@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>KodaRacer</title>
+<title>Škoda Racer</title>
 <meta name="description" content="3D motokárové závody v prohlížeči: 3 tratě, 6 jezdců, předměty a drift.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;800&family=Bungee&display=swap">
 <style>
+/* Fonts ship with the app (SIL OFL, see fonts/) so it works offline */
+@font-face { font-family: 'Bungee'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/bungee-latin-ext-400-normal.woff2) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Bungee'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/bungee-latin-400-normal.woff2) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-ext-500-normal.woff2) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-500-normal.woff2) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-ext-600-normal.woff2) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-600-normal.woff2) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 800; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-ext-800-normal.woff2) format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Semi Condensed'; font-style: normal; font-weight: 800; font-display: swap; src: url(fonts/barlow-semi-condensed-latin-800-normal.woff2) format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
 /* Layout: pit-board panel docked left over a live demo race; race HUD pinned to the four corners */
 :root {
   --ink: #0d111b;
@@ -124,6 +131,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   display: flex;
 }
 .cta-bar .cta { flex: 1; }
+.fine { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
 .help { color: var(--muted); font-size: 15px; line-height: 1.45; }
 .help summary { cursor: pointer; font-weight: 800; color: var(--paper); letter-spacing: .06em; text-transform: uppercase; font-size: 13px; }
 .help ul { margin: 8px 0 0; padding-left: 18px; }
@@ -292,7 +300,7 @@ body.touch .keyhint { display: none; }
   <div id="menu" class="screen">
     <div class="panel">
       <div class="brand">
-        <h1>KODA<span>RACER</span></h1>
+        <h1>ŠKODA <span>RACER</span></h1>
         <div class="checker"></div>
         <p>Tři kola, šest jezdců, otazníky plné překvapení. Driftuj v zatáčkách pro turbo a dojeď první.</p>
       </div>
@@ -319,6 +327,7 @@ body.touch .keyhint { display: none; }
           <li>Na mobilu plyn běží sám. Vlevo zatáčíš, vpravo je drift, předmět a brzda.</li>
         </ul>
       </details>
+      <p class="fine">Neoficiální fanouškovská hra. Nesouvisí se společností Škoda Auto.</p>
       <div class="cta-bar"><button type="button" id="startBtn" class="cta">Závodit!</button></div>
     </div>
   </div>
@@ -359,13 +368,13 @@ body.touch .keyhint { display: none; }
       <div class="kerbline"></div>
       <div class="inner">
         <h2>Hra se nenačetla</h2>
-        <p id="loadErrorText">Nepodařilo se stáhnout 3D knihovnu. Zkontroluj připojení k internetu a obnov stránku.</p>
+        <p id="loadErrorText">Nepodařilo se načíst 3D knihovnu. Zkus hru zavřít a spustit znovu.</p>
       </div>
     </div>
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="vendor/three.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -403,8 +412,8 @@ function fmtTime(t) {
   return m + ':' + String(s).padStart(2, '0') + '.' + String(c).padStart(2, '0');
 }
 const store = {
-  get(k, d) { try { const v = localStorage.getItem('kodaracer.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem('kodaracer.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  get(k, d) { try { const v = localStorage.getItem('skodaracer.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('skodaracer.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
 };
 const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -864,7 +873,7 @@ function buildWorld(tr) {
   const poleMat = new T.MeshLambertMaterial({ color: 0xdfe3ea });
   const poleGeo = new T.CylinderGeometry(0.4, 0.5, 9, 10);
   [-1, 1].forEach((s) => { const p = new T.Mesh(poleGeo, poleMat); p.position.set(s * (HW + 2.6), 4.5, 0); startG.add(p); });
-  const bannerTex = textTex('KODARACER', 1024, 128, '#11151f', '#ffffff');
+  const bannerTex = textTex('ŠKODA RACER', 1024, 128, '#11151f', '#ffffff');
   const banner = new T.Mesh(new T.BoxGeometry(HW * 2 + 6, 2.2, 0.5), [
     poleMat, poleMat, poleMat, poleMat,
     new T.MeshBasicMaterial({ map: bannerTex }), new T.MeshBasicMaterial({ map: bannerTex }),
@@ -2181,6 +2190,17 @@ const padUp = (e) => { if (e.pointerId === touch.padId) { touch.padId = null; to
 pad.addEventListener('pointerup', padUp);
 pad.addEventListener('pointercancel', padUp);
 
+// Android app (Capacitor): system back button and switching away from the app
+const capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+if (capApp) {
+  capApp.addListener('backButton', () => {
+    if (G.state === 'race' || G.state === 'countdown') setPaused(!G.paused);
+    else if (G.state === 'done') toMenu();
+    else capApp.exitApp();
+  });
+  capApp.addListener('pause', () => { if (G.state === 'race' || G.state === 'countdown') setPaused(true); });
+}
+
 function toggleMute() {
   Sfx.init();
   const m = Sfx.toggleMute();
@@ -2238,7 +2258,7 @@ function frame(now) {
 }
 
 // debug / test hook (harmless in production)
-window.__kodaracer = {
+window.__skodaracer = {
   get state() { return G.state; },
   get player() { const p = G.player; return p && { lap: p.lap, rank: p.rank, speed: p.speed, finished: p.finished, item: p.item, x: p.x, z: p.z }; },
   autopilot(on) { G.autopilot = !!on; },

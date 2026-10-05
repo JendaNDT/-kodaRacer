@@ -1,13 +1,14 @@
-# KodaRacer – Project Status
+# Škoda Racer – Project Status
 *Naposled aktualizováno: 05. 10. 2026*
 
 ## 🎯 Co to je
-3D motokárové závody ve stylu Mario Kart, které běží přímo v prohlížeči (počítač i mobil).
-Stack: jeden soubor `index.html`, Three.js r128 z CDN, zvuky a hudba syntetizované přes WebAudio, rekordy v localStorage.
+3D motokárové závody ve stylu Mario Kart. Teď existuje hratelný webový prototyp, cílem je verze v Godotu pro Android a Windows s crossplay.
+Stack prototypu: `web/index.html`, Three.js r128 a písma přibalené lokálně (funguje offline), zvuky a hudba přes WebAudio, rekordy v localStorage.
+Cílový stack: Godot 4.7.1 (Jenda ho má na Macu), export APK a EXE přes GitHub Actions.
 
 ## ⏭️ Příští krok
-**Zahrát si to na mobilu a říct, co ladit (rychlost, obtížnost, ovládání).**
-Hodnoty pro jízdu jsou v `index.html` v objektu `BASE` a v poli `DIFFS`, takže se dají snadno upravit.
+**Rozhodnout, jak má fungovat crossplay (přes stejnou Wi-Fi, nebo přes internet se serverem), a pak začít přepis do Godotu.**
+Webový prototyp slouží jako předloha: tratě, fyzika, AI a předměty se přenesou 1:1.
 
 ## ✅ Hotovo
 - 3D svět: 3 tratě (Zelené údolí, Pouštní kaňon, Ledová laguna) s obrubníky, bariérami z pneumatik, startovní bránou, stromy / kaktusy / smrky, horami, mraky a jezerem
@@ -23,8 +24,15 @@ Hodnoty pro jízdu jsou v `index.html` v objektu `BASE` a v poli `DIFFS`, takže
 - Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka, rekordy tratí
 - Dotykové ovládání na mobilu (volant vlevo, drift / předmět / brzda vpravo, plyn automaticky)
 - Zvuky (motor, efekty) a hudba, tlačítko pro ztlumení
+- Přejmenováno na **Škoda Racer** (menu, startovní brána), poznámka „neoficiální fanouškovská hra“
+- Webová verze funguje offline (Three.js a písma přibalené ve `web/`)
 
 ## 📝 TODO
+### MVP Godot verze (nutné pro v1)
+- Přepis hry do Godotu 4.7 (tratě, motokáry, drift, AI, předměty, HUD, menu, dotykové ovládání)
+- Crossplay multiplayer Android ↔ Windows
+- GitHub Actions: automatický export APK (Android) a EXE (Windows) ke stažení
+
 ### Backlog (později)
 - Kopce a skoky na trati (teď je trať rovná)
 - Ghost / časovka proti vlastnímu rekordu
@@ -38,13 +46,16 @@ Hodnoty pro jízdu jsou v `index.html` v objektu `BASE` a v poli `DIFFS`, takže
 
 ## 🏗️ Klíčová rozhodnutí
 *(Aby ses k tomu zase zbytečně nevracel.)*
-- **Jeden soubor HTML:** jde otevřít kdekoliv a jednoduše publikovat, žádný build.
-- **Three.js r128 z cdnjs:** poslední verze s klasickým globálním `THREE`, funguje bez modulů i z `file://`. Potřebuje internet při prvním načtení.
+- **Engine: Godot 4.7.1.** Jenda chce crossplay mezi Androidem a Windows a Godot exportuje na obě platformy a má vestavěný multiplayer. Webová verze zůstává jako prototyp.
+- **Balení webu přes Capacitor/Electron zrušeno:** nahradí ho export z Godotu.
+- **Webový prototyp:** jeden soubor HTML, Three.js r128 přibalené lokálně (klasický globální `THREE`, funguje i z `file://`).
+- **Název Škoda Racer + poznámka „neoficiální fanouškovská hra“:** Škoda je ochranná známka, poznámka jasně říká, že hra není oficiální. Pro Google Play by název mohl být problém.
 - **Vlastní postavy a předměty:** žádné postavy ani názvy z Nintenda, aby se hra dala bez problémů sdílet.
 - **Fyzika s pevným krokem 1/120 s:** stabilní chování nezávisle na FPS telefonu.
 - **Na mobilu plyn automaticky:** palcem se nedá zároveň držet plyn a driftovat.
 
 ## 📁 Stav souborů
-- `index.html` – celá hra (HTML, CSS, JavaScript)
+- `web/index.html` – webový prototyp hry (HTML, CSS, JavaScript)
+- `web/vendor/`, `web/fonts/` – přibalená 3D knihovna a písma
 - `README.md` – jak hrát a jak hru spustit
 - `PROJECT_STATUS.md` – tenhle přehled

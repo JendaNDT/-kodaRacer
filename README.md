@@ -1,10 +1,14 @@
-# KodaRacer
+# Škoda Racer
+
+*Neoficiální fanouškovská hra, nesouvisí se společností Škoda Auto.*
 
 3D motokárové závody v prohlížeči ve stylu Mario Kart. Tři tratě, šest jezdců, předměty, drift s turbem a pět AI soupeřů. Funguje na počítači i na mobilu.
 
 ## Jak hrát
 
-Otevři `index.html` v prohlížeči (Chrome, Safari, Firefox, Edge). Při prvním načtení je potřeba internet, protože se stahuje 3D knihovna Three.js.
+Otevři `web/index.html` v prohlížeči (Chrome, Safari, Firefox, Edge). Funguje i bez internetu, 3D knihovna Three.js i písma jsou přibalené ve složce `web/`.
+
+> Plánuje se přepis do enginu **Godot 4.7** s exportem pro Android a Windows a s crossplay multiplayerem. Webová verze slouží jako hratelný prototyp.
 
 1. Vyber jezdce, trať a obtížnost.
 2. Klikni na **Závodit!**
@@ -44,4 +48,9 @@ Plyn běží automaticky. Vlevo je volant (táhni palcem doleva a doprava), vpra
 
 ## Zveřejnění přes GitHub Pages
 
-V repozitáři: **Settings → Pages → Build and deployment → Deploy from a branch**, vyber větev a složku `/ (root)`. Hra pak poběží na adrese `https://<uživatel>.github.io/<repozitář>/`.
+V repozitáři: **Settings → Pages → Build and deployment → Deploy from a branch**, vyber větev a složku `/ (root)`. Hra pak poběží na adrese `https://<uživatel>.github.io/<repozitář>/web/`.
+
+## Licence přibalených souborů
+
+- Three.js r128: MIT (`web/vendor/three-LICENSE.txt`)
+- Písma Bungee a Barlow Semi Condensed: SIL Open Font License (`web/fonts/`)
