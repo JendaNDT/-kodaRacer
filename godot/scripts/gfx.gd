@@ -2,6 +2,8 @@ class_name Gfx
 extends RefCounted
 ## Graphics quality: Nízká / Střední / Vysoká. This table is the one place
 ## that decides what each level turns on.
+## Keep glow on wherever shadows are on: tonemapping then happens once after
+## the shadowed sun pass instead of per pass (see Atmosphere._shadowed_sun).
 
 enum { LOW, MEDIUM, HIGH }
 
@@ -12,16 +14,19 @@ const LEVELS := [
 		"msaa": Viewport.MSAA_DISABLED, "scale_pc": 0.7, "scale_mobile": 0.55,
 		"particles": 0.4, "foliage": 0.45,
 		"shadows": false, "glow": false, "ssao": false, "weather": 0.0,
+		"shadow_dist": 0.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.0,
 	},
 	{	# Střední – default on phones
 		"msaa": Viewport.MSAA_2X, "scale_pc": 1.0, "scale_mobile": 0.75,
 		"particles": 0.75, "foliage": 0.75,
 		"shadows": true, "glow": true, "ssao": false, "weather": 0.6,
+		"shadow_dist": 55.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.8,
 	},
 	{	# Vysoká – default on computers
 		"msaa": Viewport.MSAA_4X, "scale_pc": 1.0, "scale_mobile": 0.9,
 		"particles": 1.0, "foliage": 1.0,
 		"shadows": true, "glow": true, "ssao": true, "weather": 1.0,
+		"shadow_dist": 85.0, "shadow_splits": 4, "shadow_size": 4096, "shadow_filter": 4, "boost": 1.8,
 	},
 ]
 
@@ -72,13 +77,42 @@ static func foliage() -> float:
 	return float(_val("foliage"))
 
 
-## Phase 1 (light and atmosphere) reads these.
+## Light and atmosphere (Atmosphere, Kart, Race) read these.
 static func shadows() -> bool:
 	return bool(_val("shadows"))
 
 
+## How far from the camera the sun still casts shadows (metres).
+static func shadow_distance() -> float:
+	return float(_val("shadow_dist"))
+
+
+## Shadow map cascades: 1, 2 or 4 (phones at most 2).
+static func shadow_splits() -> int:
+	var n := int(_val("shadow_splits"))
+	return mini(n, 2) if Game.is_mobile() else n
+
+
+static func shadow_size() -> int:
+	return mini(2048, int(_val("shadow_size"))) if Game.is_mobile() else int(_val("shadow_size"))
+
+
+## Soft shadow edges: 0 hard, 2 = 5 samples, 4 = 13 samples.
+static func shadow_filter() -> RenderingServer.ShadowQuality:
+	var q := int(_val("shadow_filter"))
+	if Game.is_mobile():
+		q = mini(q, 2)
+	return q as RenderingServer.ShadowQuality
+
+
 static func glow() -> bool:
 	return bool(_val("glow"))
+
+
+## Brightness multiplier for flames, sparks and other glowing things: above
+## 1 they bloom with glow on, 1 keeps them as they always were.
+static func boost() -> float:
+	return float(_val("boost"))
 
 
 static func ssao() -> bool:

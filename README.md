@@ -58,8 +58,11 @@ V hlavním menu i v pauze jsou tři tlačítka:
 
 - **Zvuk**: zapnout nebo vypnout.
 - **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
-  - Ostrost obrazu a vyhlazení hran se změní hned.
-  - Hustota stromů a počet částic se změní od dalšího závodu.
+  - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů a částic.
+  - **Střední**: stíny od slunce, záře plamenů, jiskřiček a hvězdy, sněžení na Ledové laguně.
+  - **Vysoká**: navíc měkčí a delší stíny, jemné stínování v rozích (SSAO) a hustší sníh.
+  - Barvy a nálada tratí jsou na všech kvalitách stejné: odpoledne v údolí, západ slunce v kaňonu, zatažená obloha na laguně.
+  - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů, počet částic a sníh se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
 
 ## Hra po Wi-Fi
