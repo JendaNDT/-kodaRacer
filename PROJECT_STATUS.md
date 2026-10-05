@@ -8,6 +8,8 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 ## ⏭️ Příští krok
 **Spojit fáze grafiky 1, 2 a 3 do jedné větve a celek vyzkoušet na telefonu (zapnout FPS, zkusit všechny tři kvality).**
 Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build v Releases vždy obsahuje jen tu fázi, která se nahrála naposled. Všechny tři mění `kart.gd`, při spojení je potřeba sladit hlavně model motokáry, plameny turba a svítící materiály.
+**Vyzkoušet verzi 1.2.0 na telefonu a PC (zapnout FPS, projet všechny tři tratě na všech třech kvalitách) a pak fáze 2 z `PLAN_GRAFIKA.md`: efekty při jízdě.**
+Až napíšeš, kolik FPS hra na telefonu ukazuje na Střední, rozhodneme, jestli tam stíny nechat, nebo je dát jen na Vysokou (stíny jsou na Střední nejdražší efekt).
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -25,10 +27,11 @@ Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build 
 
 ## 🔄 Rozjeté (nedodělané)
 - **Fáze 1 a 2 grafiky** – hotové na vlastních větvích (`claude/kind-edison-urx1xe` = světlo a atmosféra, `ccr-810fb6fe-xsp7zl` = efekty při jízdě), zatím nespojené s fází 3 (větev `claude/amazing-faraday-a6w7aw`)
+- **Fáze 1 grafiky (verze 1.2.0):** stíny od slunce (Střední a Vysoká), záře plamenů, jiskřiček, hvězdy, rakety, krabic a slunce, filmové barvy AgX se sytostí, SSAO na Vysoké, vlastní nálada tratí (údolí odpoledne, kaňon při západu slunce, laguna zatažená se sněžením), sluneční disk a plující mraky. Opravená silnice, na kterou předtím nesvítilo slunce. `--bench` měří skutečný čas snímku.
+- Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek
 
 ## 📝 TODO
 ### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
-- Fáze 1: stíny od slunce, záře, filmové barvy, nálada každé trati (západ slunce v kaňonu, sněžení na laguně)
 - Fáze 2: stopy smyku, rychlostní čáry, lepší výbuchy a turbo, konfety v cíli
 - Fáze 4: semafor, tribuny s diváky, vlajky ve větru, dominanty tratí
 - Fáze 5: 3D náhled jezdce v menu, stupně vítězů, animovaný HUD
@@ -45,6 +48,7 @@ Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build 
 
 ## 🐛 Známé bugy
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
+- Na softwarovém vykreslování v cloudu je Střední o ~25 % a Vysoká o ~55 % pomalejší než ve verzi 1.1.0 (stíny, záře, SSAO). Na skutečném telefonu zatím neměřeno. Nízká je skoro stejně rychlá jako dřív.
 - Hledání her v síti používá UDP broadcast, který některé routery nebo telefony blokují. Pak je potřeba zadat adresu ručně.
 - APK z větve fáze 2 má nižší číslo verze pro Android (2) než fáze 1 (3) a fáze 3 (4), takže se přes ně nenainstaluje (Android nedovolí přejít na nižší verzi). Vyřeší se při spojení větví, do té doby pomůže odinstalovat a nainstalovat znovu.
 - Na softwarovém vykreslování v cloudu jsou nové motokáry asi o 6 % pomalejší, když jsou všechny blízko kamery (víc trojúhelníků, ale méně kreslicích volání). Na telefonu zatím neměřeno.
@@ -54,6 +58,9 @@ Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build 
 - **Engine: Godot 4.7.1**, protože Jenda chce crossplay Android ↔ Windows a má Godot na Macu. Webový prototyp zůstává jako předloha a hratelná ukázka.
 - **Renderer Compatibility (OpenGL) i pro hezčí grafiku**: v Godotu 4.7.1 umí stíny od slunce, záři, základní SSAO i barvy AgX (ověřeno ve zdrojovém kódu enginu). Hra tak vypadá na PC i mobilu stejně a jde testovat v cloudu. Neumí decals, proto budou stopy smyku z vlastních pásů geometrie. Forward+ pro PC je jen volitelný bonus.
 - **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu. Co která úroveň zapíná, je na jednom místě v `godot/scripts/gfx.gd`. Výchozí: telefon Střední, PC Vysoká.
+- **Stejné barvy na všech kvalitách:** AgX se zvýšenou sytostí běží i na Nízké (stojí to asi 5 % výkonu), kvality se liší jen stíny, září, SSAO, sněžením a hustotou. Samotné AgX bez sytosti dělalo barvy vybledlé.
+- **Vyrovnání jasu u stínů:** renderer Compatibility přidává slunce se stíny jako druhou vrstvu a sčítá ji tak, že je obraz přepálený. `Atmosphere._shadowed_sun` proto spočítá slabší slunce, aby osvětlená silnice a tráva měly stejný jas jako na Nízké. Kde jsou stíny zapnuté, musí být zapnutá i záře (tónování pak proběhne jednou za obě vrstvy).
+- **Dvě slunce:** jedno kreslí jen disk na obloze (může být hodně jasné a zářit), druhé svítí na scénu. Vzdálené hory, mraky, země a silnice stíny nevrhají (šetří výkon a při západu slunce by hory zakryly celou trať).
 - **Kontrola verze přes vestavěné ověření Godotu** (auth), ne přes běžné síťové volání: mezi různými verzemi hry se jinak síťová volání můžou pomíchat. Hráči musí mít stejnou verzi.
 - **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
 - **Motokáry z vlastního generátoru tvarů (`mesh_kit.gd`)**: zkosené kvádry, protažená zaoblená těla, soustružené díly (kola) a trubky. Všechno, co se na motokáře nehýbe, je jeden model s barvami ve vrcholech; lesk nebo matnost dílu nese malá textura. Hýbe se jen jezdec (trup, hlava, 4 díly rukou, volant) a 3 kola (přední zvlášť kvůli zatáčení, zadní na jedné ose).
@@ -78,9 +85,10 @@ Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build 
 - `godot/scripts/driver_rig.gd` – jezdec: helma, ruce na volantu, animace
 - `godot/scripts/showcase.gd` – režim `--showcase` pro screenshoty motokár
 - `godot/scripts/track.gd`, `world_builder.gd` – trať a svět kolem ní
+- `godot/scripts/atmosphere.gd` – obloha, slunce a stíny, mlha, barvy, záře, mraky, sníh
 - `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
-- `godot/scripts/game.gd`, `sfx.gd` – data, nastavení, ovládání, zvuky
+- `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky
 - `godot/scripts/gfx.gd` – úrovně kvality grafiky (co která zapíná)
 - `godot/export_presets.cfg` – export Android + Windows
 - `.github/workflows/build.yml` – testy a sestavení APK + EXE

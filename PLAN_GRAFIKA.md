@@ -21,6 +21,8 @@ Cíl: aby hra vypadala „hotově“ (světlo, stíny, efekty, detailní motoká
 | Jas, kontrast, sytost | ✅ | |
 | Decals (obtisky na silnici) | ❌ | stopy smyku proto uděláme jako vlastní pásy z trojúhelníků |
 
+**Zjištěno ve fázi 1:** slunce se stíny kreslí renderer Compatibility jako druhou vrstvu přes celou scénu. Proto stíny stojí nejvíc výkonu ze všech efektů a scéna by vyšla přepáleně světlá. Hra to vyrovnává automaticky (`Atmosphere._shadowed_sun`), takže všechny kvality vypadají stejně jasně.
+
 **Rozhodnutí:** zůstáváme na rendereru Compatibility pro PC i mobil. Hra pak vypadá všude stejně a já ji umím testovat tady. Výkonnější renderer Forward+ pro PC (měkčí stíny, odlesky) je volitelný bonus na konec.
 
 ---
@@ -28,6 +30,7 @@ Cíl: aby hra vypadala „hotově“ (světlo, stíny, efekty, detailní motoká
 ## Fáze 0 – Nastavení kvality, FPS a kontrola verze  *(malá, nutný základ)* ✅ hotovo (verze 1.1.0)
 
 > **Výsledek:** kvalita Nízká/Střední/Vysoká v menu i pauze (`gfx.gd`), počítadlo FPS, kontrola verze při připojení (vestavěné ověření Godotu) a verze v seznamu her, měření `--bench`. Na softwarovém vykreslování v cloudu: Nízká 19,6 FPS, Střední 8,0 FPS, Vysoká 7,7 FPS. Na telefonu s grafickým čipem budou čísla jiná, poměr ale ukazuje, že přepínač pomáhá.
+> *Oprava ve fázi 1:* `--bench` u pomalých snímků měřil zaokrouhlený čas, teď měří skutečný. Přeměřená verze 1.1.0: Nízká 25,7 FPS, Střední 9,8 FPS, Vysoká 9,9 FPS.
 
 Aby hezčí grafika nezabila slabé telefony.
 
@@ -42,7 +45,15 @@ Aby hezčí grafika nezabila slabé telefony.
 
 ---
 
-## Fáze 1 – Světlo a atmosféra  *(střední, největší „wow“)*
+## Fáze 1 – Světlo a atmosféra  *(střední, největší „wow“)* ✅ hotovo (verze 1.2.0)
+
+> **Výsledek:** nový soubor `atmosphere.gd` (obloha se slunečním diskem, slunce, mlha, mraky, sníh), nálady tratí v `game.gd`, svítící efekty v `kart.gd` a `race.gd`.
+> - Stíny od slunce na Střední (tvrdé okraje, šetří výkon) a Vysoké (měkké okraje, 4 pásma, delší dosah). Na Nízké zůstaly tmavé skvrny.
+> - Záře na Střední a Vysoké: plameny turba, jiskry driftu, hvězda, raketa (nový svítící plamen vzadu), výbuchy, krabice s otazníkem a slunce.
+> - Barvy AgX se zvýšenou sytostí na všech kvalitách, takže hra vypadá všude stejně. SSAO jen na Vysoké.
+> - Údolí: odpoledne. Kaňon: západ slunce s dlouhými stíny. Laguna: chladné zatažené světlo, nízké mraky a sněžení (Střední a Vysoká).
+> - Mraky pomalu plují. Opravena stará chyba: silnice byla otočená spodní stranou nahoru, takže na ni slunce nesvítilo a stíny na ní nebyly vidět.
+> - Výkon na softwarovém vykreslování v cloudu (průměr tří tratí, 1.1.0 → 1.2.0): Nízká 25,7 → 24,5 FPS, Střední 9,8 → 7,3 FPS, Vysoká 9,9 → 4,4 FPS. Na Střední stojí nejvíc stíny. Pokud se telefon na Střední trhá, můžeme stíny nechat jen na Vysoké.
 
 - **Opravdové stíny od slunce** od motokár, stromů, pneumatik i brány. Na Nízké zůstanou dnešní tmavé skvrny.
 - **Záře (glow):** svítí plameny turba, jiskry driftu, hvězda, raketa a krabice s otazníkem (materiály s emisí).

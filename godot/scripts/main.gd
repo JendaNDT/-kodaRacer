@@ -16,6 +16,7 @@ var _fps_time := 0.0
 var _fps_frames := 0
 var _fps_worst := 0.0
 var _bench: PackedFloat32Array = PackedFloat32Array()
+var _bench_last := 0
 var _bench_draws := 0
 var _bench_prims := 0
 
@@ -276,10 +277,13 @@ func _process(delta: float) -> void:
 		print("[%s t=%.1f race=%.1f state=%s] %s" % [_test_mode, _test_t, race.race_time, race.state, ", ".join(parts)])
 	if _test_mode == "bench":
 		var secs := float(Game.cmd_args.get("seconds", "10"))
-		if _test_t > 2.0:
-			_bench.append(delta)
+		# wall-clock time: on slow frames `delta` is capped to whole physics ticks
+		var now := Time.get_ticks_usec()
+		if _test_t > 2.0 and _bench_last > 0:
+			_bench.append((now - _bench_last) / 1000000.0)
 			_bench_draws += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
 			_bench_prims += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
+		_bench_last = now
 		if _test_t > 2.0 + secs:
 			var sorted := _bench.duplicate()
 			sorted.sort()

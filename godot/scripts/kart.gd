@@ -73,6 +73,7 @@ var dust: CPUParticles3D
 var flame_fx: CPUParticles3D
 var star_fx: CPUParticles3D
 var name_tag: Label3D
+var blob: MeshInstance3D
 var star_hue := 0.0
 var susp_y := 0.0
 var susp_v := 0.0
@@ -133,6 +134,17 @@ static func _shared() -> Dictionary:
 			var a := clampf(1.0 - d, 0.0, 1.0)
 			dot.set_pixel(xx, yy, Color(1, 1, 1, a * a))
 	_m.dot = ImageTexture.create_from_image(dot)
+	# particle materials, shared so apply_quality() can brighten them at once
+	for additive in [true, false]:
+		var pm := StandardMaterial3D.new()
+		pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		pm.vertex_color_use_as_albedo = true
+		pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		pm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if additive else BaseMaterial3D.BLEND_MODE_MIX
+		pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		pm.albedo_texture = _m.dot
+		pm.disable_fog = true
+		_m["pmat_add" if additive else "pmat_mix"] = pm
 	return _m
 
 
@@ -147,18 +159,23 @@ static func _cyl(top: float, bottom: float, h: float, seg: int) -> CylinderMesh:
 
 
 static func particle_mesh(size: float, additive: bool) -> QuadMesh:
-	var q := QuadMesh.new()
-	q.size = Vector2(size, size)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.vertex_color_use_as_albedo = true
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if additive else BaseMaterial3D.BLEND_MODE_MIX
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	m.albedo_texture = _shared().dot
-	m.disable_fog = true
-	q.material = m
-	return q
+	var m := _shared()
+	var key := "quad_%s_%s" % [size, additive]
+	if not m.has(key):
+		var q := QuadMesh.new()
+		q.size = Vector2(size, size)
+		q.material = m.pmat_add if additive else m.pmat_mix
+		m[key] = q
+	return m[key]
+
+
+## Glowing things (flames, sparks, star) get brighter than white when the
+## level has glow, so they bloom. Shared materials, so it applies at once.
+static func apply_quality() -> void:
+	var m := _shared()
+	var b := Gfx.boost()
+	m.flamem.albedo_color = Color(1.0 * b, 0.63 * b, 0.19 * b, 0.85)
+	m.pmat_add.albedo_color = Color(b, b, b, 1.0)
 
 
 static func fade_ramp() -> Gradient:
@@ -210,6 +227,7 @@ func _build_model() -> void:
 		var f := _part(m.flame, m.flamem, Vector3(ex.x * sx, ex.y, ex.z - 0.3))
 		f.rotation.x = -PI / 2.0
 		f.visible = false
+		f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		flames.append(f)
 	# front wheels steer on their own pivots, the rear pair spins on one axle
 	var fw: Dictionary = model.front
@@ -239,12 +257,15 @@ func _build_model() -> void:
 	var wheel: Vector3 = model.wheel
 	rig.position = seat
 	rig.setup(driver, wheel - seat, float(model.tilt), paint, lod * 1.3)
+	# soft dark spot under the kart, used where the sun casts no real shadows
 	var size: Vector2 = model.size
-	var shadow := MeshInstance3D.new()
-	shadow.mesh = m.shadow
-	shadow.position.y = 0.1
-	shadow.scale = Vector3(size.x / 2.8, 1.0, size.y / 3.8)
-	add_child(shadow)
+	blob = MeshInstance3D.new()
+	blob.mesh = m.shadow
+	blob.position.y = 0.1
+	blob.scale = Vector3(size.x / 2.8, 1.0, size.y / 3.8)
+	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	blob.visible = not Gfx.shadows()
+	add_child(blob)
 
 	# effects
 	for sx in [-1.0, 1.0]:
@@ -299,6 +320,7 @@ func _emitter(size: float, additive: bool, amount: int, life: float) -> CPUParti
 	p.local_coords = false
 	p.emitting = false
 	p.color_ramp = fade_ramp()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return p
 
 
@@ -313,6 +335,7 @@ func set_name_tag(text: String) -> void:
 		name_tag.outline_modulate = Color(0, 0, 0, 0.8)
 		name_tag.position = Vector3(0, float(model.top) + 1.0, 0)
 		name_tag.no_depth_test = false
+		name_tag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(name_tag)
 	name_tag.text = text
 	# local players' own tag lives on its own render layer that their camera skips
@@ -582,6 +605,7 @@ func render(delta: float, alpha: float, smooth: bool, t: float, dust_color: Colo
 		for mt in glow_mats:
 			mt.emission_enabled = true
 			mt.emission = c
+			mt.emission_energy_multiplier = Gfx.boost()
 	elif glow_mats[0].emission_enabled:
 		for mt in glow_mats:
 			mt.emission_enabled = false

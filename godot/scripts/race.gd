@@ -20,6 +20,7 @@ var track_idx := 0
 var diff_idx := 1
 var diff: Dictionary
 var world: Node3D
+var atm: Dictionary
 var holder: Node
 var fx: Node3D
 var boxes: Array = []
@@ -103,6 +104,9 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	var w := get_world(p_track)
 	world = w.root
 	boxes = w.boxes
+	atm = w.atm
+	Atmosphere.apply_quality(atm)
+	Kart.apply_quality()
 	if world.get_parent() != null:
 		world.get_parent().remove_child(world)
 	holder.add_child(world)
@@ -239,11 +243,15 @@ func _make_views() -> void:
 
 
 ## Re-reads the quality level for things that can change mid-race
-## (scenery density and particle counts follow from the next race).
+## (scenery density, particle counts and snow follow from the next race).
 func apply_quality() -> void:
 	render_scale = Gfx.render_scale()
 	for p in panes:
 		p.vp.msaa_3d = Gfx.msaa()
+	Atmosphere.apply_quality(atm)
+	Kart.apply_quality()
+	for k in karts:
+		k.blob.visible = not Gfx.shadows()
 
 
 func shake(slot: int, amount: float) -> void:
@@ -283,6 +291,7 @@ func burst(pos: Vector3, color: Color, amount: int, speed: float, additive := tr
 	p.gravity = Vector3(0, -8, 0)
 	p.color = color
 	p.color_ramp = Kart.fade_ramp()
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	p.position = pos
 	fx.add_child(p)
 	p.emitting = true
@@ -636,7 +645,17 @@ func _missile_node() -> Node3D:
 	trail.color_ramp = Kart.fade_ramp()
 	trail.position.z = -1.0
 	trail.emitting = true
+	trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	g.add_child(trail)
+	# glowing exhaust flame
+	var flame := MeshInstance3D.new()
+	flame.mesh = Kart._shared().flame
+	flame.material_override = Kart._shared().flamem
+	flame.rotation.x = -PI / 2.0
+	flame.position.z = -1.15
+	flame.scale = Vector3(1.2, 0.8, 1.2)
+	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	g.add_child(flame)
 	return g
 
 
@@ -907,6 +926,7 @@ func _process(delta: float) -> void:
 	for k in karts:
 		k.render(dt, alpha, smooth, time if not smooth else Time.get_ticks_msec() / 1000.0, dust_color)
 	_update_box_visuals(dt)
+	Atmosphere.animate(atm)
 	for b in bananas:
 		b.node.position.y = 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
 	for m in missiles:
@@ -1224,7 +1244,7 @@ func toggle_pause() -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.add_theme_font_size_override("font_size", 17)
 		row2.add_child(b)
-	var hint := UI.label("Hustota stromů a počet částic se po změně grafiky projeví od dalšího závodu.", 15, UI.MUTED)
+	var hint := UI.label("Stíny a záře se přepnou hned, hustota stromů, počet částic a sníh až od dalšího závodu.", 15, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(470, 0)
 	inner.add_child(hint)

@@ -1,7 +1,8 @@
 class_name WorldBuilder
 extends RefCounted
-## Builds everything you see around a track: sky, light, ground, road, kerbs,
-## tyre barriers, start gantry, item boxes and themed scenery.
+## Builds everything you see around a track: ground, road, kerbs, tyre
+## barriers, start gantry, item boxes and themed scenery. Sky, sun, fog,
+## clouds and weather come from Atmosphere.
 
 const GROUND := 3600.0
 
@@ -13,36 +14,8 @@ static func build(tr: Track) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "World"
 
-	# --- sky, fog, light
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = th.sky_top
-	sky_mat.sky_horizon_color = th.horizon
-	sky_mat.ground_horizon_color = th.horizon
-	sky_mat.ground_bottom_color = Color(th.horizon).darkened(0.15)
-	sky_mat.sky_curve = 0.12
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = th.ambient
-	env.ambient_light_energy = 0.5
-	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	env.fog_enabled = true
-	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = th.horizon
-	env.fog_density = 1.0
-	env.fog_depth_begin = 150.0
-	env.fog_depth_end = 950.0
-	env.fog_sky_affect = 0.0
-	var we := WorldEnvironment.new()
-	we.environment = env
-	root.add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.light_energy = 0.8
-	sun.transform = Transform3D(Basis.looking_at(-Vector3(-0.6, 1.0, 0.45).normalized(), Vector3.UP), Vector3.ZERO)
-	root.add_child(sun)
+	# --- sky, sun, fog, clouds and weather
+	var atm := Atmosphere.build(root, tr, th)
 
 	# --- ground
 	var gimg := Image.create_empty(256, 256, false, Image.FORMAT_RGBA8)
@@ -64,6 +37,7 @@ static func build(tr: Track) -> Dictionary:
 	var ground := MeshInstance3D.new()
 	ground.mesh = gplane
 	ground.position = Vector3(tr.cx, 0.0, tr.cz)
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(ground)
 
 	# --- lake in the infield where there is room
@@ -116,6 +90,7 @@ static func build(tr: Track) -> Dictionary:
 	var road := MeshInstance3D.new()
 	road.mesh = ribbon(tr, -Game.HW, Game.HW, 0.04, 14.0)
 	road.material_override = road_mat
+	road.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(road)
 
 	var kimg := Image.create_empty(4, 2, false, Image.FORMAT_RGBA8)
@@ -131,6 +106,7 @@ static func build(tr: Track) -> Dictionary:
 		var o1: float = Game.HW + Game.KERB if side > 0.0 else -Game.HW
 		k.mesh = ribbon(tr, o0, o1, 0.065, 6.0)
 		k.material_override = kmat
+		k.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(k)
 
 	# --- start line and gantry
@@ -177,6 +153,7 @@ static func build(tr: Track) -> Dictionary:
 	box_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	box_mat.emission_enabled = true
 	box_mat.emission = Color(0.18, 0.18, 0.2)
+	atm.box_mat = box_mat
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = Vector3(1.7, 1.7, 1.7)
 	for f in tr.def.boxes:
@@ -200,6 +177,7 @@ static func build(tr: Track) -> Dictionary:
 			q.outline_size = 22
 			q.outline_modulate = Color(0.08, 0.08, 0.16, 0.9)
 			q.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+			q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.add_child(q)
 			root.add_child(node)
 			boxes.append({"x": bx, "z": bz, "node": node, "mesh": mi, "active": true, "respawn": 0.0,
@@ -208,7 +186,7 @@ static func build(tr: Track) -> Dictionary:
 
 	# --- scenery
 	_scenery(root, tr, th, rng)
-	return {"root": root, "boxes": boxes}
+	return {"root": root, "boxes": boxes, "atm": atm}
 
 
 # ------------------------------------------------------------------ pieces
@@ -232,8 +210,9 @@ static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> A
 		norms[i * 2] = Vector3.UP
 		norms[i * 2 + 1] = Vector3.UP
 		if i < cnt:
+			# wound so the front face looks up: the sun lights the road and kerbs
 			var a := i * 2
-			idx.append_array(PackedInt32Array([a, a + 1, a + 2, a + 1, a + 3, a + 2]))
+			idx.append_array(PackedInt32Array([a, a + 2, a + 1, a + 1, a + 2, a + 3]))
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = verts
@@ -306,6 +285,13 @@ static func _multi(mesh: Mesh, mat: Material, xfs: Array, cols: Array = []) -> M
 	return mi
 
 
+## Far-away scenery (mountains, mesas) would throw huge shadows over the
+## track at sunset, so it only receives light.
+static func _no_cast(g: GeometryInstance3D) -> GeometryInstance3D:
+	g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return g
+
+
 static func _xf(rot_y: float, scale: Vector3, pos: Vector3) -> Transform3D:
 	return Transform3D(Basis(Vector3.UP, rot_y) * Basis.from_scale(scale), pos)
 
@@ -326,6 +312,7 @@ static func _disc(r: float, color: Color, y: float, shiny: bool) -> Node3D:
 	mi.mesh = m
 	mi.material_override = mat
 	mi.position.y = y
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var holder := Node3D.new()
 	holder.add_child(mi)
 	return holder
@@ -348,6 +335,7 @@ static func _start_gantry(tr: Track) -> Node3D:
 	line.mesh = plane
 	line.material_override = lmat
 	line.position.y = 0.085
+	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	g.add_child(line)
 	var pole_mat := StandardMaterial3D.new()
 	pole_mat.albedo_color = Color("dfe3ea")
@@ -390,6 +378,7 @@ static func _start_gantry(tr: Track) -> Node3D:
 		lbl.modulate = Color.WHITE
 		lbl.outline_size = 0
 		lbl.position = Vector3(0, 8.4, face * 0.27)
+		lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if face < 0.0:
 			lbl.rotation.y = PI
 		g.add_child(lbl)
@@ -397,6 +386,7 @@ static func _start_gantry(tr: Track) -> Node3D:
 			var q := MeshInstance3D.new()
 			q.mesh = cq
 			q.material_override = cmat
+			q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			q.position = Vector3(s * (Game.HW + 1.3), 8.4, face * 0.27)
 			if face < 0.0:
 				q.rotation.y = PI
@@ -571,7 +561,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		mesa.height = 1.0
 		mesa.radial_segments = 7
 		mesa.rings = 1
-		root.add_child(_multi(flat(mesa), _vc_mat(), ring_xf, mcols))
+		root.add_child(_no_cast(_multi(flat(mesa), _vc_mat(), ring_xf, mcols)))
 	else:
 		var cone := CylinderMesh.new()
 		cone.top_radius = 0.0
@@ -580,35 +570,11 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		cone.radial_segments = 6
 		cone.rings = 1
 		var fcone := flat(cone)
-		root.add_child(_multi(fcone, _vc_mat(), ring_xf, mcols))
+		root.add_child(_no_cast(_multi(fcone, _vc_mat(), ring_xf, mcols)))
 		if th.cap != null:
 			var cap_mat := StandardMaterial3D.new()
 			cap_mat.albedo_color = th.cap
-			root.add_child(_multi(fcone, cap_mat, cap_ring_xf))
-
-	# clouds
-	var puff_xf: Array = []
-	for c in int(16 * dens):
-		var a := rng.randf() * TAU
-		var rad := 150.0 + rng.randf() * 600.0
-		var y := 110.0 + rng.randf() * 70.0
-		var px := tr.cx + cos(a) * rad
-		var pz := tr.cz + sin(a) * rad
-		for p in 4:
-			var sz := 8.0 + rng.randf() * 8.0
-			puff_xf.append(_xf(0.0, Vector3(sz * 1.4, sz * 0.8, sz),
-				Vector3(px + (p - 1.5) * 13.0 + rng.randf() * 6.0, y + rng.randf() * 5.0, pz + rng.randf() * 10.0)))
-	var puff := SphereMesh.new()
-	puff.radius = 1.0
-	puff.height = 2.0
-	puff.radial_segments = 6
-	puff.rings = 3
-	var cloud_mat := StandardMaterial3D.new()
-	cloud_mat.albedo_color = Color.WHITE
-	cloud_mat.disable_fog = true
-	cloud_mat.emission_enabled = true
-	cloud_mat.emission = Color(0.35, 0.35, 0.38)
-	root.add_child(_multi(flat(puff), cloud_mat, puff_xf))
+			root.add_child(_no_cast(_multi(fcone, cap_mat, cap_ring_xf)))
 
 
 static func _snowmen(root: Node3D, tr: Track, rng: RandomNumberGenerator) -> void:
