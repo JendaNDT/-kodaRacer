@@ -1,13 +1,13 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 05. 10. 2026 (noc)*
+*Naposled aktualizováno: 06. 10. 2026*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.4.0 (fáze grafiky 0–3 dohromady) na telefonu a PC: zapnout FPS a projet všechny tři tratě na všech třech kvalitách.**
-Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam nechat stíny (nejdražší efekt), nebo je dát jen na Vysokou. Pak fáze 4 z `PLAN_GRAFIKA.md`: živější svět kolem trati.
+**Vyzkoušet verzi 1.5.0 na telefonu a PC (zapnout FPS, projet všechny tři tratě na všech třech kvalitách) a pak fáze 5 z `PLAN_GRAFIKA.md`: menu, výsledky a rozhraní.**
+Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam nechat stíny (nejdražší efekt), nebo je dát jen na Vysokou.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -24,11 +24,11 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 - **Fáze 2 grafiky:** stopy smyku, rychlostní čáry, 3. úroveň driftu (fialové jiskry, nejdelší turbo), plamen turba se zábleskem, výbuch rakety s tlakovou vlnou, hvězdičky nad hlavou po zásahu, lesk a střepy krabic, konfety v cíli, vlající vlajky, prach / písek / sníh od kol podle trati
 - **Fáze 3 grafiky:** 6 různých motokár z generátoru zaoblených tvarů (formule, bublina, sporťák, buggy, traktůrek, střela), živý jezdec (ruce na volantu, hlava do zatáčky, náklon, radost v cíli, motání hlavy po zásahu), helma s pruhy, startovní čísla na bocích, kola s ráfkem a vzorkem, pérování podvozku, zjednodušené modely pro vzdálené motokáry, režim `--showcase` na screenshoty
 - **Spojení fází 1, 2 a 3 do verze 1.4.0** (větev `claude/amazing-faraday-a6w7aw`): plameny, záblesk turba, stopy smyku, prach od kol a hvězdičky po zásahu sedí na výfuky a kola každé motokáry. Do stínu se kreslí zjednodušené motokáry, ruce a volant stín nevrhají. Zářící krabice (fáze 1) a lesk krabic (fáze 2) jsou spojené v jednom shaderu.
+- **Fáze 4 grafiky (verze 1.5.0):** semafor s pěti světly synchronizovaný s odpočtem, tribuny s mávajícími diváky, praporky a vlajky ve větru, reklamní panely vymyšlených sponzorů, balíky slámy a kužely v zatáčkách, stromy a kaktusy ve větru, vlnící se a třpytivé jezero. Dominanty: větrný mlýn a dřevěný most přes trať (údolí), skalní oblouk přes trať (kaňon), iglú, ledové krystaly a zamrzlé jezero (laguna). Hustota diváků podle kvality.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
 ### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
-- Fáze 4: semafor, tribuny s diváky, vlajky ve větru, dominanty tratí
 - Fáze 5: 3D náhled jezdce v menu, stupně vítězů, animovaný HUD
 - Fáze 6 (volitelná): kopce, skoky a klopené zatáčky
 
@@ -43,7 +43,8 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 
 ## 🐛 Známé bugy
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
-- Na softwarovém vykreslování v cloudu je verze 1.4.0 proti 1.1.0 na Nízké asi o 18 %, na Střední o ~33 % a na Vysoké o ~60 % pomalejší. Většinu dělají stíny, záře a SSAO z fáze 1; fáze 2 a 3 k tomu přidávají asi 5–8 %. Na skutečném telefonu zatím neměřeno.
+- Na softwarovém vykreslování v cloudu je verze 1.5.0 proti 1.1.0 na Nízké asi o 14 %, na Střední o ~35 % a na Vysoké o ~58 % pomalejší (Nízká 27,8 → 24,0, Střední 10,4 → 6,7, Vysoká 10,0 → 4,2 FPS). Většinu dělají stíny, záře a SSAO z fáze 1. Na skutečném telefonu zatím neměřeno.
+- Když se něco nového (jezero, tribuna) poprvé objeví na obrazovce, může hra jednou krátce zaškobrtnout, protože se teprve překládá jeho shader. Pak už ne.
 - Hledání her v síti používá UDP broadcast, který některé routery nebo telefony blokují. Pak je potřeba zadat adresu ručně.
 
 ## 🏗️ Klíčová rozhodnutí
@@ -59,7 +60,9 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 - **Motokáry z vlastního generátoru tvarů (`mesh_kit.gd`)**: zkosené kvádry, protažená zaoblená těla, soustružené díly (kola) a trubky. Všechno, co se na motokáře nehýbe, je jeden model s barvami ve vrcholech; lesk nebo matnost dílu nese malá textura. Hýbe se jen jezdec (trup, hlava, 4 díly rukou, volant) a 3 kola (přední zvlášť kvůli zatáčení, zadní na jedné ose).
 - **Jízdní vlastnosti se fází 3 nezměnily**: nové motokáry mění jen vzhled, fyzika i síťová data jsou stejné jako dřív.
 - **Vzdálené motokáry jednodušší (LOD)** podle kvality: Nízká od 10 m, Střední od 16 m, Vysoká od 32 m. Bez toho by detailní motokáry zbytečně zatěžovaly slabé telefony.
-- **Fáze grafiky 1–3 vznikly paralelně** na samostatných větvích a jsou spojené ve verzi 1.4.0 na větvi `claude/amazing-faraday-a6w7aw`. Další fáze stavět na ní.
+- **Fáze grafiky 1–3 vznikly paralelně** na samostatných větvích a jsou spojené ve verzi 1.4.0. Od fáze 4 je hlavní větev `main`, další práce staví na ní.
+- **Svět kolem trati v `trackside.gd`**: co se hýbe (diváci, praporky, vlajky, stromy, voda), hýbe grafická karta přes shadery, takže to procesor nezatěžuje. Skript řídí jen semafor a lopatky mlýna. Pozice tribun, mostu a oblouku se hledají automaticky podle tvaru trati (rovinka, dost místa, mimo jiné části trati a jezero).
+- **Pneumatiky bariér, balíky slámy, kužely a diváci nevrhají stín**: stín je u nich skoro neviditelný, ale kreslil by se pro každé pásmo stínů znovu. Díky tomu fáze 4 na výkonu nic nestojí.
 - **Stíny motokár ze zjednodušeného modelu:** detailní model stín nevrhá, místo něj ho vrhá neviditelná jednodušší kopie (stín se kreslí pro každé pásmo stínů zvlášť).
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
@@ -83,6 +86,7 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 - `godot/scripts/showcase.gd` – režim `--showcase` pro screenshoty motokár
 - `godot/scripts/track.gd`, `world_builder.gd` – trať a svět kolem ní
 - `godot/scripts/atmosphere.gd` – obloha, slunce a stíny, mlha, barvy, záře, mraky, sníh
+- `godot/scripts/trackside.gd` – semafor, tribuny s diváky, praporky a vlajky, reklamní panely, balíky a kužely, vítr ve stromech, jezero, dominanty tratí
 - `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
 - `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky

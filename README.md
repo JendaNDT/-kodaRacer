@@ -36,6 +36,16 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | 5 | Karel Kolo | traktůrek s komínem | Tahoun |
 | 6 | Bára Brzda | nízká futuristická střela | Zatáčky |
 
+## Tratě
+
+| Trať | Nálada | Poznávací znamení |
+| --- | --- | --- |
+| Zelené údolí | slunečné odpoledne | větrný mlýn u jezera, dřevěný most přes trať |
+| Pouštní kaňon | západ slunce | skalní oblouk přes trať |
+| Ledová laguna | zataženo, sněží | iglú, svítící ledové krystaly, zamrzlé jezero |
+
+Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách.
+
 ## Ovládání
 
 | | Jeden hráč | Hráč 1 (2 hráči) | Hráč 2 (2 hráči) |
@@ -71,11 +81,11 @@ V hlavním menu i v pauze jsou tři tlačítka:
 
 - **Zvuk**: zapnout nebo vypnout.
 - **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
-  - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů, částic a stop smyku, vzdálené motokáry zjednodušené už od 10 m.
+  - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů, částic, stop smyku a diváků, vzdálené motokáry zjednodušené už od 10 m.
   - **Střední**: stíny od slunce, záře plamenů, jiskřiček a hvězdy, sněžení na Ledové laguně.
   - **Vysoká**: navíc měkčí a delší stíny, jemné stínování v rozích (SSAO), hustší sníh a detailní motokáry až do 32 m.
   - Barvy a nálada tratí jsou na všech kvalitách stejné: odpoledne v údolí, západ slunce v kaňonu, zatažená obloha na laguně.
-  - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů, počet částic a stop smyku, sníh a zjednodušení vzdálených motokár se změní od dalšího závodu.
+  - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů a diváků, počet částic a stop smyku, sníh a zjednodušení vzdálených motokár se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
 
 ## Hra po Wi-Fi

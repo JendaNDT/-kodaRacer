@@ -3,7 +3,7 @@
 
 Cíl: aby hra vypadala „hotově“ (světlo, stíny, efekty, detailní motokáry, živé okolí) a přitom plynule běžela i na slabším telefonu.
 
-> **Stav:** fáze 0–3 jsou hotové a spojené ve **verzi 1.4.0** (větev `claude/amazing-faraday-a6w7aw`). Fáze 1, 2 a 3 vznikly souběžně a jejich vlastní čísla verzí (1.2.0, 1.3.0) platila jen pro samostatné buildy. Výkon spojené verze v cloudu proti 1.1.0: Nízká 27,8 → 22,8 FPS, Střední 10,4 → 7,1 FPS, Vysoká 10,0 → 3,9 FPS. Většinu poklesu dělají stíny z fáze 1, fáze 2 a 3 přidávají asi 5–8 %.
+> **Stav:** fáze 0–4 jsou hotové (**verze 1.5.0**, větev `main`). Fáze 0–3 byly spojené ve verzi 1.4.0. Fáze 1, 2 a 3 vznikly souběžně a jejich vlastní čísla verzí (1.2.0, 1.3.0) platila jen pro samostatné buildy. Výkon spojené verze v cloudu proti 1.1.0: Nízká 27,8 → 22,8 FPS, Střední 10,4 → 7,1 FPS, Vysoká 10,0 → 3,9 FPS. Většinu poklesu dělají stíny z fáze 1, fáze 2 a 3 přidávají asi 5–8 %.
 
 ## Jak budeme postupovat
 
@@ -119,7 +119,15 @@ Počet částic se řídí kvalitou z fáze 0.
 
 ---
 
-## Fáze 4 – Živější svět kolem trati  *(velká)*
+## Fáze 4 – Živější svět kolem trati  *(velká)* ✅ hotovo (verze 1.5.0)
+
+> **Výsledek (`trackside.gd`):** pod startovní bránou visí semafor s pěti světly. Při odpočtu se rozsvěcují červeně jedno po druhém a při startu se všechna rozsvítí zeleně, a to i u klienta ve Wi-Fi hře. U startovní rovinky stojí až dvě tribuny s barevnými sedadly, plné diváků: polovina mává oběma rukama, ostatní poskakují. Na střechách jsou praporky a vlajky ve větru. Kolem trati jsou reklamní panely osmi vymyšlených sponzorů (Turbo Šnek, Knedlík Expres, Pneu Hop…) a v nejostřejších zatáčkách balíky slámy a kužely. Stromy, keře i kaktusy se hýbou ve větru, jezero v údolí se vlní a třpytí.
+> - *Údolí:* větrný mlýn u jezera s točícími se lopatkami a obloukový dřevěný most přes trať, na kterém stojí diváci.
+> - *Kaňon:* skalní oblouk z pískovce s vrstvami přes celou trať.
+> - *Laguna:* iglú u jezera a u trati, svítící ledové krystaly a zamrzlé jezero s prasklinami, které odráží oblohu.
+> - **Hustota diváků** podle kvality (Nízká 35 %, Střední 65 %, Vysoká všechna místa), vzdálené tribuny se nekreslí.
+> - **Výkon:** aby fáze 4 nic nestála, nevrhají už stín pneumatiky bariér (přes tisíc kusů, stín skoro neviditelný), balíky slámy ani kužely. V cloudu je pak Střední stejně rychlá jako předtím (6,8 → 6,7 FPS, v rámci šumu) a Vysoká dokonce rychlejší (3,9 → 4,2 FPS). Trojúhelníků na snímek je na Střední o 40 % méně (308 → 184 tisíc).
+> - **Screenshoty:** `--showcase --view=spot --spot=bridge` (dále `windmill`, `arch`, `igloo1`, `crystals`, `lake`, `lights`, `stand1`, `board1`, `corner1`…) zamíří kameru na dané místo.
 
 - **Start a cíl:** semafor s pěti světly synchronizovaný s odpočtem, tribuny s mávajícími diváky, vlajky a praporky ve větru.
 - **Okolí trati:** reklamní panely s vymyšlenými sponzory (žádné skutečné značky), kužely a balíky slámy.
@@ -171,7 +179,7 @@ Riziko: zasahuje do fyziky, AI i sítě, proto až nakonec a samostatně.
 | 1 Světlo a atmosféra ✅ | střední | největší vizuální skok |
 | 2 Efekty při jízdě ✅ | střední | pocit rychlosti, zábava |
 | 3 Motokáry a jezdci ✅ | velká | charakter postav |
-| 4 Svět kolem trati | velká | živé prostředí |
+| 4 Svět kolem trati ✅ | velká | živé prostředí |
 | 5 Menu a výsledky | střední | dojem z celé hry |
 | 6 Kopce a skoky | největší | nová hratelnost |
 

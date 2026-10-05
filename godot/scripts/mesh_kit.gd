@@ -499,6 +499,26 @@ func disc(t: Transform3D, r: float, col: Color, fin := GLOSS, seg := 16) -> void
 	_fan(t, fin, col, Vector3.ZERO, ring, Vector3(0, 0, 1))
 
 
+## Flat-shaded convex face through pts (in the space of t), its normal
+## turned to point away from `inside`. For faceted shapes such as rocks.
+func face(t: Transform3D, pts: PackedVector3Array, inside: Vector3, col: Color, fin := MATTE) -> void:
+	var n := (pts[1] - pts[0]).cross(pts[2] - pts[0])
+	if n.length_squared() < 1e-12 and pts.size() > 3:
+		n = (pts[2] - pts[0]).cross(pts[3] - pts[0])
+	if n.length_squared() < 1e-12:
+		return
+	n = n.normalized()
+	var ctr := Vector3.ZERO
+	for p in pts:
+		ctr += p
+	ctr /= pts.size()
+	if n.dot(ctr - inside) < 0.0:
+		n = -n
+	var nb := _nbasis(t)
+	for k in range(1, pts.size() - 1):
+		_tri(t, nb, fin, col, pts[0], pts[k], pts[k + 1], n, n, n)
+
+
 ## Flat convex polygon in the XY plane of t, facing +Z.
 func polygon(t: Transform3D, pts: PackedVector2Array, col: Color, fin := GLOSS) -> void:
 	var ring := PackedVector3Array()

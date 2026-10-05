@@ -2,7 +2,8 @@ class_name WorldBuilder
 extends RefCounted
 ## Builds everything you see around a track: ground, road, kerbs, tyre
 ## barriers, start gantry, item boxes and themed scenery. Sky, sun, fog,
-## clouds and weather come from Atmosphere.
+## clouds and weather come from Atmosphere; stands, boards, start lights
+## and landmarks from Trackside.
 
 const GROUND := 3600.0
 
@@ -106,6 +107,8 @@ static func build(tr: Track) -> Dictionary:
 			root.add_child(shore)
 			var lake := _disc(r, th.lake, 0.035, true)
 			lake.position = Vector3(bx, 0.0, bz)
+			(lake.get_child(0) as MeshInstance3D).material_override = Trackside.lake_material(th.lake,
+				th.mood.horizon, th.deco == "pines")
 			root.add_child(lake)
 			tr.lake = {"x": bx, "z": bz, "r": r + 3.0}
 
@@ -173,7 +176,9 @@ static func build(tr: Track) -> Dictionary:
 	tyre_mesh.height = 1.25
 	tyre_mesh.radial_segments = 10
 	tyre_mesh.rings = 1
-	root.add_child(_multi(tyre_mesh, _vc_mat(), tyre_xf, tyre_cols))
+	# over a thousand low tyres: their shadow is a thin strip nobody notices,
+	# but would be drawn again for every shadow cascade
+	root.add_child(_no_cast(_multi(tyre_mesh, _vc_mat(), tyre_xf, tyre_cols)))
 
 	# --- item boxes
 	var boxes: Array = []
@@ -224,9 +229,10 @@ static func build(tr: Track) -> Dictionary:
 				"phase": k * 0.7 + float(f) * 10.0, "scale": 1.0})
 			k += 1
 
-	# --- scenery
+	# --- scenery, stands, boards, landmarks
 	_scenery(root, tr, th, rng)
-	return {"root": root, "boxes": boxes, "atm": atm}
+	var ts := Trackside.build(root, tr, th, rng)
+	return {"root": root, "boxes": boxes, "atm": atm, "trackside": ts}
 
 
 # ------------------------------------------------------------------ pieces
@@ -525,7 +531,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			c.v = clampf(c.v + (t[4] - 0.5) * 0.15, 0.0, 1.0)
 			fcols.append(c)
 		root.add_child(_multi(trunk, trunk_mat, trunk_xf))
-		root.add_child(_multi(fol, _vc_mat(), fol_xf, fcols))
+		root.add_child(_multi(fol, Trackside.wind_material(0.05, 2.0), fol_xf, fcols))
 		if pine:
 			var cap := CylinderMesh.new()
 			cap.top_radius = 0.0
@@ -533,9 +539,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			cap.height = 2.6
 			cap.radial_segments = 7
 			cap.rings = 1
-			var cap_mat := StandardMaterial3D.new()
-			cap_mat.albedo_color = Color.WHITE
-			root.add_child(_multi(flat(cap), cap_mat, cap_xf))
+			root.add_child(_multi(flat(cap), Trackside.wind_material(0.05, 2.0), cap_xf))
 			_snowmen(root, tr, rng)
 		else:
 			var bushes := _scatter(tr, rng, int(120 * dens), 60.0, Game.BAR + 2.5)
@@ -550,7 +554,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 				var s: float = 0.7 + t[2] * 0.9
 				bush_xf.append(_xf(t[3] * 6.0, Vector3(s * 1.3, s, s * 1.3), Vector3(t[0], 0.6 * s, t[1])))
 				bcols.append(base.lightened(0.08 + t[4] * 0.1))
-			root.add_child(_multi(flat(bush), _vc_mat(), bush_xf, bcols))
+			root.add_child(_multi(flat(bush), Trackside.wind_material(0.06, 0.0), bush_xf, bcols))
 	elif deco == "cactus":
 		var cact := _scatter(tr, rng, int(110 * dens), 150.0, clear)
 		var body := CylinderMesh.new()
@@ -581,8 +585,8 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			if t[4] > 0.4:
 				arm_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0] - cos(a) * 1.2 * s, 3.4 * s, t[1] - sin(a) * 1.2 * s)))
 				acols.append(c)
-		root.add_child(_multi(flat(body), _vc_mat(), body_xf, ccols))
-		root.add_child(_multi(flat(arm), _vc_mat(), arm_xf, acols))
+		root.add_child(_multi(flat(body), Trackside.wind_material(0.012, 0.0), body_xf, ccols))
+		root.add_child(_multi(flat(arm), Trackside.wind_material(0.012, 0.0), arm_xf, acols))
 		var rocks := _scatter(tr, rng, int(80 * dens), 120.0, Game.BAR + 3.0)
 		var rock := SphereMesh.new()
 		rock.radius = 1.5

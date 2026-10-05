@@ -5,6 +5,9 @@ extends RefCounted
 ##   --view=front|back|side|close   where the camera stands (close: --driver=N)
 ##   --pose=drive|steer|cheer|dizzy|boost|star|mix   what the drivers do
 ##   --steer=0.8                     steering for the steer pose
+##   --view=spot --spot=bridge       aim at a trackside landmark instead,
+##                                   from the side it faces (--dist,
+##                                   --height, --angle to swing around)
 
 
 static func hold(race: Race) -> void:
@@ -52,6 +55,17 @@ static func hold(race: Race) -> void:
 			cam.fov = 48.0
 		"side":
 			cam.position = ctr + side * 17.0 + up * 3.0
+		"spot":
+			var spots: Dictionary = race.ts.get("spots", {})
+			var name := String(a.get("spot", "lights"))
+			if spots.has(name):
+				# [where, direction it faces]; --angle turns away from that side
+				look = spots[name][0]
+				var dir: Vector3 = (spots[name][1] as Vector3).rotated(Vector3.UP, float(a.get("angle", "0")) * PI / 180.0)
+				cam.position = look + dir * float(a.get("dist", "25")) + up * float(a.get("height", "4"))
+			elif Engine.get_process_frames() % 120 == 0:
+				print("SPOTS ", spots.keys())
+			cam.fov = 50.0
 		"close":
 			var d := clampi(int(a.get("driver", "0")), 0, karts.size() - 1)
 			var k: Kart = karts[d]

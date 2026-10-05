@@ -21,6 +21,7 @@ var diff_idx := 1
 var diff: Dictionary
 var world: Node3D
 var atm: Dictionary
+var ts: Dictionary
 var holder: Node
 var fx: Node3D
 var skids: SkidMarks
@@ -105,6 +106,7 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	world = w.root
 	boxes = w.boxes
 	atm = w.atm
+	ts = w.trackside
 	Atmosphere.apply_quality(atm)
 	Kart.apply_quality()
 	if world.get_parent() != null:
@@ -943,6 +945,7 @@ func _process(delta: float) -> void:
 	skids.tick(dt)
 	_update_box_visuals(dt)
 	Atmosphere.animate(atm)
+	Trackside.update(ts, self)
 	for b in bananas:
 		b.node.position.y = 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
 	for m in missiles:
