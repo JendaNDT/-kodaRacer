@@ -11,6 +11,8 @@ var pool: Array[AudioStreamPlayer] = []
 var pool_i := 0
 var engines: Array = []
 var muted := false
+var _want_music := false
+var _music_fast := false
 
 
 func _ready() -> void:
@@ -23,7 +25,8 @@ func _ready() -> void:
 	music_player.volume_db = -9.0
 	add_child(music_player)
 	_build_sounds()
-	music_player.stream = _build_music()
+	# the music loop takes the longest to synthesise, so build it off the main thread
+	WorkerThreadPool.add_task(_music_task)
 	for i in 2:
 		_make_engine()
 	set_muted(bool(Game.settings.muted))
@@ -41,11 +44,25 @@ func play(name: String, vol := 1.0) -> void:
 
 
 func music(on: bool, fast := false) -> void:
+	_want_music = on
+	_music_fast = fast
 	music_player.pitch_scale = 1.12 if fast else 1.0
+	if music_player.stream == null:
+		return
 	if on and not music_player.playing:
 		music_player.play()
 	elif not on and music_player.playing:
 		music_player.stop()
+
+
+func _music_task() -> void:
+	var stream := _build_music()
+	_set_music.call_deferred(stream)
+
+
+func _set_music(stream: AudioStreamWAV) -> void:
+	music_player.stream = stream
+	music(_want_music, _music_fast)
 
 
 func set_muted(m: bool) -> void:
@@ -90,6 +107,8 @@ func _process(_delta: float) -> void:
 			continue
 		var n := pb.get_frames_available()
 		if n <= 0:
+			continue
+		if float(e.vol) < 0.0005 and float(e.target_vol) <= 0.0:
 			continue
 		var buf := PackedVector2Array()
 		buf.resize(n)

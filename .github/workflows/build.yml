@@ -77,6 +77,14 @@ jobs:
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log
 
+      - name: Test – finding games on the network
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=20 > disc-host.log 2>&1 &
+          sleep 3
+          ~/godot-bin/godot --headless --path godot -- --disctest 2>&1 | tee disc.log
+          wait || true
+          grep -q "FOUND HOSTS" disc.log
+
       - name: Export Windows EXE
         run: |
           mkdir -p dist

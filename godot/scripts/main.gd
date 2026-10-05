@@ -44,6 +44,11 @@ func _ready() -> void:
 		for k in race.locals:
 			k.autopilot = true
 		return
+	if a.has("disctest"):
+		_test_mode = "discovery"
+		menu.visible = false
+		Net.start_listening()
+		return
 	if a.has("nettest"):
 		_test_mode = "net_" + String(a.nettest)
 		menu.visible = false
@@ -197,6 +202,16 @@ func _process(delta: float) -> void:
 		for k in race.order:
 			parts.append("%s L%d %s" % [k.ch.name, k.lap, "F" if k.finished else ""])
 		print("[%s t=%.1f race=%.1f state=%s] %s" % [_test_mode, _test_t, race.race_time, race.state, ", ".join(parts)])
+	if _test_mode == "discovery":
+		if not Net.hosts.is_empty():
+			print("FOUND HOSTS ", Net.hosts)
+			_test_mode = ""
+			get_tree().quit(0)
+		elif _test_t > 8.0:
+			print("NO HOSTS FOUND")
+			_test_mode = ""
+			get_tree().quit(1)
+		return
 	if _test_mode == "autotest" and race != null:
 		if race.results_shown:
 			_finish_test(true, "results shown")
