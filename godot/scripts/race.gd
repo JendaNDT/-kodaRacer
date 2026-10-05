@@ -64,10 +64,18 @@ static func get_track(i: int) -> Track:
 	return _tracks[i]
 
 
+## Worlds are cached per track and quality level (scenery density depends on it).
 static func get_world(i: int) -> Dictionary:
-	if not _worlds.has(i):
-		_worlds[i] = WorldBuilder.build(get_track(i))
-	return _worlds[i]
+	var key := "%d_%d" % [i, Gfx.level()]
+	if not _worlds.has(key):
+		# drop worlds built for another quality level that are not on screen
+		for k in _worlds.keys():
+			var root: Node3D = _worlds[k].root
+			if not String(k).ends_with("_%d" % Gfx.level()) and root.get_parent() == null:
+				root.queue_free()
+				_worlds.erase(k)
+		_worlds[key] = WorldBuilder.build(get_track(i))
+	return _worlds[key]
 
 
 func _init() -> void:
@@ -107,7 +115,7 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	fx = Node3D.new()
 	holder.add_child(fx)
 	dust_color = track.def.theme.dust
-	render_scale = 0.75 if Game.is_mobile() else 1.0
+	render_scale = Gfx.render_scale()
 	for i in roster.size():
 		var r: Dictionary = roster[i]
 		var k := Kart.new()
@@ -186,7 +194,7 @@ func _make_views() -> void:
 		pane.offset_top = 2 if (count == 2 and i == 1) else 0
 		pane.offset_bottom = -2 if (count == 2 and i == 0) else 0
 		var vp := SubViewport.new()
-		vp.msaa_3d = Viewport.MSAA_2X
+		vp.msaa_3d = Gfx.msaa()
 		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		vp.size = Vector2i(640, 360)
 		vp.audio_listener_enable_3d = false
@@ -230,6 +238,14 @@ func _make_views() -> void:
 		Game.touch.active = true
 
 
+## Re-reads the quality level for things that can change mid-race
+## (scenery density and particle counts follow from the next race).
+func apply_quality() -> void:
+	render_scale = Gfx.render_scale()
+	for p in panes:
+		p.vp.msaa_3d = Gfx.msaa()
+
+
 func shake(slot: int, amount: float) -> void:
 	if slot >= 0 and slot < panes.size():
 		panes[slot].shake = maxf(panes[slot].shake, amount)
@@ -253,7 +269,7 @@ func sound_at(name: String, px: float, pz: float, local := false, vol := 1.0) ->
 func burst(pos: Vector3, color: Color, amount: int, speed: float, additive := true, size := 0.7, life := 0.6) -> void:
 	var p := CPUParticles3D.new()
 	p.mesh = Kart.particle_mesh(size, additive)
-	p.amount = amount
+	p.amount = Gfx.amount(amount)
 	p.lifetime = life
 	p.one_shot = true
 	p.explosiveness = 1.0
@@ -608,7 +624,7 @@ func _missile_node() -> Node3D:
 		g.add_child(f)
 	var trail := CPUParticles3D.new()
 	trail.mesh = Kart.particle_mesh(0.7, true)
-	trail.amount = 30
+	trail.amount = Gfx.amount(30)
 	trail.lifetime = 0.3
 	trail.local_coords = false
 	trail.direction = Vector3(0, 0, -1)
@@ -1196,7 +1212,40 @@ func toggle_pause() -> void:
 	var q := UI.button("Odejít do menu", func(): menu_requested.emit())
 	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(q)
+	var row2 := UI.hbox(10)
+	inner.add_child(row2)
+	var sb := UI.button(Menu._mute_text().replace("\n", ": "), Callable())
+	sb.pressed.connect(_pause_mute.bind(sb))
+	var gb := UI.button(Menu._gfx_text().replace("\n", ": "), Callable())
+	gb.pressed.connect(_pause_quality.bind(gb))
+	var fb := UI.button(Menu._fps_text().replace("\n", ": "), Callable())
+	fb.pressed.connect(_pause_fps.bind(fb))
+	for b in [sb, gb, fb]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 17)
+		row2.add_child(b)
+	var hint := UI.label("Hustota stromů a počet částic se po změně grafiky projeví od dalšího závodu.", 15, UI.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(470, 0)
+	inner.add_child(hint)
 	resume.grab_focus.call_deferred()
+
+
+func _pause_mute(b: Button) -> void:
+	Sfx.toggle_mute()
+	b.text = Menu._mute_text().replace("\n", ": ")
+
+
+func _pause_quality(b: Button) -> void:
+	Gfx.cycle()
+	apply_quality()
+	b.text = Menu._gfx_text().replace("\n", ": ")
+
+
+func _pause_fps(b: Button) -> void:
+	Game.settings.show_fps = not bool(Game.settings.show_fps)
+	Game.save_settings()
+	b.text = Menu._fps_text().replace("\n", ": ")
 
 
 func _resume() -> void:

@@ -11,6 +11,11 @@ var _test_mode := ""
 var _shot_path := ""
 var _shot_delay := 0.0
 var _done_at := -1.0
+var fps_label: Label
+var _fps_time := 0.0
+var _fps_frames := 0
+var _fps_worst := 0.0
+var _bench: PackedFloat32Array = PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -25,6 +30,8 @@ func _ready() -> void:
 	menu.start_offline.connect(start_offline)
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
+	menu.quality_changed.connect(_start_demo)
+	_make_fps_label()
 	Net.race_started.connect(_on_net_race)
 	Net.back_to_lobby.connect(_on_back_to_lobby)
 	Net.session_ended.connect(_on_session_ended)
@@ -33,6 +40,17 @@ func _ready() -> void:
 	var a := Game.cmd_args
 	if a.has("track"):
 		Game.settings.track = clampi(int(a.track), 0, Game.TRACKS.size() - 1)
+	if a.has("quality"):
+		Game.settings.quality = clampi(int(a.quality), 0, 2)   # not saved
+	if a.has("fps"):
+		Game.settings.show_fps = true
+	if a.has("bench"):
+		# fixed demo race, frame times measured after a warm-up
+		_test_mode = "bench"
+		menu.visible = false
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		_start_demo()
+		return
 	if a.has("screenshot"):
 		_shot_path = String(a.screenshot)
 		_shot_delay = float(a.get("delay", "4"))
@@ -51,6 +69,7 @@ func _ready() -> void:
 		return
 	if a.has("nettest"):
 		_test_mode = "net_" + String(a.nettest)
+		Net.join_failed.connect(func(reason: String): print("JOIN FAILED: ", reason))
 		menu.visible = false
 		_start_demo()
 		if a.nettest == "host":
@@ -67,6 +86,45 @@ func _ready() -> void:
 		if a.has("autopilot"):
 			for k in race.locals:
 				k.autopilot = true
+
+
+## Small FPS readout at the bottom centre, switched on in the menu or pause.
+func _make_fps_label() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+	fps_label = UI.label("", 15, UI.PAPER, UI.bold_font)
+	var bg := UI.box(Color(0.05, 0.07, 0.1, 0.7), 8, 0, Color(0, 0, 0, 0))
+	bg.content_margin_left = 10
+	bg.content_margin_right = 10
+	bg.content_margin_top = 3
+	bg.content_margin_bottom = 3
+	fps_label.add_theme_stylebox_override("normal", bg)
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fps_label.anchor_left = 0.5
+	fps_label.anchor_right = 0.5
+	fps_label.anchor_top = 1.0
+	fps_label.anchor_bottom = 1.0
+	fps_label.offset_left = -170
+	fps_label.offset_right = 170
+	fps_label.offset_top = -34
+	fps_label.offset_bottom = -8
+	layer.add_child(fps_label)
+
+
+func _update_fps(delta: float) -> void:
+	fps_label.visible = bool(Game.settings.show_fps)
+	if not fps_label.visible:
+		return
+	_fps_time += delta
+	_fps_frames += 1
+	_fps_worst = maxf(_fps_worst, delta)
+	if _fps_time >= 0.5:
+		fps_label.text = "%d FPS · %.1f ms · nejhorší %.0f ms · %s" % [
+			int(round(_fps_frames / _fps_time)), _fps_time / _fps_frames * 1000.0, _fps_worst * 1000.0, Gfx.level_name()]
+		_fps_time = 0.0
+		_fps_frames = 0
+		_fps_worst = 0.0
 
 
 func show_menu(screen: String) -> void:
@@ -187,6 +245,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ---------------------------------------------------------------- test modes
 func _process(delta: float) -> void:
+	_update_fps(delta)
+	if Game.cmd_args.has("pause-at") and race != null and _test_t < float(Game.cmd_args["pause-at"]) and _test_t + delta >= float(Game.cmd_args["pause-at"]):
+		race.toggle_pause()   # screenshots of the pause menu
 	_test_t += delta
 	if _shot_path != "" and _test_t >= _shot_delay:
 		var img := get_viewport().get_texture().get_image()
@@ -202,6 +263,23 @@ func _process(delta: float) -> void:
 		for k in race.order:
 			parts.append("%s L%d %s" % [k.ch.name, k.lap, "F" if k.finished else ""])
 		print("[%s t=%.1f race=%.1f state=%s] %s" % [_test_mode, _test_t, race.race_time, race.state, ", ".join(parts)])
+	if _test_mode == "bench":
+		var secs := float(Game.cmd_args.get("seconds", "10"))
+		if _test_t > 2.0:
+			_bench.append(delta)
+		if _test_t > 2.0 + secs:
+			var sorted := _bench.duplicate()
+			sorted.sort()
+			var total := 0.0
+			for d in _bench:
+				total += d
+			var avg := total / _bench.size()
+			print("BENCH quality=%s frames=%d avg_fps=%.1f avg_ms=%.2f p95_ms=%.2f worst_ms=%.2f" % [
+				Gfx.level_name(), _bench.size(), 1.0 / avg, avg * 1000.0,
+				sorted[int(sorted.size() * 0.95)] * 1000.0, sorted[sorted.size() - 1] * 1000.0])
+			_test_mode = ""
+			get_tree().quit(0)
+		return
 	if _test_mode == "discovery":
 		if not Net.hosts.is_empty():
 			print("FOUND HOSTS ", Net.hosts)

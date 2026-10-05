@@ -421,11 +421,12 @@ static func _scatter(tr: Track, rng: RandomNumberGenerator, count: int, extra: f
 
 static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> void:
 	var clear := Game.BAR + 5.0
+	var dens := Gfx.foliage()
 	var deco: String = th.deco
 	var base: Color = th.tree
 	if deco == "trees" or deco == "pines":
 		var pine := deco == "pines"
-		var trees := _scatter(tr, rng, 240 if pine else 230, 160.0, clear)
+		var trees := _scatter(tr, rng, int((240 if pine else 230) * dens), 160.0, clear)
 		var trunk := CylinderMesh.new()
 		trunk.top_radius = 0.35
 		trunk.bottom_radius = 0.55
@@ -478,7 +479,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			root.add_child(_multi(flat(cap), cap_mat, cap_xf))
 			_snowmen(root, tr, rng)
 		else:
-			var bushes := _scatter(tr, rng, 120, 60.0, Game.BAR + 2.5)
+			var bushes := _scatter(tr, rng, int(120 * dens), 60.0, Game.BAR + 2.5)
 			var bush := SphereMesh.new()
 			bush.radius = 1.2
 			bush.height = 2.4
@@ -492,7 +493,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 				bcols.append(base.lightened(0.08 + t[4] * 0.1))
 			root.add_child(_multi(flat(bush), _vc_mat(), bush_xf, bcols))
 	elif deco == "cactus":
-		var cact := _scatter(tr, rng, 110, 150.0, clear)
+		var cact := _scatter(tr, rng, int(110 * dens), 150.0, clear)
 		var body := CylinderMesh.new()
 		body.top_radius = 0.6
 		body.bottom_radius = 0.7
@@ -523,7 +524,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 				acols.append(c)
 		root.add_child(_multi(flat(body), _vc_mat(), body_xf, ccols))
 		root.add_child(_multi(flat(arm), _vc_mat(), arm_xf, acols))
-		var rocks := _scatter(tr, rng, 80, 120.0, Game.BAR + 3.0)
+		var rocks := _scatter(tr, rng, int(80 * dens), 120.0, Game.BAR + 3.0)
 		var rock := SphereMesh.new()
 		rock.radius = 1.5
 		rock.height = 3.0
@@ -587,7 +588,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 
 	# clouds
 	var puff_xf: Array = []
-	for c in 16:
+	for c in int(16 * dens):
 		var a := rng.randf() * TAU
 		var rad := 150.0 + rng.randf() * 600.0
 		var y := 110.0 + rng.randf() * 70.0

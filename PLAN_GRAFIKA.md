@@ -25,7 +25,9 @@ Cíl: aby hra vypadala „hotově“ (světlo, stíny, efekty, detailní motoká
 
 ---
 
-## Fáze 0 – Nastavení kvality, FPS a kontrola verze  *(malá, nutný základ)*
+## Fáze 0 – Nastavení kvality, FPS a kontrola verze  *(malá, nutný základ)* ✅ hotovo (verze 1.1.0)
+
+> **Výsledek:** kvalita Nízká/Střední/Vysoká v menu i pauze (`gfx.gd`), počítadlo FPS, kontrola verze při připojení (vestavěné ověření Godotu) a verze v seznamu her, měření `--bench`. Na softwarovém vykreslování v cloudu: Nízká 19,6 FPS, Střední 8,0 FPS, Vysoká 7,7 FPS. Na telefonu s grafickým čipem budou čísla jiná, poměr ale ukazuje, že přepínač pomáhá.
 
 Aby hezčí grafika nezabila slabé telefony.
 

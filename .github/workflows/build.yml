@@ -85,6 +85,15 @@ jobs:
           wait || true
           grep -q "FOUND HOSTS" disc.log
 
+      - name: Test – a different game version is refused
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=15 > ver-host.log 2>&1 &
+          sleep 3
+          ~/godot-bin/godot --headless --path godot -- --nettest=client --fake-version=0.0.1 --timeout=10 2>&1 | tee ver-client.log || true
+          wait || true
+          grep -q "JOIN FAILED: Hostitel má jinou verzi hry" ver-client.log
+          if grep -hE "SCRIPT ERROR" ver-host.log ver-client.log; then exit 1; fi
+
       - name: Export Windows EXE
         run: |
           mkdir -p dist

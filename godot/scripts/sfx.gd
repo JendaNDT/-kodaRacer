@@ -13,6 +13,8 @@ var engines: Array = []
 var muted := false
 var _want_music := false
 var _music_fast := false
+var _music_task_id := -1
+var _built_music: AudioStreamWAV
 
 
 func _ready() -> void:
@@ -26,7 +28,7 @@ func _ready() -> void:
 	add_child(music_player)
 	_build_sounds()
 	# the music loop takes the longest to synthesise, so build it off the main thread
-	WorkerThreadPool.add_task(_music_task)
+	_music_task_id = WorkerThreadPool.add_task(_music_task)
 	for i in 2:
 		_make_engine()
 	set_muted(bool(Game.settings.muted))
@@ -56,13 +58,25 @@ func music(on: bool, fast := false) -> void:
 
 
 func _music_task() -> void:
-	var stream := _build_music()
-	_set_music.call_deferred(stream)
+	_built_music = _build_music()
 
 
-func _set_music(stream: AudioStreamWAV) -> void:
-	music_player.stream = stream
+## Picks up the music once the worker thread is done (read only after completion).
+func _collect_music() -> void:
+	if _music_task_id < 0 or not WorkerThreadPool.is_task_completed(_music_task_id):
+		return
+	WorkerThreadPool.wait_for_task_completion(_music_task_id)
+	_music_task_id = -1
+	music_player.stream = _built_music
+	if Game.cmd_args.has("timing"):
+		print("MUSIC READY after %d ms" % Time.get_ticks_msec())
 	music(_want_music, _music_fast)
+
+
+func _exit_tree() -> void:
+	if _music_task_id >= 0:
+		WorkerThreadPool.wait_for_task_completion(_music_task_id)
+		_music_task_id = -1
 
 
 func set_muted(m: bool) -> void:
@@ -101,6 +115,7 @@ func _make_engine() -> void:
 
 
 func _process(_delta: float) -> void:
+	_collect_music()
 	for e in engines:
 		var pb: AudioStreamGeneratorPlayback = e.playback
 		if pb == null:

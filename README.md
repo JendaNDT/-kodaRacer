@@ -52,12 +52,24 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 | Raketa | letí za soupeřem před tebou a vyhodí ho |
 | Hvězda | 7 s nesmrtelnosti a vyšší rychlosti, srážkou shodíš soupeře |
 
+## Grafika a výkon
+
+V hlavním menu i v pauze jsou tři tlačítka:
+
+- **Zvuk**: zapnout nebo vypnout.
+- **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
+  - Ostrost obrazu a vyhlazení hran se změní hned.
+  - Hustota stromů a počet částic se změní od dalšího závodu.
+- **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
+
 ## Hra po Wi-Fi
 
 1. Všichni musí být připojení ke **stejné Wi-Fi**.
 2. Jeden hráč dá **Hra po Wi-Fi → Založit hru**. Na obrazovce uvidí svou adresu, třeba `192.168.1.23`.
 3. Ostatní dají **Hra po Wi-Fi** a hru buď uvidí v seznamu, nebo zadají adresu ručně.
 4. Hostitel vybere trať a obtížnost a spustí závod.
+
+Všichni musí mít **stejnou verzi hry** (je napsaná dole v hlavním menu). Hra s jinou verzí se v seznamu ukáže jako „jiná verze hry“ a připojení se odmítne s vysvětlením.
 
 Na Windows se při prvním založení hry objeví dotaz brány firewall. Povol přístup pro **soukromé sítě**, jinak se ostatní nepřipojí. Hra používá porty UDP 24680 a 24681.
 

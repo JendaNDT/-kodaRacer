@@ -6,7 +6,8 @@ extends Node
 const PORT := 24680
 const DISCOVERY_PORT := 24681
 const MAX_PLAYERS := 6
-const MAGIC := "SKODARACER1"
+const MAGIC := "SKODARACER2"
+const OLD_MAGIC := "SKODARACER1"   # version 1.0.0 broadcasts, shown as "jiná verze"
 
 signal lobby_changed
 signal joined
@@ -18,6 +19,8 @@ signal snapshot_received(data: PackedFloat32Array)
 signal back_to_lobby
 signal peer_left(id: int)
 
+## Players can only race together on the same game version.
+var version := String(ProjectSettings.get_setting("application/config/version", "1.0.0"))
 var active := false
 var is_host := false
 var players := {}      # peer id -> {"name": String, "driver": int}
@@ -34,10 +37,19 @@ var _bcast_t := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if Game.cmd_args.has("fake-version"):
+		version = String(Game.cmd_args["fake-version"])   # tests only
+	var mp := _mp()
+	mp.peer_authenticating.connect(_on_authenticating)
+	mp.peer_authentication_failed.connect(_on_auth_failed)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
 	multiplayer.server_disconnected.connect(_on_server_gone)
+
+
+func _mp() -> SceneMultiplayer:
+	return multiplayer as SceneMultiplayer
 
 
 func my_id() -> int:
@@ -51,6 +63,8 @@ func host(name: String, driver: int) -> Error:
 	var err := peer.create_server(PORT, MAX_PLAYERS - 1)
 	if err != OK:
 		return err
+	_mp().auth_callback = _auth_host
+	_mp().auth_timeout = 4.0
 	multiplayer.multiplayer_peer = peer
 	active = true
 	is_host = true
@@ -71,6 +85,8 @@ func join(ip: String, name: String, driver: int) -> Error:
 	var err := peer.create_client(ip.strip_edges(), PORT)
 	if err != OK:
 		return err
+	_mp().auth_callback = _auth_client
+	_mp().auth_timeout = 6.0
 	multiplayer.multiplayer_peer = peer
 	active = true
 	is_host = false
@@ -82,6 +98,7 @@ func leave() -> void:
 	if multiplayer.multiplayer_peer != null and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	_mp().auth_callback = Callable()
 	active = false
 	is_host = false
 	in_race = false
@@ -134,9 +151,11 @@ func _process(delta: float) -> void:
 			var pkt := _listen.get_packet()
 			var ip := _listen.get_packet_ip()
 			var parts := pkt.get_string_from_utf8().split("|")
-			if parts.size() >= 4 and parts[0] == MAGIC:
+			if parts.size() >= 4 and (parts[0] == MAGIC or parts[0] == OLD_MAGIC):
 				var known := hosts.has(ip)
-				hosts[ip] = {"name": parts[1], "count": int(parts[2]), "racing": parts[3] == "1", "t": Time.get_ticks_msec()}
+				var ver := parts[4] if parts[0] == MAGIC and parts.size() >= 5 else "1.0.0"
+				hosts[ip] = {"name": parts[1], "count": int(parts[2]), "racing": parts[3] == "1", "version": ver,
+					"t": Time.get_ticks_msec()}
 				if not known:
 					changed = true
 		var now := Time.get_ticks_msec()
@@ -150,7 +169,7 @@ func _process(delta: float) -> void:
 
 func _broadcast() -> void:
 	var host_name := String(players.get(1, {}).get("name", "Hra"))
-	var msg := "%s|%s|%d|%d" % [MAGIC, host_name.replace("|", " "), players.size(), 1 if in_race else 0]
+	var msg := "%s|%s|%d|%d|%s" % [MAGIC, host_name.replace("|", " "), players.size(), 1 if in_race else 0, version]
 	var data := msg.to_utf8_buffer()
 	var targets := ["255.255.255.255"]
 	for ip in local_ips():
@@ -159,6 +178,52 @@ func _broadcast() -> void:
 	for t in targets:
 		_udp.set_dest_address(t, DISCOVERY_PORT)
 		_udp.put_packet(data)
+
+
+# ---------------------------------------------------------------- version check
+# Godot's built-in authentication runs before any RPC is allowed, so the
+# check works even against builds whose RPC lists differ.
+func _on_authenticating(id: int) -> void:
+	if not is_host and id == 1:
+		_mp().send_auth(1, ("HELLO|%s" % version).to_utf8_buffer())
+
+
+func _auth_host(id: int, data: PackedByteArray) -> void:
+	var parts := data.get_string_from_utf8().split("|")
+	if parts.size() >= 2 and parts[0] == "HELLO" and parts[1] == version:
+		_mp().send_auth(id, "OK".to_utf8_buffer())
+		_mp().complete_auth(id)
+		return
+	_mp().send_auth(id, ("BAD|%s" % version).to_utf8_buffer())
+	# let the answer reach the player before dropping the connection
+	get_tree().create_timer(0.6).timeout.connect(_kick.bind(id))
+
+
+func _kick(id: int) -> void:
+	# the player may already have left after reading the message
+	if is_host and multiplayer.multiplayer_peer != null and id in _mp().get_authenticating_peers():
+		multiplayer.multiplayer_peer.disconnect_peer(id)
+
+
+func _auth_client(_id: int, data: PackedByteArray) -> void:
+	var parts := data.get_string_from_utf8().split("|")
+	if parts[0] == "OK":
+		_mp().complete_auth(1)
+	elif parts[0] == "BAD":
+		var theirs := parts[1] if parts.size() > 1 else "?"
+		_fail_join.call_deferred("Hostitel má jinou verzi hry (%s), ty máš %s. Stáhněte si oba stejnou verzi." % [theirs, version])
+
+
+func _on_auth_failed(_id: int) -> void:
+	if not is_host:
+		_fail_join.call_deferred("Hostitel neodpověděl. Možná má starší verzi hry, stáhněte si oba stejnou verzi.")
+
+
+func _fail_join(reason: String) -> void:
+	if is_host:
+		return
+	leave()
+	join_failed.emit(reason)
 
 
 # ---------------------------------------------------------------- peers

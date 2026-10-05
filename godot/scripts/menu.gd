@@ -6,6 +6,7 @@ extends Control
 signal start_offline(players: int)
 signal quit_requested
 signal track_changed
+signal quality_changed
 
 var panel: PanelContainer
 var scroll: ScrollContainer
@@ -295,9 +296,17 @@ func _home() -> void:
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
 	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
-	var mute := UI.button("Zvuk: vypnutý" if Sfx.muted else "Zvuk: zapnutý", Callable())
+	var row := UI.hbox(8)
+	content.add_child(row)
+	var mute := _small_button(_mute_text())
 	mute.pressed.connect(_toggle_mute.bind(mute))
-	_wide(mute)
+	row.add_child(mute)
+	var gfx := _small_button(_gfx_text())
+	gfx.pressed.connect(_cycle_quality.bind(gfx))
+	row.add_child(gfx)
+	var fps := _small_button(_fps_text())
+	fps.pressed.connect(_toggle_fps.bind(fps))
+	row.add_child(fps)
 	if not Game.is_mobile():
 		_wide(UI.button("Konec", func(): quit_requested.emit()))
 	var help := _section("Ovládání")
@@ -312,7 +321,7 @@ func _home() -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size = Vector2(300, 0)
 		help.add_child(l)
-	_text("Neoficiální fanouškovská hra. Nesouvisí se společností Škoda Auto.", 14)
+	_text("Verze %s · Neoficiální fanouškovská hra. Nesouvisí se společností Škoda Auto." % Net.version, 14)
 
 
 func _setup() -> void:
@@ -345,9 +354,40 @@ func _go_setup(n: int) -> void:
 	show_screen("setup")
 
 
+func _small_button(text: String) -> Button:
+	var b := UI.button(text, Callable())
+	b.add_theme_font_size_override("font_size", 16)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return b
+
+
+static func _mute_text() -> String:
+	return "Zvuk\n" + ("vypnutý" if Sfx.muted else "zapnutý")
+
+
+static func _gfx_text() -> String:
+	return "Grafika\n" + Gfx.level_name()
+
+
+static func _fps_text() -> String:
+	return "FPS\n" + ("zobrazené" if Game.settings.show_fps else "skryté")
+
+
 func _toggle_mute(btn: Button) -> void:
-	var m := Sfx.toggle_mute()
-	btn.text = "Zvuk: vypnutý" if m else "Zvuk: zapnutý"
+	Sfx.toggle_mute()
+	btn.text = _mute_text()
+
+
+func _cycle_quality(btn: Button) -> void:
+	Gfx.cycle()
+	btn.text = _gfx_text()
+	quality_changed.emit()
+
+
+func _toggle_fps(btn: Button) -> void:
+	Game.settings.show_fps = not bool(Game.settings.show_fps)
+	Game.save_settings()
+	btn.text = _fps_text()
 
 
 func _pick_driver(i: int, key: String) -> void:
@@ -422,9 +462,12 @@ func _fill_hosts() -> void:
 		return
 	for ip in Net.hosts.keys():
 		var h: Dictionary = Net.hosts[ip]
+		var same := String(h.get("version", "")) == Net.version
 		var t := "%s · %d/6 hráčů%s" % [h.name, h.count, " · závod běží" if h.racing else ""]
+		if not same:
+			t = "%s · jiná verze hry (%s)" % [h.name, h.get("version", "?")]
 		var b := UI.button(t, _join.bind(String(ip)))
-		b.disabled = bool(h.racing)
+		b.disabled = bool(h.racing) or not same
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_hosts_box.add_child(b)
 

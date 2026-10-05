@@ -6,8 +6,8 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vylepšení grafiky podle `PLAN_GRAFIKA.md`: začít fází 0 (kvalita grafiky, FPS, kontrola verze) a fází 1 (stíny, záře, nálada tratí).**
-Plán má 7 fází. Po každé fázi se sestaví nové APK a EXE k vyzkoušení na telefonu.
+**Vyzkoušet verzi 1.1.0 na telefonu (zapnout FPS, zkusit všechny tři kvality) a pak fáze 1 z `PLAN_GRAFIKA.md`: stíny, záře, nálada tratí.**
+Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zapíná Střední kvalita.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -19,11 +19,11 @@ Plán má 7 fází. Po každé fázi se sestaví nové APK a EXE k vyzkoušení 
 - Dotykové ovládání pro Android (volant, drift, předmět, brzda, automatický plyn), tlačítko Zpět = pauza
 - Ikona aplikace a úvodní obrazovka
 - GitHub Actions: import projektu, test celého závodu, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
+- **Fáze 0 grafiky (verze 1.1.0):** kvalita grafiky Nízká/Střední/Vysoká v menu i v pauze (rozlišení 3D, vyhlazení hran, počet částic, hustota stromů), počítadlo FPS, kontrola verze u Wi-Fi hry (jiná verze se odmítne s vysvětlením, v seznamu her je vidět verze), měření výkonu `--bench`, hudba se generuje na pozadí (rychlejší start)
 - Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek
 
 ## 📝 TODO
 ### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
-- Fáze 0: kvalita grafiky Nízká/Střední/Vysoká, počítadlo FPS, kontrola verze u Wi-Fi hry
 - Fáze 1: stíny od slunce, záře, filmové barvy, nálada každé trati (západ slunce v kaňonu, sněžení na laguně)
 - Fáze 2: stopy smyku, rychlostní čáry, lepší výbuchy a turbo, konfety v cíli
 - Fáze 3: 6 různých motokár, živí jezdci (ruce na volantu, naklánění)
@@ -48,7 +48,8 @@ Plán má 7 fází. Po každé fázi se sestaví nové APK a EXE k vyzkoušení 
 *(Aby ses k tomu zase zbytečně nevracel.)*
 - **Engine: Godot 4.7.1**, protože Jenda chce crossplay Android ↔ Windows a má Godot na Macu. Webový prototyp zůstává jako předloha a hratelná ukázka.
 - **Renderer Compatibility (OpenGL) i pro hezčí grafiku**: v Godotu 4.7.1 umí stíny od slunce, záři, základní SSAO i barvy AgX (ověřeno ve zdrojovém kódu enginu). Hra tak vypadá na PC i mobilu stejně a jde testovat v cloudu. Neumí decals, proto budou stopy smyku z vlastních pásů geometrie. Forward+ pro PC je jen volitelný bonus.
-- **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu.
+- **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu. Co která úroveň zapíná, je na jednom místě v `godot/scripts/gfx.gd`. Výchozí: telefon Střední, PC Vysoká.
+- **Kontrola verze přes vestavěné ověření Godotu** (auth), ne přes běžné síťové volání: mezi různými verzemi hry se jinak síťová volání můžou pomíchat. Hráči musí mít stejnou verzi.
 - **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
@@ -67,6 +68,7 @@ Plán má 7 fází. Po každé fázi se sestaví nové APK a EXE k vyzkoušení 
 - `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
 - `godot/scripts/game.gd`, `sfx.gd` – data, nastavení, ovládání, zvuky
+- `godot/scripts/gfx.gd` – úrovně kvality grafiky (co která zapíná)
 - `godot/export_presets.cfg` – export Android + Windows
 - `.github/workflows/build.yml` – testy a sestavení APK + EXE
 - `web/` – původní webový prototyp

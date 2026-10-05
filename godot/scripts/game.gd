@@ -76,6 +76,7 @@ var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
 const SETTINGS_PATH := "user://settings.cfg"
 var settings := {
 	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {},
+	"quality": -1, "show_fps": false,
 }
 
 # ---------------------------------------------------------------- input state
@@ -158,6 +159,11 @@ func load_settings() -> void:
 	settings.driver2 = clampi(int(settings.driver2), 0, CHARS.size() - 1)
 	settings.track = clampi(int(settings.track), 0, TRACKS.size() - 1)
 	settings.diff = clampi(int(settings.diff), 0, DIFFS.size() - 1)
+	# -1 = not chosen yet: phones start on Střední, computers on Vysoká
+	if int(settings.quality) < 0:
+		settings.quality = 1 if is_mobile() else 2
+	settings.quality = clampi(int(settings.quality), 0, 2)
+	settings.show_fps = bool(settings.show_fps)
 	if typeof(settings.records) != TYPE_DICTIONARY:
 		settings.records = {}
 

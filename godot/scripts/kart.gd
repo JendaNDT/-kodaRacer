@@ -309,7 +309,7 @@ func _build_model() -> void:
 func _emitter(size: float, additive: bool, amount: int, life: float) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.mesh = particle_mesh(size, additive)
-	p.amount = amount
+	p.amount = Gfx.amount(amount)
 	p.lifetime = life
 	p.local_coords = false
 	p.emitting = false
