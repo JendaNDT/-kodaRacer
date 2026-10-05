@@ -23,6 +23,7 @@ var world: Node3D
 var atm: Dictionary
 var holder: Node
 var fx: Node3D
+var skids: SkidMarks
 var boxes: Array = []
 var karts: Array = []
 var order: Array = []
@@ -42,7 +43,6 @@ var paused := false
 var tick := 0
 var item_seq := 0
 var render_scale := 1.0
-var dust_color := Color.WHITE
 var demo_focus: Kart
 var demo_switch := 0.0
 var all_done_t := -1.0
@@ -118,7 +118,8 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		b.node.scale = Vector3.ONE
 	fx = Node3D.new()
 	holder.add_child(fx)
-	dust_color = track.def.theme.dust
+	skids = SkidMarks.new()
+	fx.add_child(skids)
 	render_scale = Gfx.render_scale()
 	for i in roster.size():
 		var r: Dictionary = roster[i]
@@ -218,8 +219,12 @@ func _make_views() -> void:
 		vp.add_child(cam)
 		cam.current = true
 		var p := {"root": pane, "vp": vp, "cam": cam, "kart": locals[i] if i < locals.size() else null,
-			"yaw": 0.0, "fov": 72.0, "shake": 0.0, "hud": null, "snapped": false}
+			"yaw": 0.0, "fov": 72.0, "shake": 0.0, "hud": null, "snapped": false, "lines": null}
 		if mode != Mode.DEMO and p.kart != null:
+			var sl := SpeedLines.new()
+			pane.add_child(sl)
+			sl.setup(p.kart)
+			p.lines = sl
 			var hud := Hud.new()
 			pane.add_child(hud)
 			hud.setup(self, p.kart, count > 1)
@@ -533,6 +538,12 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 			if use:
 				out.item = true
 				ai.item_t = 0.6 + randf() * 1.5
+	if k.human and Game.cmd_args.has("fxtest"):
+		# screenshots only: the autopilot drifts through corners
+		var want: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
+		if want and not k.drift_active:
+			out.steer = signf(float(out.steer)) * maxf(absf(float(out.steer)), 0.3)
+		out.drift = want or (k.drift_active and absf(float(out.steer)) > 0.04)
 	return out
 
 
@@ -701,8 +712,12 @@ func _explode(px: float, pz: float) -> void:
 
 
 func _explode_fx(px: float, pz: float) -> void:
-	burst(Vector3(px, 1.0, pz), Color(1.0, 0.6, 0.15), 28, 9.0, true, 1.4, 0.7)
-	burst(Vector3(px, 1.0, pz), Color(0.35, 0.35, 0.35, 0.7), 12, 3.0, false, 2.4, 1.0)
+	Effects.explosion(fx, Vector3(px, 0.0, pz))
+	for p in panes:
+		var c: Camera3D = p.cam
+		var d := Vector2(px - c.global_position.x, pz - c.global_position.z).length()
+		if d < 40.0:
+			p.shake = maxf(float(p.shake), 0.5 * (1.0 - d / 40.0))
 	sound_at("explode", px, pz)
 
 
@@ -924,7 +939,8 @@ func _process(delta: float) -> void:
 	var alpha := Engine.get_physics_interpolation_fraction()
 	var smooth := mode == Mode.CLIENT
 	for k in karts:
-		k.render(dt, alpha, smooth, time if not smooth else Time.get_ticks_msec() / 1000.0, dust_color)
+		k.render(dt, alpha, smooth, time if not smooth else Time.get_ticks_msec() / 1000.0)
+	skids.tick(dt)
 	_update_box_visuals(dt)
 	Atmosphere.animate(atm)
 	for b in bananas:
@@ -945,6 +961,8 @@ func _process(delta: float) -> void:
 		if p.vp.size != want:
 			p.vp.size = want
 		_update_camera(p, dt)
+		if p.lines != null:
+			p.lines.update_lines(dt)
 		if p.hud != null:
 			p.hud.refresh()
 	if mode == Mode.DEMO:
@@ -991,7 +1009,8 @@ func _update_box_visuals(dt: float) -> void:
 		if not b.active:
 			if node.visible:
 				node.visible = false
-				burst(node.position, Color(1.0, 0.62, 0.25), 16, 6.0, true, 0.4, 0.5)
+				if _ear(node.position.x, node.position.z) > 0.0:
+					Effects.box_shards(fx, node.position)
 			continue
 		if not node.visible:
 			node.visible = true
@@ -1022,8 +1041,14 @@ func _observe(k: Kart, dt: float) -> void:
 			shake(k.local_slot, 0.5)
 	if k.boost > float(o.boost) + 0.05:
 		sound_at("boost", k.x, k.z, loc, 0.9)
+		k.on_boost(int(o.level) if not k.drift_active else 0)
 		if loc and hud != null and race_time < 0.6 and state == "race" and k.boost > 1.0:
 			hud.show_msg("Raketový start!", UI.GO)
+	if k.finished and not bool(o.finished) and mode != Mode.DEMO:
+		if loc:
+			Effects.confetti_shower(k)
+		if _ear(k.x, k.z) > 0.0:
+			Effects.confetti_burst(fx, k.position)
 	if loc:
 		if k.roulette > 0.0 and float(o.roulette) <= 0.0:
 			Sfx.play("pickup", 0.9)
@@ -1035,7 +1060,7 @@ func _observe(k: Kart, dt: float) -> void:
 		if k.roulette <= 0.0 and float(o.roulette) > 0.0 and k.item != 0:
 			Sfx.play("got", 0.9)
 		if k.drift_level > int(o.level):
-			Sfx.play("level1" if k.drift_level == 1 else "level2", 0.8)
+			Sfx.play("level%d" % clampi(k.drift_level, 1, 3), 0.8)
 		if k.hop > float(o.hop) + 0.05 and k.spin <= 0.0:
 			Sfx.play("hop", 0.6)
 		if k.star > 0.0 and float(o.star) <= 0.0:

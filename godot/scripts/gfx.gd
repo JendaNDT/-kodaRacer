@@ -12,19 +12,19 @@ const NAMES := ["Nízká", "Střední", "Vysoká"]
 const LEVELS := [
 	{	# Nízká – slower phones
 		"msaa": Viewport.MSAA_DISABLED, "scale_pc": 0.7, "scale_mobile": 0.55,
-		"particles": 0.4, "foliage": 0.45, "kart_lod": 10.0,
+		"particles": 0.4, "foliage": 0.45, "skids": 160, "kart_lod": 10.0,
 		"shadows": false, "glow": false, "ssao": false, "weather": 0.0,
 		"shadow_dist": 0.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.0,
 	},
 	{	# Střední – default on phones
 		"msaa": Viewport.MSAA_2X, "scale_pc": 1.0, "scale_mobile": 0.75,
-		"particles": 0.75, "foliage": 0.75, "kart_lod": 16.0,
+		"particles": 0.75, "foliage": 0.75, "skids": 360, "kart_lod": 16.0,
 		"shadows": true, "glow": true, "ssao": false, "weather": 0.6,
 		"shadow_dist": 55.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.8,
 	},
 	{	# Vysoká – default on computers
 		"msaa": Viewport.MSAA_4X, "scale_pc": 1.0, "scale_mobile": 0.9,
-		"particles": 1.0, "foliage": 1.0, "kart_lod": 32.0,
+		"particles": 1.0, "foliage": 1.0, "skids": 700, "kart_lod": 32.0,
 		"shadows": true, "glow": true, "ssao": true, "weather": 1.0,
 		"shadow_dist": 85.0, "shadow_splits": 4, "shadow_size": 4096, "shadow_filter": 4, "boost": 1.8,
 	},
@@ -75,6 +75,11 @@ static func amount(n: int) -> int:
 ## Multiplier for trees, bushes, cacti, rocks and clouds.
 static func foliage() -> float:
 	return float(_val("foliage"))
+
+
+## How many tyre-mark strips stay on the road at once.
+static func skid_marks() -> int:
+	return int(_val("skids"))
 
 
 ## Karts farther from the camera than this (metres) switch to their

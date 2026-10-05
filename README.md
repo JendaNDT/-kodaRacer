@@ -54,7 +54,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 ### Tipy
 
-- **Drift**: v zatáčce drž drift a zatáčej. Nejdřív odletují modré jiskry, pak oranžové. Když drift pustíš, dostaneš turbo.
+- **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
 - **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš.
 
@@ -71,11 +71,11 @@ V hlavním menu i v pauze jsou tři tlačítka:
 
 - **Zvuk**: zapnout nebo vypnout.
 - **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
-  - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů a částic.
+  - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů, částic a stop smyku, vzdálené motokáry zjednodušené už od 10 m.
   - **Střední**: stíny od slunce, záře plamenů, jiskřiček a hvězdy, sněžení na Ledové laguně.
-  - **Vysoká**: navíc měkčí a delší stíny, jemné stínování v rozích (SSAO) a hustší sníh.
+  - **Vysoká**: navíc měkčí a delší stíny, jemné stínování v rozích (SSAO), hustší sníh a detailní motokáry až do 32 m.
   - Barvy a nálada tratí jsou na všech kvalitách stejné: odpoledne v údolí, západ slunce v kaňonu, zatažená obloha na laguně.
-  - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů, počet částic a sníh se změní od dalšího závodu.
+  - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů, počet částic a stop smyku, sníh a zjednodušení vzdálených motokár se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
 
 ## Hra po Wi-Fi

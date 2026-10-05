@@ -3,6 +3,8 @@
 
 Cíl: aby hra vypadala „hotově“ (světlo, stíny, efekty, detailní motokáry, živé okolí) a přitom plynule běžela i na slabším telefonu.
 
+> **Stav:** fáze 0–3 jsou hotové a spojené ve **verzi 1.4.0** (větev `claude/amazing-faraday-a6w7aw`). Fáze 1, 2 a 3 vznikly souběžně a jejich vlastní čísla verzí (1.2.0, 1.3.0) platila jen pro samostatné buildy. Výkon spojené verze v cloudu proti 1.1.0: Nízká 27,8 → 22,8 FPS, Střední 10,4 → 7,1 FPS, Vysoká 10,0 → 3,9 FPS. Většinu poklesu dělají stíny z fáze 1, fáze 2 a 3 přidávají asi 5–8 %.
+
 ## Jak budeme postupovat
 
 - **Jedna fáze = jeden balík změn.** Po každé fázi nahraju změny na GitHub, sestaví se nové APK a EXE a ty si to vyzkoušíš na telefonu i PC.
@@ -71,7 +73,10 @@ Soubory: `world_builder.gd` (prostředí, slunce, obloha), `game.gd` (barvy trat
 
 ---
 
-## Fáze 2 – Efekty při jízdě („šťáva“)  *(střední)*
+## Fáze 2 – Efekty při jízdě („šťáva“)  *(střední)* ✅ hotovo (verze 1.2.0)
+
+> **Výsledek:** stopy smyku (`skid_marks.gd`, na GPU mizí, počet podle kvality: 160 / 360 / 700), rychlostní čáry (`speed_lines.gd`, každý hráč vlastní), 3. úroveň driftu (fialová, po 3,5 s „nabíjení“, turbo 1,75 s místo 1,3 s, platí i pro AI), plamen turba s jádrem, jiskrami a zábleskem v barvě driftu, výbuch rakety (záblesk, tlaková vlna, oheň, kouř, úlomky, otřes kamery), hvězdičky nad hlavou po zásahu, lesk přejíždějící po krabicích a barevné střepy, konfety v cíli, vlající šachovnicové vlajky na bráně, prach / písek / sníh od kol podle povrchu a kouř pneumatik při driftu. Vše vidí i klient ve Wi-Fi hře. Výkon v cloudu (softwarové vykreslování): Nízká 26,9 → 25,3 FPS, Střední 10,4 → 9,8 FPS.
+> *Odchylky od plánu:* mávající vlajka je na startovní bráně (ne v ruce). Motokára po zásahu se točí jako dřív, nové jsou hvězdičky.
 
 - **Stopy smyku** na asfaltu při driftu a prudkém brzdění. Postupně mizí a jejich počet je omezený, aby nežraly výkon.
 - **Rychlostní čáry** po okrajích obrazovky při turbu a hvězdě, síla podle rychlosti. Každý hráč má vlastní, i na rozdělené obrazovce.
@@ -162,9 +167,9 @@ Riziko: zasahuje do fyziky, AI i sítě, proto až nakonec a samostatně.
 
 | Fáze | Velikost | Co přinese |
 | --- | --- | --- |
-| 0 Kvalita + FPS + verze | malá | bezpečnost výkonu, základ |
-| 1 Světlo a atmosféra | střední | největší vizuální skok |
-| 2 Efekty při jízdě | střední | pocit rychlosti, zábava |
+| 0 Kvalita + FPS + verze ✅ | malá | bezpečnost výkonu, základ |
+| 1 Světlo a atmosféra ✅ | střední | největší vizuální skok |
+| 2 Efekty při jízdě ✅ | střední | pocit rychlosti, zábava |
 | 3 Motokáry a jezdci ✅ | velká | charakter postav |
 | 4 Svět kolem trati | velká | živé prostředí |
 | 5 Menu a výsledky | střední | dojem z celé hry |

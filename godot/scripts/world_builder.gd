@@ -6,6 +6,47 @@ extends RefCounted
 
 const GROUND := 3600.0
 
+## Item boxes: rainbow glass with a gleam sweeping across them.
+const BOX_SHADER := """
+shader_type spatial;
+render_mode blend_mix, cull_back;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform float glow = 0.0;   // 1 on levels with glow: the rainbow box shines
+varying float sweep;
+void vertex() {
+	vec3 o = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	sweep = (VERTEX.x + VERTEX.y * 1.3 + VERTEX.z * 0.7) * 0.22 - TIME * 0.55 + (o.x + o.z) * 0.013;
+}
+void fragment() {
+	float band = abs(fract(sweep) - 0.5);
+	float shine = smoothstep(0.07, 0.0, band);
+	ALBEDO = texture(tex, UV).rgb;
+	vec3 base = mix(vec3(0.18, 0.18, 0.2), (vec3(1.0) + ALBEDO) * 0.4, glow);
+	EMISSION = base + vec3(1.0, 0.98, 0.9) * shine * 0.9;
+	ALPHA = mix(0.82, 1.0, shine);
+	ROUGHNESS = 0.3;
+}
+"""
+
+## Checkered flag that waves on a pole (UV.x = 0 at the pole).
+const FLAG_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+varying float fold;
+void vertex() {
+	float k = UV.x;
+	float ph = UV.x * 7.0 - TIME * 7.5 + UV.y * 1.5;
+	VERTEX.z += sin(ph) * 0.32 * k;
+	VERTEX.y -= k * k * 0.25;
+	fold = cos(ph) * k;
+}
+void fragment() {
+	float c = mod(floor(UV.x * 7.0) + floor(UV.y * 5.0), 2.0);
+	vec3 col = mix(vec3(0.97), vec3(0.06), c);
+	ALBEDO = col * (0.82 + 0.18 * fold);
+}
+"""
+
 
 static func build(tr: Track) -> Dictionary:
 	var th: Dictionary = tr.def.theme
@@ -147,12 +188,11 @@ static func build(tr: Track) -> Dictionary:
 				c = Color.WHITE
 			bimg.set_pixel(xx, yy, c)
 	bimg.generate_mipmaps()
-	var box_mat := StandardMaterial3D.new()
-	box_mat.albedo_texture = ImageTexture.create_from_image(bimg)
-	box_mat.albedo_color = Color(1, 1, 1, 0.82)
-	box_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	box_mat.emission_enabled = true
-	box_mat.emission = Color(0.18, 0.18, 0.2)
+	var box_shader := Shader.new()
+	box_shader.code = BOX_SHADER
+	var box_mat := ShaderMaterial.new()
+	box_mat.shader = box_shader
+	box_mat.set_shader_parameter("tex", ImageTexture.create_from_image(bimg))
 	atm.box_mat = box_mat
 	var box_mesh := BoxMesh.new()
 	box_mesh.size = Vector3(1.7, 1.7, 1.7)
@@ -391,6 +431,35 @@ static func _start_gantry(tr: Track) -> Node3D:
 			if face < 0.0:
 				q.rotation.y = PI
 			g.add_child(q)
+	# waving checkered flags on top of the gantry
+	var flag_shader := Shader.new()
+	flag_shader.code = FLAG_SHADER
+	var flag_mat := ShaderMaterial.new()
+	flag_mat.shader = flag_shader
+	var cloth := PlaneMesh.new()
+	cloth.orientation = PlaneMesh.FACE_Z
+	cloth.size = Vector2(3.4, 2.2)
+	cloth.center_offset = Vector3(1.7, -1.1, 0.0)
+	cloth.subdivide_width = 14
+	cloth.subdivide_depth = 4
+	var staff := CylinderMesh.new()
+	staff.top_radius = 0.09
+	staff.bottom_radius = 0.11
+	staff.height = 4.6
+	staff.radial_segments = 6
+	for s in [-1.0, 1.0]:
+		var st := MeshInstance3D.new()
+		st.mesh = staff
+		st.material_override = pole_mat
+		st.position = Vector3(s * (Game.HW + 2.6), 9.5 + 2.3, 0)
+		g.add_child(st)
+		var fl := MeshInstance3D.new()
+		fl.mesh = cloth
+		fl.material_override = flag_mat
+		fl.position = Vector3(s * (Game.HW + 2.6), 13.9, 0)
+		# both flags fly towards the middle of the road
+		fl.rotation.y = PI if s > 0.0 else 0.0
+		g.add_child(fl)
 	return g
 
 

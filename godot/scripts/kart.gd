@@ -4,6 +4,10 @@ extends Node3D
 ## the arcade driving model (ported 1:1 from the web prototype).
 
 const SNAP_FIELDS := 24
+## Drift spark / turbo colours for drift levels 1–3 (blue, orange, purple).
+const DRIFT_COLS := [Color(0.35, 0.78, 1.0), Color(1.0, 0.64, 0.18), Color(0.78, 0.36, 1.0)]
+const DRIFT_BOOST := [0.0, 0.7, 1.3, 1.75]
+const FLAME_COL := Color(1.0, 0.63, 0.19)
 
 var race: Race
 var ch: Dictionary
@@ -53,6 +57,7 @@ var drift_active := false
 var drift_dir := 0.0
 var drift_charge := 0.0
 var drift_level := 0
+var braking := false
 var bump_cd := 0.0
 var wrong_t := 0.0
 var obs := {}
@@ -68,10 +73,18 @@ var spin_r: Array = []
 var spin_a := PackedFloat32Array()
 var flames: Array = []
 var glow_mats: Array = []
+var cores: Array = []
+var flame_mat: StandardMaterial3D
 var sparks: Array = []
-var dust: CPUParticles3D
+var wheel_dust: Array = []
+var wheel_smoke: Array = []
 var flame_fx: CPUParticles3D
+var boost_fx: CPUParticles3D
 var star_fx: CPUParticles3D
+var stars: Node3D
+var boost_col := FLAME_COL
+var boost_age := 0.0
+var skid_last: Array = [null, null]
 var name_tag: Label3D
 var blob: MeshInstance3D
 var star_hue := 0.0
@@ -105,12 +118,16 @@ static func _shared() -> Dictionary:
 	if not _m.is_empty():
 		return _m
 	_m.flame = _cyl(0.0, 0.2, 1.0, 8)
+	_m.core = _cyl(0.0, 0.1, 0.7, 8)
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.albedo_color = Color(1.0, 0.63, 0.19, 0.85)
 	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_m.flamem = fm
+	var cm := fm.duplicate()
+	cm.albedo_color = Color(1.0, 0.95, 0.75, 0.9)
+	_m.corem = cm
 	# soft round blob shadow
 	var img := Image.create_empty(64, 64, false, Image.FORMAT_RGBA8)
 	for yy in 64:
@@ -144,6 +161,10 @@ static func _shared() -> Dictionary:
 		pm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		pm.albedo_texture = _m.dot
 		pm.disable_fog = true
+		# fade particles that fly right past the camera instead of filling the screen
+		pm.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+		pm.distance_fade_min_distance = 1.5
+		pm.distance_fade_max_distance = 5.0
 		_m["pmat_add" if additive else "pmat_mix"] = pm
 	return _m
 
@@ -175,6 +196,7 @@ static func apply_quality() -> void:
 	var m := _shared()
 	var b := Gfx.boost()
 	m.flamem.albedo_color = Color(1.0 * b, 0.63 * b, 0.19 * b, 0.85)
+	m.corem.albedo_color = Color(1.0 * b, 0.95 * b, 0.75 * b, 0.9)
 	m.pmat_add.albedo_color = Color(b, b, b, 1.0)
 
 
@@ -194,19 +216,28 @@ func _part(mesh: Mesh, mat: Material, pos: Vector3, parent: Node3D = null) -> Me
 	return mi
 
 
-## Detailed mesh up close, the simpler one beyond `dist` metres.
+## Detailed mesh up close, the simpler one beyond `dist` metres. The sun's
+## shadow always comes from the simpler one (a shadow-only copy up close):
+## nobody sees the difference in a shadow, but it is drawn once per cascade.
 static func _lod_pair(parent: Node3D, near: Mesh, far: Mesh, dist: float) -> Array:
 	var a := MeshInstance3D.new()
 	a.mesh = near
 	a.visibility_range_end = dist
 	a.visibility_range_end_margin = 2.0
+	a.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(a)
 	var b := MeshInstance3D.new()
 	b.mesh = far
 	b.visibility_range_begin = dist
 	b.visibility_range_begin_margin = 2.0
 	parent.add_child(b)
-	return [a, b]
+	var c := MeshInstance3D.new()
+	c.mesh = far
+	c.visibility_range_end = dist
+	c.visibility_range_end_margin = 2.0
+	c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	parent.add_child(c)
+	return [a, b, c]
 
 
 func _build_model() -> void:
@@ -223,12 +254,18 @@ func _build_model() -> void:
 	for mesh in _lod_pair(chassis, model.body, model.body_low, lod):
 		mesh.set_surface_override_material(0, paint)
 	var ex: Vector3 = model.exhaust
+	flame_mat = m.flamem.duplicate()
 	for sx in [-1.0, 1.0]:
-		var f := _part(m.flame, m.flamem, Vector3(ex.x * sx, ex.y, ex.z - 0.3))
+		var f := _part(m.flame, flame_mat, Vector3(ex.x * sx, ex.y, ex.z - 0.3))
 		f.rotation.x = -PI / 2.0
 		f.visible = false
 		f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		flames.append(f)
+		var c := _part(m.core, m.corem, Vector3(ex.x * sx, ex.y, ex.z - 0.2))
+		c.rotation.x = -PI / 2.0
+		c.visible = false
+		c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		cores.append(c)
 	# front wheels steer on their own pivots, the rear pair spins on one axle
 	var fw: Dictionary = model.front
 	var rw: Dictionary = model.rear
@@ -278,17 +315,7 @@ func _build_model() -> void:
 		p.gravity = Vector3(0, -14, 0)
 		add_child(p)
 		sparks.append(p)
-	dust = _emitter(1.2, false, 24, 0.6)
-	dust.position = Vector3(0, 0.3, float(rw.z) - 0.45)
-	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	dust.emission_sphere_radius = 1.0
-	dust.direction = Vector3(0, 1, -0.3)
-	dust.initial_velocity_min = 1.0
-	dust.initial_velocity_max = 2.5
-	dust.gravity = Vector3(0, 0.5, 0)
-	dust.scale_amount_min = 0.8
-	dust.scale_amount_max = 1.6
-	add_child(dust)
+	_wheel_fx(race.track.def.theme)
 	flame_fx = _emitter(0.7, true, 24, 0.18)
 	flame_fx.position = Vector3(0, ex.y + 0.02, ex.z - 0.45)
 	flame_fx.direction = Vector3(0, 0.2, -1)
@@ -298,6 +325,15 @@ func _build_model() -> void:
 	flame_fx.gravity = Vector3.ZERO
 	flame_fx.color = Color(1.0, 0.55, 0.15)
 	add_child(flame_fx)
+	boost_fx = _emitter(0.22, true, 16, 0.3)
+	boost_fx.local_coords = true
+	boost_fx.position = Vector3(0, ex.y, ex.z - 0.15)
+	boost_fx.direction = Vector3(0, 0.5, -1)
+	boost_fx.spread = 35.0
+	boost_fx.initial_velocity_min = 4.0
+	boost_fx.initial_velocity_max = 8.0
+	boost_fx.gravity = Vector3(0, -12, 0)
+	add_child(boost_fx)
 	star_fx = _emitter(0.5, true, 20, 0.4)
 	star_fx.position = Vector3(0, 1.0, 0)
 	star_fx.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -310,6 +346,67 @@ func _build_model() -> void:
 	star_fx.hue_variation_min = -1.0
 	star_fx.hue_variation_max = 1.0
 	add_child(star_fx)
+	stars = Effects.hit_stars()
+	stars.position.y = 2.6
+	add_child(stars)
+
+
+## Dust or snow thrown up by the rear wheels off the road (by surface) and
+## tyre smoke while drifting or spinning on the road.
+func _wheel_fx(th: Dictionary) -> void:
+	var rw: Dictionary = model.rear
+	var surf: String = th.get("surface", "grass")
+	var dust_col: Color = th.dust
+	for sx in [-1.0, 1.0]:
+		var p: CPUParticles3D
+		match surf:
+			"snow":
+				p = _emitter(0.9, false, 22, 0.7)
+				p.direction = Vector3(sx * 0.4, 1.0, -0.7)
+				p.spread = 25.0
+				p.initial_velocity_min = 3.5
+				p.initial_velocity_max = 7.0
+				p.gravity = Vector3(0, -9, 0)
+				p.scale_amount_min = 0.5
+				p.scale_amount_max = 1.3
+				p.color = Color(1, 1, 1, 0.95)
+			"sand":
+				p = _emitter(1.6, false, 16, 1.0)
+				p.direction = Vector3(sx * 0.3, 0.6, -1.0)
+				p.spread = 40.0
+				p.initial_velocity_min = 1.0
+				p.initial_velocity_max = 3.0
+				p.gravity = Vector3(0, 0.4, 0)
+				p.scale_amount_curve = Effects._curve(0.6, 1.5)
+				p.color = Color(dust_col, 0.8)
+			_:
+				p = _emitter(0.7, false, 14, 0.55)
+				p.direction = Vector3(sx * 0.3, 1.0, -0.6)
+				p.spread = 30.0
+				p.initial_velocity_min = 2.5
+				p.initial_velocity_max = 5.0
+				p.gravity = Vector3(0, -14, 0)
+				p.scale_amount_min = 0.6
+				p.scale_amount_max = 1.2
+				var g := Gradient.new()
+				g.colors = PackedColorArray([Color(th.ground).darkened(0.25), dust_col])
+				p.color_initial_ramp = g
+		p.position = Vector3(sx * float(rw.x), 0.3, float(rw.z) - 0.25)
+		p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		p.emission_sphere_radius = 0.3
+		add_child(p)
+		wheel_dust.append(p)
+		var sm := _emitter(1.4, false, 12, 0.8)
+		sm.position = Vector3(sx * float(rw.x), 0.25, float(rw.z) - 0.15)
+		sm.direction = Vector3(0, 1, -0.3)
+		sm.spread = 30.0
+		sm.initial_velocity_min = 0.5
+		sm.initial_velocity_max = 1.5
+		sm.gravity = Vector3(0, 1.0, 0)
+		sm.scale_amount_curve = Effects._curve(0.6, 1.8)
+		sm.color = Color(1, 1, 1, 0.6) if surf == "snow" else Color(0.9, 0.9, 0.92, 0.38)
+		add_child(sm)
+		wheel_smoke.append(sm)
 
 
 func _emitter(size: float, additive: bool, amount: int, life: float) -> CPUParticles3D:
@@ -352,7 +449,7 @@ func reset(px: float, pz: float, h: float) -> void:
 	item = 0; item_n = 0; roulette = 0.0; roll_tick = 0.0
 	lap = 0; max_lap = 0; lap_start = 0.0; lap_times = []; last_lap = 0.0
 	finished = false; finish_time = 0.0; offroad = false; lat = 0.0; rank = 6
-	drift_prev = false; drift_active = false; drift_dir = 0.0; drift_charge = 0.0; drift_level = 0
+	drift_prev = false; drift_active = false; drift_dir = 0.0; drift_charge = 0.0; drift_level = 0; braking = false
 	bump_cd = 0.0; wrong_t = 0.0; autopilot = false
 	var pj := race.track.project(x, z, -1)
 	idx = pj[0]
@@ -360,8 +457,11 @@ func reset(px: float, pz: float, h: float) -> void:
 	last_s = s
 	prev_x = x; prev_z = z; prev_h = heading
 	vis_x = x; vis_z = z; vis_h = heading
-	for f in flames:
+	for f in flames + cores:
 		f.visible = false
+	skid_last = [null, null]
+	boost_col = FLAME_COL
+	stars.visible = false
 	for mt in glow_mats:
 		mt.emission_enabled = false
 	body.rotation = Vector3.ZERO
@@ -402,7 +502,7 @@ func hit(dur: float, big: bool) -> bool:
 
 func end_drift() -> void:
 	if drift_level > 0:
-		boost = maxf(boost, 0.7 if drift_level == 1 else 1.3)
+		boost = maxf(boost, float(DRIFT_BOOST[mini(drift_level, 3)]))
 		boost_mul = 1.25
 	drift_active = false
 	drift_charge = 0.0
@@ -420,6 +520,7 @@ func update(dt: float, inp: Dictionary) -> void:
 	invuln = maxf(0.0, invuln - dt)
 	bump_cd = maxf(0.0, bump_cd - dt)
 
+	braking = false
 	if spin > 0.0:
 		spin -= dt
 		speed = Game.approach(speed, 0.0, 32.0 * dt)
@@ -440,6 +541,7 @@ func update(dt: float, inp: Dictionary) -> void:
 				var a: float = base.accel * float(ch.accel) * float(race.diff.speed) * (2.2 if speed < 0.0 else 1.0) * (1.0 - 0.55 * clampf(speed / cap, 0.0, 1.0))
 				speed = minf(cap, speed + a * dt)
 		elif inp.brake:
+			braking = speed > 8.0
 			if speed > 0.5:
 				speed -= float(base.brake) * dt
 			else:
@@ -468,7 +570,7 @@ func update(dt: float, inp: Dictionary) -> void:
 				var tight := clampf((steer * drift_dir + 1.0) * 0.5, 0.0, 1.0)
 				heading -= drift_dir * float(base.turn) * handling * (0.5 + 0.62 * tight) * dt
 				drift_charge += dt * (0.55 + 0.9 * tight) * (0.4 if offroad else 1.0)
-				var lvl := 2 if drift_charge > 2.2 else (1 if drift_charge > 1.0 else 0)
+				var lvl := 3 if drift_charge > 3.5 else (2 if drift_charge > 2.2 else (1 if drift_charge > 1.0 else 0))
 				if lvl > drift_level:
 					drift_level = lvl
 		if not drift_active:
@@ -532,7 +634,7 @@ func pack(out: PackedFloat32Array, o: int) -> void:
 	out[o + 13] = drift_dir * (drift_level + 1) if drift_active else 0.0
 	out[o + 14] = lap; out[o + 15] = s; out[o + 16] = rank; out[o + 17] = 1.0 if finished else 0.0
 	out[o + 18] = finish_time; out[o + 19] = item * 10 + item_n; out[o + 20] = roulette
-	out[o + 21] = last_lap; out[o + 22] = wrong_t; out[o + 23] = 1.0 if offroad else 0.0
+	out[o + 21] = last_lap; out[o + 22] = wrong_t; out[o + 23] = (1 if offroad else 0) + (2 if braking else 0)
 
 
 func unpack(d: PackedFloat32Array, o: int) -> void:
@@ -550,7 +652,9 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	item = it / 10
 	item_n = it % 10
 	roulette = d[o + 20]
-	last_lap = d[o + 21]; wrong_t = d[o + 22]; offroad = d[o + 23] > 0.5
+	last_lap = d[o + 21]; wrong_t = d[o + 22]; var fl := int(d[o + 23])
+	offroad = fl & 1 != 0
+	braking = fl & 2 != 0
 
 
 # ================================================================== visuals
@@ -561,7 +665,7 @@ func begin_tick() -> void:
 
 
 ## alpha: physics interpolation fraction; smooth > 0 eases toward network state instead.
-func render(delta: float, alpha: float, smooth: bool, t: float, dust_color: Color) -> void:
+func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 	var px: float
 	var pz: float
 	var ph: float
@@ -593,29 +697,91 @@ func render(delta: float, alpha: float, smooth: bool, t: float, dust_color: Colo
 	for f in front:
 		f.rotation.y = -steer * 0.45
 	rig.update(self, delta, t)
-	var fl := boost > 0.0 or star > 0.0
-	for f in flames:
-		f.visible = fl
-		if fl:
-			f.scale = Vector3(1.0, 0.8 + randf() * 0.6, 1.0)
-	flame_fx.emitting = fl
+	_render_flames(delta)
 	if star > 0.0:
-		star_hue = fposmod(star_hue + delta * 1.6, 1.0)
-		var c := Color.from_hsv(star_hue, 1.0, 0.9)
 		for mt in glow_mats:
 			mt.emission_enabled = true
-			mt.emission = c
+			mt.emission = Color.from_hsv(star_hue, 1.0, 0.9)
 			mt.emission_energy_multiplier = Gfx.boost()
 	elif glow_mats[0].emission_enabled:
 		for mt in glow_mats:
 			mt.emission_enabled = false
 	star_fx.emitting = star > 0.0
-	var spark_col := Color(1.0, 0.64, 0.18) if drift_level == 2 else Color(0.35, 0.78, 1.0)
+	var lvl := clampi(drift_level, 1, 3)
 	for p in sparks:
 		p.emitting = drift_active and drift_level > 0
-		p.color = spark_col
-	dust.emitting = offroad and absf(speed) > 8.0
-	dust.color = dust_color
+		p.color = DRIFT_COLS[lvl - 1]
+		p.scale_amount_min = 1.5 if drift_level == 3 else 1.0
+		p.scale_amount_max = p.scale_amount_min
+	var moving := absf(speed) > 8.0
+	var on_road_slide := not offroad and absf(speed) > 6.0 and (drift_active or spin > 0.0)
+	for i in 2:
+		wheel_dust[i].emitting = offroad and moving and hop_y() < 0.2
+		wheel_smoke[i].emitting = on_road_slide
+	_render_skids()
+	stars.visible = spin > 0.0
+	if stars.visible:
+		stars.rotation.y = t * 5.0
+		stars.position.y = float(model.top) + 0.45 + hop_y()
+
+
+func _render_flames(delta: float) -> void:
+	var fl := boost > 0.0 or star > 0.0
+	boost_age = boost_age + delta if fl else 0.0
+	flame_fx.emitting = fl
+	boost_fx.emitting = boost > 0.0
+	if not fl:
+		if flames[0].visible:
+			for f in flames + cores:
+				f.visible = false
+		return
+	var col := boost_col
+	if star > 0.0:
+		star_hue = fposmod(star_hue + delta * 1.6, 1.0)
+		if boost <= 0.0:
+			col = Color.from_hsv(star_hue, 0.8, 1.0)
+	var b := Gfx.boost()
+	flame_mat.albedo_color = Color(col.r * b, col.g * b, col.b * b, 0.85)
+	flame_fx.color = col
+	boost_fx.color = col.lightened(0.4)
+	# the flame bursts out long right after the turbo kicks in, then flickers
+	var pulse := 1.0 + 0.9 * clampf(1.0 - boost_age / 0.35, 0.0, 1.0)
+	var ex: Vector3 = model.exhaust
+	for i in flames.size():
+		var ln := (0.9 + randf() * 0.6) * pulse * 1.2
+		var f: MeshInstance3D = flames[i]
+		f.visible = true
+		f.scale = Vector3(pulse, ln, pulse)
+		f.position.z = ex.z - 0.5 * ln
+		var c: MeshInstance3D = cores[i]
+		c.visible = true
+		c.scale = Vector3(1.0, ln * 0.8, 1.0)
+		c.position.z = ex.z - 0.28 * ln
+
+
+## Tyre marks from both rear wheels while drifting, braking hard or spinning.
+func _render_skids() -> void:
+	var skid := (drift_active or braking or spin > 0.0) and not offroad and absf(speed) > 6.0 and hop_y() < 0.15
+	var strength := 0.75 if braking and not drift_active else 1.0
+	var rw: Dictionary = model.rear
+	for i in 2:
+		if not skid:
+			skid_last[i] = null
+			continue
+		var wp := transform * Vector3(float(rw.x) * (-1.0 if i == 0 else 1.0), 0.0, float(rw.z))
+		if skid_last[i] == null:
+			skid_last[i] = wp
+		elif wp.distance_to(skid_last[i]) >= SkidMarks.STEP:
+			race.skids.add(skid_last[i], wp, strength)
+			skid_last[i] = wp
+
+
+## Turbo just started: colour by what gave it (drift level 1–3, 0 = item or start) and a flash.
+func on_boost(level: int) -> void:
+	boost_col = DRIFT_COLS[level - 1] if level >= 1 and level <= 3 else FLAME_COL
+	boost_age = 0.0
+	var ex: Vector3 = model.exhaust
+	Effects.flash(body, Vector3(0, ex.y, ex.z - 0.45), boost_col.lightened(0.3), 3.2, 0.3)
 
 
 ## Springy chassis: dips on landing, nods when speeding up or braking and

@@ -148,11 +148,8 @@ static func apply_quality(atm: Dictionary) -> void:
 	if atm.snow != null:
 		atm.snow.visible = Gfx.weather() > 0.0
 	if atm.box_mat != null:
-		var bm: StandardMaterial3D = atm.box_mat
 		# the rainbow box shines on levels with glow
-		bm.emission_texture = bm.albedo_texture if Gfx.glow() else null
-		bm.emission = Color(1, 1, 1) if Gfx.glow() else Color(0.18, 0.18, 0.2)
-		bm.emission_energy_multiplier = 0.4 if Gfx.glow() else 1.0
+		(atm.box_mat as ShaderMaterial).set_shader_parameter("glow", 1.0 if Gfx.glow() else 0.0)
 
 
 ## Slow drift of the clouds around the track.

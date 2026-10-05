@@ -47,6 +47,8 @@ func _ready() -> void:
 		Game.settings.quality = clampi(int(a.quality), 0, 2)   # not saved
 	if a.has("fps"):
 		Game.settings.show_fps = true
+	if a.has("timescale"):
+		Engine.time_scale = float(a.timescale)   # slow motion for effect screenshots
 	if a.has("bench"):
 		# fixed demo race, frame times measured after a warm-up
 		_test_mode = "bench"
@@ -258,6 +260,8 @@ func _process(delta: float) -> void:
 	_update_fps(delta)
 	if Game.cmd_args.has("pause-at") and race != null and _test_t < float(Game.cmd_args["pause-at"]) and _test_t + delta >= float(Game.cmd_args["pause-at"]):
 		race.toggle_pause()   # screenshots of the pause menu
+	if Game.cmd_args.has("fx") and race != null and _test_t < float(Game.cmd_args.get("fx-at", "6")) and _test_t + delta >= float(Game.cmd_args.get("fx-at", "6")):
+		_show_fx(String(Game.cmd_args.fx))
 	_test_t += delta
 	if Game.cmd_args.has("showcase") and race != null:
 		Showcase.hold(race)
@@ -334,6 +338,44 @@ func _process(delta: float) -> void:
 			_finish_test(me.finished, "client finished place %d" % race._place_of(me))
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
+
+
+## Screenshot helper: sets off one effect next to the first local player.
+func _show_fx(what: String) -> void:
+	var k: Kart = race.locals[0]
+	var ahead := Vector3(sin(k.heading), 0.0, cos(k.heading))
+	var cam: Camera3D = race.panes[0].cam
+	var front := cam.global_position - cam.global_basis.z * 9.0
+	if Game.cmd_args.has("fx-pause"):
+		race.paused = true   # karts stand still, the effect keeps playing
+	match what:
+		"explosion":
+			race._explode(front.x, front.z)
+		"box":
+			Effects.box_shards(race.fx, front)
+		"burst":
+			Effects.confetti_burst(race.fx, front - Vector3(0, 2, 0))
+		"confetti":
+			k.finished = true
+			k.finish_time = race.race_time
+		"hit":
+			k.hit(1.6, false)
+		"boost":
+			k.boost = 2.0
+			k.boost_mul = 1.25
+			k.drift_level = 0
+			k.obs.level = int(Game.cmd_args.get("level", "3"))
+		"star":
+			k.star = 4.0
+		"skids":
+			# an S-shaped pair of marks across the road ahead
+			var side := Vector3(cos(k.heading), 0.0, -sin(k.heading))
+			for i in 50:
+				var w0 := sin(i * 0.14) * 6.0
+				var w1 := sin((i + 1) * 0.14) * 6.0
+				for sx in [-1.0, 1.0]:
+					race.skids.add(k.position + ahead * (4.0 + i * 0.75) + side * (w0 + sx),
+						k.position + ahead * (4.75 + i * 0.75) + side * (w1 + sx), 1.0)
 
 
 func _finish_test(ok: bool, why: String) -> void:

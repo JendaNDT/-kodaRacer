@@ -236,6 +236,7 @@ func _build_sounds() -> void:
 	b = _buf(0.65); _noise(b, 0, 0.6, 1, 400, 2600, 0.9); _tone(b, 0, 0.45, 220, 700, W.SAW, 0.18); sounds.boost = _to_stream(b)
 	b = _buf(0.1); _tone(b, 0, 0.09, 880, 0, W.TRI, 0.3); sounds.level1 = _to_stream(b)
 	b = _buf(0.1); _tone(b, 0, 0.09, 1320, 0, W.TRI, 0.3); sounds.level2 = _to_stream(b)
+	b = _buf(0.18); _tone(b, 0, 0.07, 1760, 0, W.TRI, 0.3); _tone(b, 0.07, 0.1, 2093, 0, W.TRI, 0.3); sounds.level3 = _to_stream(b)
 	b = _buf(0.1); _tone(b, 0, 0.08, 320, 520, W.TRI, 0.2); sounds.hop = _to_stream(b)
 	b = _buf(0.62); _tone(b, 0, 0.6, 760, 110, W.SQUARE, 0.25); _noise(b, 0, 0.3, 1, 900, 0, 0.5); sounds.hit = _to_stream(b)
 	b = _buf(0.18); _noise(b, 0, 0.16, 0, 320, 0, 1.2); _tone(b, 0, 0.12, 90, 0, W.SINE, 0.6); sounds.bump = _to_stream(b)

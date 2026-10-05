@@ -41,7 +41,7 @@ var TRACKS := [
 		"boxes": [0.1, 0.36, 0.6, 0.84],
 		"theme": {"ground": Color("4caa3c"), "ground2": Color("41983a"),
 			"ground3": Color("5cb84a"), "road": Color("44464d"), "kerb_a": Color("e8333a"), "kerb_b": Color("f4f4f4"),
-			"dust": Color("8a6a45"), "deco": "trees", "mount": Color("5d8c68"),
+			"dust": Color("8a6a45"), "surface": "grass", "deco": "trees", "mount": Color("5d8c68"),
 			"cap": Color("f4f8ff"), "tree": Color("2f8a3e"), "lake": Color("3d9be0"),
 			# sunny afternoon: high sun, deep blue sky, crisp shadows
 			"mood": {"sky_top": Color("1f6fd6"), "horizon": Color("cfe7ff"), "sun_elev": 50.0, "sun_azim": -55.0,
@@ -58,7 +58,7 @@ var TRACKS := [
 		"boxes": [0.08, 0.3, 0.55, 0.78],
 		"theme": {"ground": Color("d9aa62"), "ground2": Color("c99852"),
 			"ground3": Color("e6bb7c"), "road": Color("594b43"), "kerb_a": Color("d9480f"), "kerb_b": Color("fff1dc"),
-			"dust": Color("d8b07a"), "deco": "cactus", "mount": Color("c0622f"),
+			"dust": Color("d8b07a"), "surface": "sand", "deco": "cactus", "mount": Color("c0622f"),
 			"cap": null, "tree": Color("3f8f3a"), "lake": null,
 			# sunset: low orange sun, long shadows, warm haze
 			"mood": {"sky_top": Color("3b4f9e"), "horizon": Color("ffab6b"), "sun_elev": 9.0, "sun_azim": 125.0,
@@ -75,7 +75,7 @@ var TRACKS := [
 		"boxes": [0.12, 0.38, 0.62, 0.86],
 		"theme": {"ground": Color("e4ebf4"), "ground2": Color("d5dfec"),
 			"ground3": Color("f4f7fb"), "road": Color("4b5564"), "kerb_a": Color("2a7de1"), "kerb_b": Color("f7fbff"),
-			"dust": Color("ffffff"), "deco": "pines", "mount": Color("dbe6f3"),
+			"dust": Color("ffffff"), "surface": "snow", "deco": "pines", "mount": Color("dbe6f3"),
 			"cap": Color("ffffff"), "tree": Color("2e6b55"), "lake": Color("a9d8f5"),
 			# cold and grey: weak bluish sun, low clouds, falling snow
 			"mood": {"sky_top": Color("7389b3"), "horizon": Color("dfe7f2"), "sun_elev": 24.0, "sun_azim": -150.0,

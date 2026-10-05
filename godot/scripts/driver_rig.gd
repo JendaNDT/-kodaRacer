@@ -47,6 +47,8 @@ func setup(driver: int, wheel_pos: Vector3, tilt: float, mat: Material, lod: flo
 	steer_spin = _mi(m.wheel, MeshKit.shared_material(), steer_node)
 	for mi in upper + fore + [steer_spin]:
 		(mi as GeometryInstance3D).visibility_range_end = lod
+		# too thin to matter in the sun's shadow
+		(mi as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	reset()
 
 
