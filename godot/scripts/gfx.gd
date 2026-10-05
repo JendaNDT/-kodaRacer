@@ -10,17 +10,17 @@ const NAMES := ["Nízká", "Střední", "Vysoká"]
 const LEVELS := [
 	{	# Nízká – slower phones
 		"msaa": Viewport.MSAA_DISABLED, "scale_pc": 0.7, "scale_mobile": 0.55,
-		"particles": 0.4, "foliage": 0.45,
+		"particles": 0.4, "foliage": 0.45, "kart_lod": 10.0,
 		"shadows": false, "glow": false, "ssao": false, "weather": 0.0,
 	},
 	{	# Střední – default on phones
 		"msaa": Viewport.MSAA_2X, "scale_pc": 1.0, "scale_mobile": 0.75,
-		"particles": 0.75, "foliage": 0.75,
+		"particles": 0.75, "foliage": 0.75, "kart_lod": 16.0,
 		"shadows": true, "glow": true, "ssao": false, "weather": 0.6,
 	},
 	{	# Vysoká – default on computers
 		"msaa": Viewport.MSAA_4X, "scale_pc": 1.0, "scale_mobile": 0.9,
-		"particles": 1.0, "foliage": 1.0,
+		"particles": 1.0, "foliage": 1.0, "kart_lod": 32.0,
 		"shadows": true, "glow": true, "ssao": true, "weather": 1.0,
 	},
 ]
@@ -70,6 +70,12 @@ static func amount(n: int) -> int:
 ## Multiplier for trees, bushes, cacti, rocks and clouds.
 static func foliage() -> float:
 	return float(_val("foliage"))
+
+
+## Karts farther from the camera than this (metres) switch to their
+## simpler model, and their drivers drop the arms and steering wheel.
+static func kart_lod() -> float:
+	return float(_val("kart_lod"))
 
 
 ## Phase 1 (light and atmosphere) reads these.

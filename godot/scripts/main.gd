@@ -16,6 +16,8 @@ var _fps_time := 0.0
 var _fps_frames := 0
 var _fps_worst := 0.0
 var _bench: PackedFloat32Array = PackedFloat32Array()
+var _bench_draws := 0
+var _bench_prims := 0
 
 
 func _ready() -> void:
@@ -51,6 +53,11 @@ func _ready() -> void:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 		_start_demo()
 		return
+	if a.has("showcase"):
+		# karts parked for screenshots, camera set after the race moves it
+		process_priority = 100
+		menu.visible = false
+		_start_demo()
 	if a.has("screenshot"):
 		_shot_path = String(a.screenshot)
 		_shot_delay = float(a.get("delay", "4"))
@@ -76,6 +83,8 @@ func _ready() -> void:
 			Net.host("Hostitel", 0)
 		else:
 			Net.join("127.0.0.1", "Klient", 1)
+		return
+	if a.has("showcase"):
 		return
 	show_menu(String(a.get("screen", "home")))
 	if a.has("host"):
@@ -249,6 +258,8 @@ func _process(delta: float) -> void:
 	if Game.cmd_args.has("pause-at") and race != null and _test_t < float(Game.cmd_args["pause-at"]) and _test_t + delta >= float(Game.cmd_args["pause-at"]):
 		race.toggle_pause()   # screenshots of the pause menu
 	_test_t += delta
+	if Game.cmd_args.has("showcase") and race != null:
+		Showcase.hold(race)
 	if _shot_path != "" and _test_t >= _shot_delay:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(_shot_path)
@@ -267,6 +278,8 @@ func _process(delta: float) -> void:
 		var secs := float(Game.cmd_args.get("seconds", "10"))
 		if _test_t > 2.0:
 			_bench.append(delta)
+			_bench_draws += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
+			_bench_prims += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
 		if _test_t > 2.0 + secs:
 			var sorted := _bench.duplicate()
 			sorted.sort()
@@ -274,9 +287,10 @@ func _process(delta: float) -> void:
 			for d in _bench:
 				total += d
 			var avg := total / _bench.size()
-			print("BENCH quality=%s frames=%d avg_fps=%.1f avg_ms=%.2f p95_ms=%.2f worst_ms=%.2f" % [
+			print("BENCH quality=%s frames=%d avg_fps=%.1f avg_ms=%.2f p95_ms=%.2f worst_ms=%.2f draw_calls=%d triangles=%d" % [
 				Gfx.level_name(), _bench.size(), 1.0 / avg, avg * 1000.0,
-				sorted[int(sorted.size() * 0.95)] * 1000.0, sorted[sorted.size() - 1] * 1000.0])
+				sorted[int(sorted.size() * 0.95)] * 1000.0, sorted[sorted.size() - 1] * 1000.0,
+				_bench_draws / _bench.size(), _bench_prims / _bench.size()])
 			_test_mode = ""
 			get_tree().quit(0)
 		return

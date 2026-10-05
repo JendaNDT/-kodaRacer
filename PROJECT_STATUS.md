@@ -6,8 +6,8 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.1.0 na telefonu (zapnout FPS, zkusit všechny tři kvality) a pak fáze 1 z `PLAN_GRAFIKA.md`: stíny, záře, nálada tratí.**
-Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zapíná Střední kvalita.
+**Spojit fáze grafiky 1, 2 a 3 do jedné větve a celek vyzkoušet na telefonu (zapnout FPS, zkusit všechny tři kvality).**
+Každá fáze vznikla na vlastní větvi z verze 1.1.0, takže testovací build v Releases vždy obsahuje jen tu fázi, která se nahrála naposled. Všechny tři mění `kart.gd`, při spojení je potřeba sladit hlavně model motokáry, plameny turba a svítící materiály.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -20,13 +20,16 @@ Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zap�
 - Ikona aplikace a úvodní obrazovka
 - GitHub Actions: import projektu, test celého závodu, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
 - **Fáze 0 grafiky (verze 1.1.0):** kvalita grafiky Nízká/Střední/Vysoká v menu i v pauze (rozlišení 3D, vyhlazení hran, počet částic, hustota stromů), počítadlo FPS, kontrola verze u Wi-Fi hry (jiná verze se odmítne s vysvětlením, v seznamu her je vidět verze), měření výkonu `--bench`, hudba se generuje na pozadí (rychlejší start)
-- Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek
+- **Fáze 3 grafiky (verze 1.3.0):** 6 různých motokár z generátoru zaoblených tvarů (formule, bublina, sporťák, buggy, traktůrek, střela), živý jezdec (ruce na volantu, hlava do zatáčky, náklon, radost v cíli, motání hlavy po zásahu), helma s pruhy, startovní čísla na bocích, kola s ráfkem a vzorkem, pérování podvozku, zjednodušené modely pro vzdálené motokáry, režim `--showcase` na screenshoty, `--bench` ukazuje i počet kreslicích volání a trojúhelníků
+- Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek. Fáze 3 ověřena v oficiálním Godotu 4.7.1 stejně (závod, Wi-Fi hostitel + klient, screenshoty, měření výkonu).
+
+## 🔄 Rozjeté (nedodělané)
+- **Fáze 1 a 2 grafiky** – hotové na vlastních větvích (`claude/kind-edison-urx1xe` = světlo a atmosféra, `ccr-810fb6fe-xsp7zl` = efekty při jízdě), zatím nespojené s fází 3 (větev `claude/amazing-faraday-a6w7aw`)
 
 ## 📝 TODO
 ### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
 - Fáze 1: stíny od slunce, záře, filmové barvy, nálada každé trati (západ slunce v kaňonu, sněžení na laguně)
 - Fáze 2: stopy smyku, rychlostní čáry, lepší výbuchy a turbo, konfety v cíli
-- Fáze 3: 6 různých motokár, živí jezdci (ruce na volantu, naklánění)
 - Fáze 4: semafor, tribuny s diváky, vlajky ve větru, dominanty tratí
 - Fáze 5: 3D náhled jezdce v menu, stupně vítězů, animovaný HUD
 - Fáze 6 (volitelná): kopce, skoky a klopené zatáčky
@@ -43,6 +46,8 @@ Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zap�
 ## 🐛 Známé bugy
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
 - Hledání her v síti používá UDP broadcast, který některé routery nebo telefony blokují. Pak je potřeba zadat adresu ručně.
+- APK z větve fáze 2 má nižší číslo verze pro Android (2) než fáze 1 (3) a fáze 3 (4), takže se přes ně nenainstaluje (Android nedovolí přejít na nižší verzi). Vyřeší se při spojení větví, do té doby pomůže odinstalovat a nainstalovat znovu.
+- Na softwarovém vykreslování v cloudu jsou nové motokáry asi o 6 % pomalejší, když jsou všechny blízko kamery (víc trojúhelníků, ale méně kreslicích volání). Na telefonu zatím neměřeno.
 
 ## 🏗️ Klíčová rozhodnutí
 *(Aby ses k tomu zase zbytečně nevracel.)*
@@ -51,6 +56,10 @@ Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zap�
 - **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu. Co která úroveň zapíná, je na jednom místě v `godot/scripts/gfx.gd`. Výchozí: telefon Střední, PC Vysoká.
 - **Kontrola verze přes vestavěné ověření Godotu** (auth), ne přes běžné síťové volání: mezi různými verzemi hry se jinak síťová volání můžou pomíchat. Hráči musí mít stejnou verzi.
 - **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
+- **Motokáry z vlastního generátoru tvarů (`mesh_kit.gd`)**: zkosené kvádry, protažená zaoblená těla, soustružené díly (kola) a trubky. Všechno, co se na motokáře nehýbe, je jeden model s barvami ve vrcholech; lesk nebo matnost dílu nese malá textura. Hýbe se jen jezdec (trup, hlava, 4 díly rukou, volant) a 3 kola (přední zvlášť kvůli zatáčení, zadní na jedné ose).
+- **Jízdní vlastnosti se fází 3 nezměnily**: nové motokáry mění jen vzhled, fyzika i síťová data jsou stejné jako dřív.
+- **Vzdálené motokáry jednodušší (LOD)** podle kvality: Nízká od 10 m, Střední od 16 m, Vysoká od 32 m. Bez toho by detailní motokáry zbytečně zatěžovaly slabé telefony.
+- **Fáze grafiky vznikají paralelně na samostatných větvích** z verze 1.1.0; před dalším testem na telefonu je potřeba je spojit.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
 - **Testovací podpisový klíč v repozitáři** (`build/debug.keystore`), aby šlo APK aktualizovat bez odinstalace. Pro Google Play bude potřeba vlastní tajný klíč.
@@ -63,7 +72,11 @@ Až napíšeš, kolik FPS hra na telefonu ukazuje, nastavím podle toho, co zap�
 - `godot/project.godot` – Godot projekt (otevřít přes Import)
 - `godot/scripts/main.gd` – start hry, menu vs. závod, testovací režimy
 - `godot/scripts/race.gd` – závod: simulace, AI, předměty, kamery, rozdělená obrazovka, výsledky, síťová synchronizace
-- `godot/scripts/kart.gd` – motokára: model, efekty, jízdní fyzika
+- `godot/scripts/kart.gd` – motokára: sestavení modelu, efekty, pérování, jízdní fyzika
+- `godot/scripts/mesh_kit.gd` – generátor zaoblených tvarů (jeden model s barvami ve vrcholech)
+- `godot/scripts/kart_model.gd` – návrhy 6 motokár a kol
+- `godot/scripts/driver_rig.gd` – jezdec: helma, ruce na volantu, animace
+- `godot/scripts/showcase.gd` – režim `--showcase` pro screenshoty motokár
 - `godot/scripts/track.gd`, `world_builder.gd` – trať a svět kolem ní
 - `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní

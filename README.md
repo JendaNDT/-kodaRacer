@@ -23,6 +23,19 @@ Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). 
 - **2 hráči na jednom počítači**: obrazovka se rozdělí na horní a dolní půlku.
 - **Hra po Wi-Fi (crossplay)**: až 6 hráčů na stejné Wi-Fi, telefony i počítače dohromady. Volná místa doplní počítač.
 
+## Jezdci a motokáry
+
+Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnosti určuje jezdec.
+
+| Číslo | Jezdec | Motokára | Typ (jako v menu) |
+| --- | --- | --- | --- |
+| 1 | Turbo Tonda | formule s křídly | Vyvážený |
+| 2 | Zuzka Zběsilá | zaoblená bublina | Hbitá |
+| 3 | Pepa Plyn | dlouhý sporťák s velkým křídlem | Rychlík |
+| 4 | Máňa Motor | buggy s velkými koly a rámem | Akcelerace |
+| 5 | Karel Kolo | traktůrek s komínem | Tahoun |
+| 6 | Bára Brzda | nízká futuristická střela | Zatáčky |
+
 ## Ovládání
 
 | | Jeden hráč | Hráč 1 (2 hráči) | Hráč 2 (2 hráči) |

@@ -78,7 +78,13 @@ Počet částic se řídí kvalitou z fáze 0.
 
 ---
 
-## Fáze 3 – Nové motokáry a živí jezdci  *(velká)*
+## Fáze 3 – Nové motokáry a živí jezdci  *(velká)* ✅ hotovo (verze 1.3.0)
+
+> **Výsledek:** generátor zaoblených tvarů (`mesh_kit.gd`), 6 různých motokár (`kart_model.gd`): formule, bublina, sporťák s velkým křídlem, buggy s ochranným rámem a rezervou, traktůrek s komínem a závodní střela se svítícími pruhy. Jezdec (`driver_rig.gd`) drží volant oběma rukama a ruce se s ním točí, hlava se dívá do zatáčky, tělo se naklání, v cíli zvedne ruce nad hlavu a po zásahu se mu motá hlava. Helma má pruhy v barvě jezdce, startovní číslo je na obou bocích. Kola mají ráfek, paprsky, barevnou krytku a podle motokáry hladký, silniční, terénní nebo traktorový vzorek. Podvozek pruží při dopadu, předklání se při brzdění a zaklání při rozjezdu a turbu, v trávě a písku drncá.
+>
+> **Výkon:** celá kostra motokáry je jeden model, vzdálené motokáry se přepnou na jednodušší verzi (Nízká od 10 m, Střední od 16 m, Vysoká od 32 m) a jezdcům v dálce se nekreslí ruce a volant. Měření `--bench` v cloudu: kreslicích volání o 30–50 % méně (Střední 139 → 94), trojúhelníků o 8–23 % víc. Na softwarovém vykreslování v cloudu, které počítá i trojúhelníky procesorem, je FPS asi o 6 % nižší, když je všech šest motokár blízko kamery (Střední 10,3 → 9,6 FPS). Na telefonu brzdí hlavně počet kreslicích volání, takže by to mělo být stejné nebo lepší. Ověřit jde jen počítadlem FPS na skutečném telefonu.
+>
+> **Screenshoty:** `--showcase` postaví všech šest motokár vedle sebe (`--view=front|back|side|close`, `--pose=drive|steer|cheer|dizzy|boost|star|mix`, u `close` ještě `--driver=0..5`).
 
 - **Generátor zaoblených tvarů** (zkosené hrany, zaoblené kapotáže), aby motokáry vypadaly jako modelované, ne slepené z krabic.
 - **Každý jezdec dostane vlastní motokáru** (jízdní vlastnosti zůstávají, mění se jen vzhled):
@@ -148,7 +154,7 @@ Riziko: zasahuje do fyziky, AI i sítě, proto až nakonec a samostatně.
 | 0 Kvalita + FPS + verze | malá | bezpečnost výkonu, základ |
 | 1 Světlo a atmosféra | střední | největší vizuální skok |
 | 2 Efekty při jízdě | střední | pocit rychlosti, zábava |
-| 3 Motokáry a jezdci | velká | charakter postav |
+| 3 Motokáry a jezdci ✅ | velká | charakter postav |
 | 4 Svět kolem trati | velká | živé prostředí |
 | 5 Menu a výsledky | střední | dojem z celé hry |
 | 6 Kopce a skoky | největší | nová hratelnost |

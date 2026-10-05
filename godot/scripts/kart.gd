@@ -1,7 +1,7 @@
 class_name Kart
 extends Node3D
-## One kart: low-poly model, effects and the arcade driving model
-## (ported 1:1 from the web prototype).
+## One kart: its model (KartModel + DriverRig), effects, suspension and
+## the arcade driving model (ported 1:1 from the web prototype).
 
 const SNAP_FIELDS := 24
 
@@ -58,9 +58,14 @@ var wrong_t := 0.0
 var obs := {}
 
 # --- visuals
-var body: Node3D
+var body: Node3D            # hops and spins with the kart (wheels included)
+var chassis: Node3D         # sits on the suspension: everything but the wheels
+var rig: DriverRig
+var model: Dictionary
 var front: Array = []
 var spins: Array = []
+var spin_r: Array = []
+var spin_a := PackedFloat32Array()
 var flames: Array = []
 var glow_mats: Array = []
 var sparks: Array = []
@@ -68,8 +73,15 @@ var dust: CPUParticles3D
 var flame_fx: CPUParticles3D
 var star_fx: CPUParticles3D
 var name_tag: Label3D
-var wheel_rot := 0.0
 var star_hue := 0.0
+var susp_y := 0.0
+var susp_v := 0.0
+var pitch := 0.0
+var pitch_v := 0.0
+var accel_f := 0.0
+var prev_speed := 0.0
+var prev_hop := 0.0
+var rumble_t := 0.0
 var prev_x := 0.0
 var prev_z := 0.0
 var prev_h := 0.0
@@ -91,37 +103,7 @@ func setup(p_race: Race, p_driver: int) -> void:
 static func _shared() -> Dictionary:
 	if not _m.is_empty():
 		return _m
-	_m.chassis = _box(1.7, 0.34, 2.7)
-	_m.nose = _box(1.25, 0.28, 0.8)
-	_m.pod = _box(0.34, 0.32, 1.5)
-	_m.seat = _box(0.95, 0.75, 0.22)
-	_m.engine = _box(0.9, 0.45, 0.55)
-	_m.visor = _box(0.58, 0.2, 0.14)
-	_m.spoiler = _box(1.8, 0.1, 0.42)
-	_m.post = _box(0.1, 0.4, 0.1)
-	_m.flag = _box(0.03, 0.34, 0.52)
-	_m.torso = _cyl(0.3, 0.38, 0.62, 10)
-	_m.wheel = _cyl(0.44, 0.44, 0.4, 14)
-	_m.hub = _cyl(0.2, 0.2, 0.42, 8)
-	_m.pipe = _cyl(0.1, 0.12, 0.5, 8)
 	_m.flame = _cyl(0.0, 0.2, 1.0, 8)
-	_m.antenna = _cyl(0.03, 0.03, 1.4, 4)
-	var head := SphereMesh.new()
-	head.radius = 0.42
-	head.height = 0.84
-	head.radial_segments = 14
-	head.rings = 8
-	_m.head = head
-	var sw := TorusMesh.new()
-	sw.inner_radius = 0.17
-	sw.outer_radius = 0.27
-	sw.rings = 14
-	sw.ring_segments = 6
-	_m.sw = sw
-	_m.dark = _mat(Color("23262e"), 0.8)
-	_m.tire = _mat(Color("161616"), 0.95)
-	_m.hubm = _mat(Color("d0d5de"), 0.4)
-	_m.visorm = _mat(Color("12151c"), 0.1)
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.albedo_color = Color(1.0, 0.63, 0.19, 0.85)
@@ -154,12 +136,6 @@ static func _shared() -> Dictionary:
 	return _m
 
 
-static func _box(w: float, h: float, d: float) -> BoxMesh:
-	var b := BoxMesh.new()
-	b.size = Vector3(w, h, d)
-	return b
-
-
 static func _cyl(top: float, bottom: float, h: float, seg: int) -> CylinderMesh:
 	var c := CylinderMesh.new()
 	c.top_radius = top
@@ -168,13 +144,6 @@ static func _cyl(top: float, bottom: float, h: float, seg: int) -> CylinderMesh:
 	c.radial_segments = seg
 	c.rings = 1
 	return c
-
-
-static func _mat(c: Color, rough: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = rough
-	return m
 
 
 static func particle_mesh(size: float, additive: bool) -> QuadMesh:
@@ -204,67 +173,83 @@ func _part(mesh: Mesh, mat: Material, pos: Vector3, parent: Node3D = null) -> Me
 	mi.mesh = mesh
 	mi.material_override = mat
 	mi.position = pos
-	(parent if parent != null else body).add_child(mi)
+	(parent if parent != null else chassis).add_child(mi)
 	return mi
+
+
+## Detailed mesh up close, the simpler one beyond `dist` metres.
+static func _lod_pair(parent: Node3D, near: Mesh, far: Mesh, dist: float) -> Array:
+	var a := MeshInstance3D.new()
+	a.mesh = near
+	a.visibility_range_end = dist
+	a.visibility_range_end_margin = 2.0
+	parent.add_child(a)
+	var b := MeshInstance3D.new()
+	b.mesh = far
+	b.visibility_range_begin = dist
+	b.visibility_range_begin_margin = 2.0
+	parent.add_child(b)
+	return [a, b]
 
 
 func _build_model() -> void:
 	var m := _shared()
+	model = KartModel.get_model(driver)
 	body = Node3D.new()
 	add_child(body)
-	var main := StandardMaterial3D.new()
-	main.albedo_color = ch.color
-	main.roughness = 0.35
-	main.metallic_specular = 0.7
-	var acc := _mat(ch.accent, 0.6)
-	var helm := StandardMaterial3D.new()
-	helm.albedo_color = ch.helmet
-	helm.roughness = 0.25
-	glow_mats = [main, acc, helm]
-	_part(m.chassis, main, Vector3(0, 0.5, 0))
-	_part(m.nose, main, Vector3(0, 0.46, 1.65))
-	_part(m.pod, acc, Vector3(0.98, 0.5, 0.1))
-	_part(m.pod, acc, Vector3(-0.98, 0.5, 0.1))
-	_part(m.seat, m.dark, Vector3(0, 0.98, -0.55))
-	_part(m.engine, m.dark, Vector3(0, 0.82, -1.15))
-	for px in [-0.3, 0.3]:
-		_part(m.pipe, m.hubm, Vector3(px, 0.78, -1.5)).rotation.x = PI / 2.0
-		var f := _part(m.flame, m.flamem, Vector3(px, 0.78, -2.05))
+	chassis = Node3D.new()
+	body.add_child(chassis)
+	# one material per kart so the star can make just this kart glow
+	var paint := MeshKit.body_material()
+	glow_mats = [paint]
+	var lod := Gfx.kart_lod()
+	for mesh in _lod_pair(chassis, model.body, model.body_low, lod):
+		mesh.set_surface_override_material(0, paint)
+	var ex: Vector3 = model.exhaust
+	for sx in [-1.0, 1.0]:
+		var f := _part(m.flame, m.flamem, Vector3(ex.x * sx, ex.y, ex.z - 0.3))
 		f.rotation.x = -PI / 2.0
 		f.visible = false
 		flames.append(f)
-	_part(m.torso, acc, Vector3(0, 1.2, -0.25))
-	_part(m.head, helm, Vector3(0, 1.78, -0.2))
-	_part(m.visor, m.visorm, Vector3(0, 1.8, 0.16))
-	_part(m.sw, m.dark, Vector3(0, 1.15, 0.45)).rotation.x = PI / 2.0 - 0.9
-	_part(m.spoiler, main, Vector3(0, 1.32, -1.45))
-	_part(m.post, m.dark, Vector3(0.6, 1.1, -1.45))
-	_part(m.post, m.dark, Vector3(-0.6, 1.1, -1.45))
-	_part(m.antenna, m.dark, Vector3(-0.75, 1.7, -1.3))
-	_part(m.flag, helm, Vector3(-0.75, 2.25, -1.55))
-	var wheels := [[0.98, 0.44, 0.95, 1.0], [-0.98, 0.44, 0.95, 1.0], [1.0, 0.48, -0.95, 1.1], [-1.0, 0.48, -0.95, 1.1]]
-	for i in wheels.size():
-		var w: Array = wheels[i]
+	# front wheels steer on their own pivots, the rear pair spins on one axle
+	var fw: Dictionary = model.front
+	var rw: Dictionary = model.rear
+	for sx in [1.0, -1.0]:
 		var pivot := Node3D.new()
-		pivot.position = Vector3(w[0], w[1], w[2])
+		pivot.position = Vector3(float(fw.x) * sx, float(fw.r), float(fw.z))
 		body.add_child(pivot)
 		var sp := Node3D.new()
-		sp.scale = Vector3.ONE * float(w[3])
 		pivot.add_child(sp)
-		_part(m.wheel, m.tire, Vector3.ZERO, sp).rotation.z = PI / 2.0
-		_part(m.hub, m.hubm, Vector3.ZERO, sp).rotation.z = PI / 2.0
-		if i < 2:
-			front.append(pivot)
+		for wm in _lod_pair(sp, model.front_mesh, model.front_low, lod):
+			wm.scale = Vector3(sx, 1.0, 1.0)
+		front.append(pivot)
 		spins.append(sp)
+		spin_r.append(float(fw.r))
+		spin_a.append(0.0)
+	var axle := Node3D.new()
+	axle.position = Vector3(0.0, float(rw.r), float(rw.z))
+	body.add_child(axle)
+	_lod_pair(axle, model.rear_mesh, model.rear_low, lod)
+	spins.append(axle)
+	spin_r.append(float(rw.r))
+	spin_a.append(0.0)
+	rig = DriverRig.new()
+	chassis.add_child(rig)
+	var seat: Vector3 = model.seat
+	var wheel: Vector3 = model.wheel
+	rig.position = seat
+	rig.setup(driver, wheel - seat, float(model.tilt), paint, lod * 1.3)
+	var size: Vector2 = model.size
 	var shadow := MeshInstance3D.new()
 	shadow.mesh = m.shadow
 	shadow.position.y = 0.1
+	shadow.scale = Vector3(size.x / 2.8, 1.0, size.y / 3.8)
 	add_child(shadow)
 
 	# effects
 	for sx in [-1.0, 1.0]:
 		var p := _emitter(0.5, true, 28, 0.25)
-		p.position = Vector3(sx * 1.0, 0.3, -1.3)
+		p.position = Vector3(sx * float(rw.x), 0.3, float(rw.z) - 0.35)
 		p.direction = Vector3(sx * 0.3, 1.0, -0.6)
 		p.spread = 40.0
 		p.initial_velocity_min = 3.0
@@ -273,7 +258,7 @@ func _build_model() -> void:
 		add_child(p)
 		sparks.append(p)
 	dust = _emitter(1.2, false, 24, 0.6)
-	dust.position = Vector3(0, 0.3, -1.4)
+	dust.position = Vector3(0, 0.3, float(rw.z) - 0.45)
 	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	dust.emission_sphere_radius = 1.0
 	dust.direction = Vector3(0, 1, -0.3)
@@ -284,7 +269,7 @@ func _build_model() -> void:
 	dust.scale_amount_max = 1.6
 	add_child(dust)
 	flame_fx = _emitter(0.7, true, 24, 0.18)
-	flame_fx.position = Vector3(0, 0.8, -2.2)
+	flame_fx.position = Vector3(0, ex.y + 0.02, ex.z - 0.45)
 	flame_fx.direction = Vector3(0, 0.2, -1)
 	flame_fx.spread = 15.0
 	flame_fx.initial_velocity_min = 4.0
@@ -326,7 +311,7 @@ func set_name_tag(text: String) -> void:
 		name_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		name_tag.outline_size = 12
 		name_tag.outline_modulate = Color(0, 0, 0, 0.8)
-		name_tag.position = Vector3(0, 3.2, 0)
+		name_tag.position = Vector3(0, float(model.top) + 1.0, 0)
 		name_tag.no_depth_test = false
 		add_child(name_tag)
 	name_tag.text = text
@@ -357,6 +342,10 @@ func reset(px: float, pz: float, h: float) -> void:
 	for mt in glow_mats:
 		mt.emission_enabled = false
 	body.rotation = Vector3.ZERO
+	chassis.transform = Transform3D.IDENTITY
+	susp_y = 0.0; susp_v = 0.0; pitch = 0.0; pitch_v = 0.0; accel_f = 0.0
+	prev_speed = 0.0; prev_hop = 0.0; rumble_t = 0.0
+	rig.reset()
 	position = Vector3(x, 0, z)
 	rotation = Vector3(0, heading, 0)
 
@@ -569,15 +558,18 @@ func render(delta: float, alpha: float, smooth: bool, t: float, dust_color: Colo
 	var sr := clampf(absf(speed) / mx, 0.0, 1.5)
 	position = Vector3(px, 0.0, pz)
 	rotation = Vector3(0.0, ph - slip, 0.0)
-	body.position.y = hop_y() + sin(t * 38.0 + driver) * 0.02 * sr
+	body.position.y = hop_y()
 	body.rotation.y = (1.0 - spin / spin_total) * PI * 4.0 if spin > 0.0 else 0.0
-	body.rotation.z = (-drift_dir * 0.08 if drift_active else -steer * 0.05 * sr)
-	body.rotation.x = -0.04 if boost > 0.0 else 0.0
-	wheel_rot += speed * delta / 0.44
-	for sp in spins:
-		sp.rotation.x = wheel_rot
+	_suspension(delta, sr)
+	chassis.position.y = susp_y + sin(t * 38.0 + driver) * 0.015 * sr
+	chassis.rotation.x = pitch - (0.03 if boost > 0.0 else 0.0)
+	chassis.rotation.z = (-drift_dir * 0.08 if drift_active else -steer * 0.05 * sr)
+	for i in spins.size():
+		spin_a[i] = fposmod(spin_a[i] + speed * delta / float(spin_r[i]), TAU)
+		(spins[i] as Node3D).rotation.x = spin_a[i]
 	for f in front:
 		f.rotation.y = -steer * 0.45
+	rig.update(self, delta, t)
 	var fl := boost > 0.0 or star > 0.0
 	for f in flames:
 		f.visible = fl
@@ -600,3 +592,30 @@ func render(delta: float, alpha: float, smooth: bool, t: float, dust_color: Colo
 		p.color = spark_col
 	dust.emitting = offroad and absf(speed) > 8.0
 	dust.color = dust_color
+
+
+## Springy chassis: dips on landing, nods when speeding up or braking and
+## rattles over grass, sand and snow. Visual only, so it also works from
+## network snapshots.
+func _suspension(delta: float, sr: float) -> void:
+	if delta <= 0.0:
+		return
+	if prev_hop > 0.0 and hop <= 0.0:   # just landed
+		susp_v -= 0.9 + 1.1 * clampf(hop_h, 0.0, 2.5)
+	prev_hop = hop
+	if offroad and absf(speed) > 6.0:
+		rumble_t -= delta
+		if rumble_t <= 0.0:
+			rumble_t = randf_range(0.05, 0.13)
+			susp_v += randf_range(-0.7, 0.7) * sr
+	accel_f = lerpf(accel_f, (speed - prev_speed) / delta, 1.0 - exp(-8.0 * delta))
+	prev_speed = speed
+	var want_pitch := clampf(-accel_f * 0.0028, -0.07, 0.08) if spin <= 0.0 else 0.0
+	var steps := ceili(delta / (1.0 / 90.0))
+	var h := delta / steps
+	for i in steps:
+		susp_v += (-susp_y * 240.0 - susp_v * 12.0) * h
+		susp_y += susp_v * h
+		pitch_v += ((want_pitch - pitch) * 150.0 - pitch_v * 13.0) * h
+		pitch += pitch_v * h
+	susp_y = clampf(susp_y, -0.16, 0.12)
