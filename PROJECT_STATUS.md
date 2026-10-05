@@ -6,8 +6,8 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Stáhnout APK a EXE z Releases a zahrát si to na telefonu a PC, ideálně i Wi-Fi hru mezi nimi.**
-Pak říct, co ladit: rychlost, obtížnost, ovládání na mobilu, výkon na slabším telefonu.
+**Vylepšení grafiky podle `PLAN_GRAFIKA.md`: začít fází 0 (kvalita grafiky, FPS, kontrola verze) a fází 1 (stíny, záře, nálada tratí).**
+Plán má 7 fází. Po každé fázi se sestaví nové APK a EXE k vyzkoušení na telefonu.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -22,6 +22,15 @@ Pak říct, co ladit: rychlost, obtížnost, ovládání na mobilu, výkon na sl
 - Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek
 
 ## 📝 TODO
+### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
+- Fáze 0: kvalita grafiky Nízká/Střední/Vysoká, počítadlo FPS, kontrola verze u Wi-Fi hry
+- Fáze 1: stíny od slunce, záře, filmové barvy, nálada každé trati (západ slunce v kaňonu, sněžení na laguně)
+- Fáze 2: stopy smyku, rychlostní čáry, lepší výbuchy a turbo, konfety v cíli
+- Fáze 3: 6 různých motokár, živí jezdci (ruce na volantu, naklánění)
+- Fáze 4: semafor, tribuny s diváky, vlajky ve větru, dominanty tratí
+- Fáze 5: 3D náhled jezdce v menu, stupně vítězů, animovaný HUD
+- Fáze 6 (volitelná): kopce, skoky a klopené zatáčky
+
 ### Backlog (později)
 - Hra přes internet (ne jen stejná Wi-Fi): server nebo relay
 - Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
@@ -38,7 +47,8 @@ Pak říct, co ladit: rychlost, obtížnost, ovládání na mobilu, výkon na sl
 ## 🏗️ Klíčová rozhodnutí
 *(Aby ses k tomu zase zbytečně nevracel.)*
 - **Engine: Godot 4.7.1**, protože Jenda chce crossplay Android ↔ Windows a má Godot na Macu. Webový prototyp zůstává jako předloha a hratelná ukázka.
-- **Renderer Compatibility (OpenGL)**: běží i na slabších telefonech a všude vypadá stejně.
+- **Renderer Compatibility (OpenGL) i pro hezčí grafiku**: v Godotu 4.7.1 umí stíny od slunce, záři, základní SSAO i barvy AgX (ověřeno ve zdrojovém kódu enginu). Hra tak vypadá na PC i mobilu stejně a jde testovat v cloudu. Neumí decals, proto budou stopy smyku z vlastních pásů geometrie. Forward+ pro PC je jen volitelný bonus.
+- **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu.
 - **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
@@ -60,3 +70,4 @@ Pak říct, co ladit: rychlost, obtížnost, ovládání na mobilu, výkon na sl
 - `godot/export_presets.cfg` – export Android + Windows
 - `.github/workflows/build.yml` – testy a sestavení APK + EXE
 - `web/` – původní webový prototyp
+- `PLAN_GRAFIKA.md` – fázovaný plán vylepšení grafiky
