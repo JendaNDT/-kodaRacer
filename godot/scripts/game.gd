@@ -41,7 +41,7 @@ var TRACKS := [
 		"boxes": [0.1, 0.36, 0.6, 0.84],
 		"theme": {"sky_top": Color("2f7fd6"), "horizon": Color("cde9ff"), "ground": Color("4caa3c"), "ground2": Color("41983a"),
 			"ground3": Color("5cb84a"), "road": Color("54565e"), "kerb_a": Color("e8333a"), "kerb_b": Color("f4f4f4"),
-			"ambient": Color("eaf6ff"), "dust": Color("8a6a45"), "deco": "trees", "mount": Color("5d8c68"),
+			"ambient": Color("eaf6ff"), "dust": Color("8a6a45"), "surface": "grass", "deco": "trees", "mount": Color("5d8c68"),
 			"cap": Color("f4f8ff"), "tree": Color("2f8a3e"), "lake": Color("3d9be0")},
 	},
 	{
@@ -52,7 +52,7 @@ var TRACKS := [
 		"boxes": [0.08, 0.3, 0.55, 0.78],
 		"theme": {"sky_top": Color("3d8fd9"), "horizon": Color("ffe1b3"), "ground": Color("d9aa62"), "ground2": Color("c99852"),
 			"ground3": Color("e6bb7c"), "road": Color("6a5a50"), "kerb_a": Color("d9480f"), "kerb_b": Color("fff1dc"),
-			"ambient": Color("fff3e0"), "dust": Color("d8b07a"), "deco": "cactus", "mount": Color("c0622f"),
+			"ambient": Color("fff3e0"), "dust": Color("d8b07a"), "surface": "sand", "deco": "cactus", "mount": Color("c0622f"),
 			"cap": null, "tree": Color("3f8f3a"), "lake": null},
 	},
 	{
@@ -63,7 +63,7 @@ var TRACKS := [
 		"boxes": [0.12, 0.38, 0.62, 0.86],
 		"theme": {"sky_top": Color("5a7fcf"), "horizon": Color("e6f0ff"), "ground": Color("e4ebf4"), "ground2": Color("d5dfec"),
 			"ground3": Color("f4f7fb"), "road": Color("5b6678"), "kerb_a": Color("2a7de1"), "kerb_b": Color("f7fbff"),
-			"ambient": Color("f0f6ff"), "dust": Color("ffffff"), "deco": "pines", "mount": Color("dbe6f3"),
+			"ambient": Color("f0f6ff"), "dust": Color("ffffff"), "surface": "snow", "deco": "pines", "mount": Color("dbe6f3"),
 			"cap": Color("ffffff"), "tree": Color("2e6b55"), "lake": Color("a9d8f5")},
 	},
 ]

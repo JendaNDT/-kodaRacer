@@ -60,7 +60,10 @@ Soubory: `world_builder.gd` (prostředí, slunce, obloha), `game.gd` (barvy trat
 
 ---
 
-## Fáze 2 – Efekty při jízdě („šťáva“)  *(střední)*
+## Fáze 2 – Efekty při jízdě („šťáva“)  *(střední)* ✅ hotovo (verze 1.2.0)
+
+> **Výsledek:** stopy smyku (`skid_marks.gd`, na GPU mizí, počet podle kvality: 160 / 360 / 700), rychlostní čáry (`speed_lines.gd`, každý hráč vlastní), 3. úroveň driftu (fialová, po 3,5 s „nabíjení“, turbo 1,75 s místo 1,3 s, platí i pro AI), plamen turba s jádrem, jiskrami a zábleskem v barvě driftu, výbuch rakety (záblesk, tlaková vlna, oheň, kouř, úlomky, otřes kamery), hvězdičky nad hlavou po zásahu, lesk přejíždějící po krabicích a barevné střepy, konfety v cíli, vlající šachovnicové vlajky na bráně, prach / písek / sníh od kol podle povrchu a kouř pneumatik při driftu. Vše vidí i klient ve Wi-Fi hře. Výkon v cloudu (softwarové vykreslování): Nízká 26,9 → 25,3 FPS, Střední 10,4 → 9,8 FPS.
+> *Odchylky od plánu:* mávající vlajka je na startovní bráně (ne v ruce). Motokára po zásahu se točí jako dřív, nové jsou hvězdičky.
 
 - **Stopy smyku** na asfaltu při driftu a prudkém brzdění. Postupně mizí a jejich počet je omezený, aby nežraly výkon.
 - **Rychlostní čáry** po okrajích obrazovky při turbu a hvězdě, síla podle rychlosti. Každý hráč má vlastní, i na rozdělené obrazovce.

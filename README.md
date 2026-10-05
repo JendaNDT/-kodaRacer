@@ -41,7 +41,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 ### Tipy
 
-- **Drift**: v zatáčce drž drift a zatáčej. Nejdřív odletují modré jiskry, pak oranžové. Když drift pustíš, dostaneš turbo.
+- **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
 - **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš.
 
@@ -59,7 +59,7 @@ V hlavním menu i v pauze jsou tři tlačítka:
 - **Zvuk**: zapnout nebo vypnout.
 - **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
   - Ostrost obrazu a vyhlazení hran se změní hned.
-  - Hustota stromů a počet částic se změní od dalšího závodu.
+  - Hustota stromů, počet částic a stop smyku se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
 
 ## Hra po Wi-Fi
