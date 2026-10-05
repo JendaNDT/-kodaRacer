@@ -2,60 +2,61 @@
 *Naposled aktualizováno: 05. 10. 2026*
 
 ## 🎯 Co to je
-3D motokárové závody ve stylu Mario Kart. Teď existuje hratelný webový prototyp, cílem je verze v Godotu pro Android a Windows s crossplay.
-Stack prototypu: `web/index.html`, Three.js r128 a písma přibalené lokálně (funguje offline), zvuky a hudba přes WebAudio, rekordy v localStorage.
-Cílový stack: Godot 4.7.1 (Jenda ho má na Macu), export APK a EXE přes GitHub Actions.
+3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
+Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Rozhodnout, jak má fungovat crossplay (přes stejnou Wi-Fi, nebo přes internet se serverem), a pak začít přepis do Godotu.**
-Webový prototyp slouží jako předloha: tratě, fyzika, AI a předměty se přenesou 1:1.
+**Stáhnout APK a EXE z Releases a zahrát si to na telefonu a PC, ideálně i Wi-Fi hru mezi nimi.**
+Pak říct, co ladit: rychlost, obtížnost, ovládání na mobilu, výkon na slabším telefonu.
 
 ## ✅ Hotovo
-- 3D svět: 3 tratě (Zelené údolí, Pouštní kaňon, Ledová laguna) s obrubníky, bariérami z pneumatik, startovní bránou, stromy / kaktusy / smrky, horami, mraky a jezerem
-- 6 jezdců s vlastní barvou a statistikami (rychlost, zrychlení, ovladatelnost, váha)
-- 3 obtížnosti (50 / 100 / 150 ccm)
-- Jízdní model: plyn, brzda, couvání, zpomalení v trávě, odraz od bariér, srážky motokár
-- Drift s nabíjením (modré → oranžové jiskry) a mini-turbem po puštění
-- Raketový start (plyn ve chvíli, kdy se objeví „1“)
-- Předměty z otazníkových krabic: turbo, 3× turbo, banán, naváděná raketa, hvězda (nesmrtelnost); co padne, záleží na pořadí
-- 5 AI soupeřů: drží stopu, zpomalují v zatáčkách, vyhýbají se banánům, používají předměty, mírný „rubber band“
-- 3 kola, počítání pořadí, časy kol, detekce jízdy v protisměru
-- HUD: pořadí, kolo, čas, předmět, rychlost, minimapa
-- Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka, rekordy tratí
-- Dotykové ovládání na mobilu (volant vlevo, drift / předmět / brzda vpravo, plyn automaticky)
-- Zvuky (motor, efekty) a hudba, tlačítko pro ztlumení
-- Přejmenováno na **Škoda Racer** (menu, startovní brána), poznámka „neoficiální fanouškovská hra“
-- Webová verze funguje offline (Three.js a písma přibalené ve `web/`)
+- Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
+- Low-poly svět generovaný kódem: obloha, mlha, silnice, obrubníky, bariéry z pneumatik, startovní brána s nápisem ŠKODA RACER, stromy / kaktusy / smrky, sněhuláci, hory, stolové hory, mraky, jezero
+- Zvuky, hudba a zvuk motoru syntetizované v Godotu (žádné zvukové soubory)
+- **2 hráči na jednom počítači**: rozdělená obrazovka nahoře/dole, vlastní HUD, klávesy WASD vs. šipky, podpora 2 ovladačů
+- **Crossplay přes Wi-Fi**: hostitel/klient přes ENet, automatické hledání her v síti, ruční zadání adresy, lobby (výběr jezdce, trati, obtížnosti), až 6 hráčů, volná místa doplní AI. Když někdo odejde, jeho motokáru převezme AI.
+- Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka
+- Dotykové ovládání pro Android (volant, drift, předmět, brzda, automatický plyn), tlačítko Zpět = pauza
+- Ikona aplikace a úvodní obrazovka
+- GitHub Actions: import projektu, test celého závodu, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
+- Ověřeno lokálně ve vlastnoručně zkompilovaném Godotu 4.7.1 (stejný commit `a13da4f` jako Jendův): import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod se shodnými výsledky u hostitele i klienta, screenshoty všech tratí a obrazovek
 
 ## 📝 TODO
-### MVP Godot verze (nutné pro v1)
-- Přepis hry do Godotu 4.7 (tratě, motokáry, drift, AI, předměty, HUD, menu, dotykové ovládání)
-- Crossplay multiplayer Android ↔ Windows
-- GitHub Actions: automatický export APK (Android) a EXE (Windows) ke stažení
-
 ### Backlog (později)
-- Kopce a skoky na trati (teď je trať rovná)
-- Ghost / časovka proti vlastnímu rekordu
-- Víc tratí a mistrovství (Grand Prix ze 3 tratí s body)
-- Mince, které zvyšují maximální rychlost
-- Lokální multiplayer na dělené obrazovce
-- Instalace jako PWA (ikona na ploše, offline režim)
+- Hra přes internet (ne jen stejná Wi-Fi): server nebo relay
+- Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
+- Predikce vlastní motokáry u síťového klienta (teď se ovládání projeví se zpožděním odezvy Wi-Fi)
+- Vlastní podpisový klíč a verze pro Google Play
+- Kopce a skoky na trati
+- Mistrovství (Grand Prix ze 3 tratí s body), časovka proti vlastnímu rekordu
+- Víc tratí
 
 ## 🐛 Známé bugy
-- Zatím žádné známé. Ověřeno v headless Chromiu: celý závod do cíle na počítači i v mobilním zobrazení, bez chyb v konzoli. Na skutečném telefonu zatím netestováno.
+- Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
+- Hledání her v síti používá UDP broadcast, který některé routery nebo telefony blokují. Pak je potřeba zadat adresu ručně.
 
 ## 🏗️ Klíčová rozhodnutí
 *(Aby ses k tomu zase zbytečně nevracel.)*
-- **Engine: Godot 4.7.1.** Jenda chce crossplay mezi Androidem a Windows a Godot exportuje na obě platformy a má vestavěný multiplayer. Webová verze zůstává jako prototyp.
-- **Balení webu přes Capacitor/Electron zrušeno:** nahradí ho export z Godotu.
-- **Webový prototyp:** jeden soubor HTML, Three.js r128 přibalené lokálně (klasický globální `THREE`, funguje i z `file://`).
-- **Název Škoda Racer + poznámka „neoficiální fanouškovská hra“:** Škoda je ochranná známka, poznámka jasně říká, že hra není oficiální. Pro Google Play by název mohl být problém.
-- **Vlastní postavy a předměty:** žádné postavy ani názvy z Nintenda, aby se hra dala bez problémů sdílet.
-- **Fyzika s pevným krokem 1/120 s:** stabilní chování nezávisle na FPS telefonu.
-- **Na mobilu plyn automaticky:** palcem se nedá zároveň držet plyn a driftovat.
+- **Engine: Godot 4.7.1**, protože Jenda chce crossplay Android ↔ Windows a má Godot na Macu. Webový prototyp zůstává jako předloha a hratelná ukázka.
+- **Renderer Compatibility (OpenGL)**: běží i na slabších telefonech a všude vypadá stejně.
+- **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
+- **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
+- **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
+- **Testovací podpisový klíč v repozitáři** (`build/debug.keystore`), aby šlo APK aktualizovat bez odinstalace. Pro Google Play bude potřeba vlastní tajný klíč.
+- **Vlastní postavy a předměty**, žádné postavy ani názvy z Nintenda.
+- **Název Škoda Racer + poznámka „neoficiální fanouškovská hra“**: Škoda je ochranná známka, pro Google Play by název mohl být problém.
+- **Fyzika s pevným krokem 1/120 s**: stejné chování na rychlém PC i pomalém telefonu.
+- **Na mobilu plyn automaticky**: palcem se nedá zároveň držet plyn a driftovat.
 
 ## 📁 Stav souborů
-- `web/index.html` – webový prototyp hry (HTML, CSS, JavaScript)
-- `web/vendor/`, `web/fonts/` – přibalená 3D knihovna a písma
-- `README.md` – jak hrát a jak hru spustit
-- `PROJECT_STATUS.md` – tenhle přehled
+- `godot/project.godot` – Godot projekt (otevřít přes Import)
+- `godot/scripts/main.gd` – start hry, menu vs. závod, testovací režimy
+- `godot/scripts/race.gd` – závod: simulace, AI, předměty, kamery, rozdělená obrazovka, výsledky, síťová synchronizace
+- `godot/scripts/kart.gd` – motokára: model, efekty, jízdní fyzika
+- `godot/scripts/track.gd`, `world_builder.gd` – trať a svět kolem ní
+- `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
+- `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
+- `godot/scripts/game.gd`, `sfx.gd` – data, nastavení, ovládání, zvuky
+- `godot/export_presets.cfg` – export Android + Windows
+- `.github/workflows/build.yml` – testy a sestavení APK + EXE
+- `web/` – původní webový prototyp

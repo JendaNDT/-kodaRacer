@@ -1,0 +1,5 @@
+# Godot
+godot/.godot/
+*.tmp
+# build outputs
+dist/

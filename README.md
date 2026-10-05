@@ -2,55 +2,73 @@
 
 *Neoficiální fanouškovská hra, nesouvisí se společností Škoda Auto.*
 
-3D motokárové závody v prohlížeči ve stylu Mario Kart. Tři tratě, šest jezdců, předměty, drift s turbem a pět AI soupeřů. Funguje na počítači i na mobilu.
+3D motokárové závody ve stylu Mario Kart, postavené v enginu **Godot 4.7.1**. Hraje se na **Androidu** i **Windows**, dva hráči můžou jet na jednom počítači s rozdělenou obrazovkou a přes Wi-Fi spolu závodí telefony i počítače (crossplay).
 
-## Jak hrát
+## Stažení hotové hry
 
-Otevři `web/index.html` v prohlížeči (Chrome, Safari, Firefox, Edge). Funguje i bez internetu, 3D knihovna Three.js i písma jsou přibalené ve složce `web/`.
+Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). Hotové soubory najdeš v **Releases → „Škoda Racer – testovací build“**:
 
-> Plánuje se přepis do enginu **Godot 4.7** s exportem pro Android a Windows a s crossplay multiplayerem. Webová verze slouží jako hratelný prototyp.
+- **SkodaRacer.apk** pro Android: stáhni v telefonu a otevři. Telefon se zeptá na povolení instalace z neznámých zdrojů, to je u her mimo Google Play normální.
+- **SkodaRacer.exe** pro Windows: stáhni a spusť, nic se neinstaluje. Windows může ukázat modré okno SmartScreen, protože hra není digitálně podepsaná: klikni na **Další informace → Přesto spustit**.
 
-1. Vyber jezdce, trať a obtížnost.
-2. Klikni na **Závodit!**
-3. Projeď 3 kola co nejrychleji a dojeď první.
+## Otevření v Godotu (Mac, Windows, Linux)
 
-### Ovládání na počítači
+1. Na GitHubu klikni na **Code → Download ZIP** a rozbal ho.
+2. V Godotu 4.7 klikni na **Import** a vyber soubor `godot/project.godot`.
+3. Klávesou **F5** hru spustíš přímo v editoru.
 
-| Klávesa | Akce |
-| --- | --- |
-| ↑ / W | plyn |
-| ↓ / S | brzda, couvání |
-| ← → / A D | zatáčení |
-| Mezerník / Shift | drift (drž v zatáčce, pusť po jiskrách = turbo) |
-| X / E | použít předmět |
-| Esc / P | pauza |
-| M | zvuk zap/vyp |
+## Režimy
 
-### Ovládání na mobilu
+- **Závod**: ty proti pěti počítačovým soupeřům, 3 kola.
+- **2 hráči na jednom počítači**: obrazovka se rozdělí na horní a dolní půlku.
+- **Hra po Wi-Fi (crossplay)**: až 6 hráčů na stejné Wi-Fi, telefony i počítače dohromady. Volná místa doplní počítač.
 
-Plyn běží automaticky. Vlevo je volant (táhni palcem doleva a doprava), vpravo tlačítka **DRIFT**, **PŘEDMĚT** a **BRZDA**. Nejlíp se hraje s telefonem na šířku.
+## Ovládání
+
+| | Jeden hráč | Hráč 1 (2 hráči) | Hráč 2 (2 hráči) |
+| --- | --- | --- | --- |
+| Zatáčení | ← → nebo A D | A D | ← → |
+| Plyn | ↑ nebo W | W | ↑ |
+| Brzda / couvání | ↓ nebo S | S | ↓ |
+| Drift | mezerník nebo Shift | mezerník nebo levý Shift | pravý Shift nebo Num 0 |
+| Předmět | X, E nebo Enter | E nebo Q | Enter |
+
+Další klávesy: **Esc** pauza, **F11** celá obrazovka.
+
+**Herní ovladač**: A plyn, B brzda, RB/RT drift, LB/LT nebo X předmět, Start pauza. U dvou hráčů patří první ovladač hráči 1 a druhý hráči 2. Když je připojený jen jeden, ovládá hráče 2 a hráč 1 jede na klávesnici.
+
+**Mobil**: plyn běží sám. Vlevo je volant (táhni palcem), vpravo **DRIFT**, **PŘEDMĚT** a **BRZDA**. Tlačítko Zpět hru pozastaví.
 
 ### Tipy
 
-- **Drift:** v zatáčce drž drift a zatáčej. Nejdřív odletují modré jiskry, pak oranžové. Když drift pustíš, dostaneš turbo (oranžové je silnější).
-- **Raketový start:** šlápni na plyn, až se při odpočtu objeví „1“.
-- **Otazníky:** čím víc jsi vzadu, tím lepší předměty dostáváš (hvězda, 3× turbo, raketa).
-- **Tráva** tě zpomalí na polovinu, turbo nebo hvězda zpomalení vyruší.
+- **Drift**: v zatáčce drž drift a zatáčej. Nejdřív odletují modré jiskry, pak oranžové. Když drift pustíš, dostaneš turbo.
+- **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
+- **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš.
 
-## Předměty
+| Předmět | Co dělá |
+| --- | --- |
+| Turbo (i 3×) | krátké zrychlení |
+| Banán | položíš ho za sebe, kdo do něj najede, dostane smyk |
+| Raketa | letí za soupeřem před tebou a vyhodí ho |
+| Hvězda | 7 s nesmrtelnosti a vyšší rychlosti, srážkou shodíš soupeře |
 
-| | Předmět | Co dělá |
-| --- | --- | --- |
-| ⚡ | Turbo (i 3×) | krátké zrychlení |
-| 🍌 | Banán | položíš ho za sebe, kdo do něj najede, dostane smyk |
-| 🚀 | Raketa | letí za soupeřem před tebou a vyhodí ho |
-| ⭐ | Hvězda | 7 s nesmrtelnosti a vyšší rychlosti, srážkou shodíš soupeře |
+## Hra po Wi-Fi
 
-## Zveřejnění přes GitHub Pages
+1. Všichni musí být připojení ke **stejné Wi-Fi**.
+2. Jeden hráč dá **Hra po Wi-Fi → Založit hru**. Na obrazovce uvidí svou adresu, třeba `192.168.1.23`.
+3. Ostatní dají **Hra po Wi-Fi** a hru buď uvidí v seznamu, nebo zadají adresu ručně.
+4. Hostitel vybere trať a obtížnost a spustí závod.
 
-V repozitáři: **Settings → Pages → Build and deployment → Deploy from a branch**, vyber větev a složku `/ (root)`. Hra pak poběží na adrese `https://<uživatel>.github.io/<repozitář>/web/`.
+Na Windows se při prvním založení hry objeví dotaz brány firewall. Povol přístup pro **soukromé sítě**, jinak se ostatní nepřipojí. Hra používá porty UDP 24680 a 24681.
+
+## Složky
+
+- `godot/` – hra v Godotu (skripty v `godot/scripts/`, nastavení exportu v `godot/export_presets.cfg`)
+- `web/` – původní webový prototyp (`web/index.html`), dá se otevřít v prohlížeči
+- `build/debug.keystore` – testovací podpisový klíč pro APK (heslo `android`). Pro Google Play je potřeba vlastní tajný klíč.
+- `.github/workflows/build.yml` – automatické testy a sestavení APK + EXE
 
 ## Licence přibalených souborů
 
-- Three.js r128: MIT (`web/vendor/three-LICENSE.txt`)
-- Písma Bungee a Barlow Semi Condensed: SIL Open Font License (`web/fonts/`)
+- Písma Bungee a Barlow Semi Condensed: SIL Open Font License (`godot/fonts/`, `web/fonts/`)
+- Three.js r128 (jen webový prototyp): MIT (`web/vendor/three-LICENSE.txt`)

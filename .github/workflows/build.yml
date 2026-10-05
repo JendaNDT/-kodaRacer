@@ -1,0 +1,115 @@
+name: Sestavení hry (Android APK + Windows EXE)
+
+on:
+  push:
+    paths:
+      - "godot/**"
+      - "build/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Godot and export templates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-v1
+
+      - name: Download Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -e
+          TPL=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          if [ ! -x ~/godot-bin/godot ] || [ ! -f "$TPL/android_release.apk" ]; then
+            mkdir -p ~/godot-bin "$TPL"
+            cd ~/godot-bin
+            BASE=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+            curl -fsSL -o godot.zip "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+            unzip -q -o godot.zip
+            mv -f Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+            rm godot.zip
+            curl -fsSL -o templates.tpz "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            unzip -q -o templates.tpz
+            mv -f templates/* "$TPL/"
+            rm -rf templates templates.tpz
+          fi
+          ~/godot-bin/godot --version
+
+      - name: Import project
+        run: ~/godot-bin/godot --headless --path godot --import
+
+      - name: Test – full race against the AI
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --autotest --fast=8 --timeout=200 2>&1 | tee race-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" race-test.log; then exit 1; fi
+          grep -q "TEST PASS" race-test.log
+
+      - name: Test – Wi-Fi game (host and client on one machine)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=260 > host.log 2>&1 &
+          sleep 3
+          ~/godot-bin/godot --headless --path godot -- --nettest=client --timeout=260 > client.log 2>&1 || true
+          wait || true
+          grep -h "TEST" host.log client.log
+          if grep -hE "SCRIPT ERROR|Parse Error" host.log client.log; then exit 1; fi
+          grep -q "TEST PASS" host.log
+          grep -q "TEST PASS" client.log
+
+      - name: Export Windows EXE
+        run: |
+          mkdir -p dist
+          ~/godot-bin/godot --headless --path godot --export-release "Windows" "$GITHUB_WORKSPACE/dist/SkodaRacer.exe" 2>&1 | tee export-win.log
+          test -s dist/SkodaRacer.exe
+
+      - name: Export Android APK
+        env:
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ github.workspace }}/build/debug.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: android
+        run: |
+          ~/godot-bin/godot --headless --path godot --export-release "Android" "$GITHUB_WORKSPACE/dist/SkodaRacer.apk" 2>&1 | tee export-android.log
+          test -s dist/SkodaRacer.apk
+
+      - name: Show results
+        run: ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkodaRacer
+          path: dist/
+
+      - name: Publish test build (release "testovaci-build")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Automaticky sestaveno z větve ${GITHUB_REF_NAME} (commit ${GITHUB_SHA::7}).
+
+          - SkodaRacer.apk: Android (stáhni v telefonu a nainstaluj, povol instalaci z neznámých zdrojů)
+          - SkodaRacer.exe: Windows (stáhni a spusť; při varování SmartScreen klikni na Další informace → Přesto spustit)"
+          gh release delete testovaci-build --yes --cleanup-tag || true
+          gh release create testovaci-build dist/SkodaRacer.apk dist/SkodaRacer.exe \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Škoda Racer – testovací build" \
+            --notes "$NOTES"

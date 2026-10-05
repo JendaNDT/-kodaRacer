@@ -1,0 +1,525 @@
+class_name Menu
+extends Control
+## Main menu docked on the left over the live demo race:
+## home, race setup (1 or 2 players), Wi-Fi game and lobby.
+
+signal start_offline(players: int)
+signal quit_requested
+signal track_changed
+
+var panel: PanelContainer
+var scroll: ScrollContainer
+var content: VBoxContainer
+var screen := "home"
+var players := 1
+var status_text := ""
+var _hosts_box: VBoxContainer
+var _status_l: Label
+
+
+class Swatch:
+	extends Control
+	var body := Color.WHITE
+	var helmet := Color.WHITE
+	func _init(b: Color, h: Color) -> void:
+		body = b
+		helmet = h
+		custom_minimum_size = Vector2(32, 32)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5
+		draw_circle(c, r, body)
+		draw_circle(c - Vector2(0, r * 0.08), r * 0.42, helmet)
+
+
+class Bar:
+	extends Control
+	var value := 0.5
+	var color := Color.WHITE
+	func _init(v: float, c: Color) -> void:
+		value = v
+		color = c
+		custom_minimum_size = Vector2(40, 5)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.1))
+		draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * value, size.y)), color)
+
+
+class TrackThumb:
+	extends Control
+	var idx := 0
+	var active := false
+	func _init(i: int, a: bool) -> void:
+		idx = i
+		active = a
+		custom_minimum_size = Vector2(0, 74)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var tr := Race.get_track(idx)
+		var th: Dictionary = tr.def.theme
+		var bg: Color = th.ground
+		bg.a = 0.35
+		draw_rect(Rect2(Vector2.ZERO, size), bg)
+		var pad := 10.0
+		var sc := minf((size.x - 2 * pad) / (tr.max_x - tr.min_x), (size.y - 2 * pad) / (tr.max_z - tr.min_z))
+		var pts := PackedVector2Array()
+		var i := 0
+		while i <= tr.n:
+			var j := i % tr.n
+			pts.append(size * 0.5 - Vector2((tr.x[j] - tr.cx) * sc, (tr.z[j] - tr.cz) * sc))
+			i += 4
+		pts.append(pts[0])
+		draw_polyline(pts, th.kerb_a, 7.0, true)
+		draw_polyline(pts, Color.WHITE if active else Color("c9d1e0"), 3.5, true)
+		draw_rect(Rect2(pts[0] - Vector2(4, 4), Vector2(8, 8)), Color("111111"))
+
+
+func _ready() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UI.box(UI.PANEL, 0, 0, Color(0, 0, 0, 0)))
+	panel.anchor_bottom = 1.0
+	panel.offset_right = 520
+	add_child(panel)
+	scroll = ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	content = UI.vbox(16)
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var m := UI.margin(content, 28, 22, 24, 24)
+	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(m)
+	Net.lobby_changed.connect(_on_lobby_changed)
+	Net.hosts_changed.connect(_fill_hosts)
+	Net.joined.connect(_on_joined)
+	Net.join_failed.connect(set_status)
+
+
+func _on_lobby_changed() -> void:
+	if screen == "lobby" and visible:
+		show_screen("lobby")
+
+
+func _on_joined() -> void:
+	set_status("")
+	show_screen("lobby")
+
+
+func set_status(t: String) -> void:
+	status_text = t
+	if _status_l != null and is_instance_valid(_status_l):
+		_status_l.text = t
+		_status_l.visible = t != ""
+
+
+func show_screen(name: String) -> void:
+	if screen == "wifi" and name != "wifi":
+		Net.stop_listening()
+	screen = name
+	_hosts_box = null
+	_status_l = null
+	for c in content.get_children():
+		content.remove_child(c)
+		c.queue_free()
+	match name:
+		"home": _home()
+		"setup": _setup()
+		"wifi": _wifi()
+		"lobby": _lobby()
+	scroll.scroll_vertical = 0
+	_focus_first.call_deferred()
+
+
+func _focus_first() -> void:
+	var b := _find_button(content)
+	if b != null:
+		b.grab_focus()
+
+
+func _find_button(n: Node) -> Button:
+	for c in n.get_children():
+		if c is Button and c.visible and not c.disabled:
+			return c
+		var r := _find_button(c)
+		if r != null:
+			return r
+	return null
+
+
+## Android back button / Escape in the menu.
+func back() -> bool:
+	match screen:
+		"setup", "wifi":
+			show_screen("home")
+			return true
+		"lobby":
+			Net.leave()
+			show_screen("wifi")
+			return true
+	return false
+
+
+# ---------------------------------------------------------------- pieces
+func _brand(small := false) -> void:
+	var row := UI.hbox(14)
+	row.add_child(UI.label("ŠKODA", 36 if small else 52, UI.PAPER, UI.display_font))
+	row.add_child(UI.label("RACER", 36 if small else 52, UI.KERB, UI.display_font))
+	content.add_child(row)
+	content.add_child(UI.checker(12))
+
+
+func _text(t: String, size := 18, color := UI.MUTED) -> Label:
+	var l := UI.label(t, size, color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(300, 0)
+	content.add_child(l)
+	return l
+
+
+func _section(title: String) -> VBoxContainer:
+	var v := UI.vbox(8)
+	v.add_child(UI.caps(title))
+	content.add_child(v)
+	return v
+
+
+func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContainer:
+	var g := UI.grid(3, 8)
+	for i in Game.CHARS.size():
+		var ch: Dictionary = Game.CHARS[i]
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_pressed = i == selected
+		b.disabled = i in taken
+		b.custom_minimum_size = Vector2(120, 152)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var v := UI.vbox(3)
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 10
+		v.offset_top = 9
+		v.offset_right = -10
+		v.offset_bottom = -9
+		b.add_child(v)
+		v.add_child(Swatch.new(ch.color, ch.helmet))
+		var nl := UI.label(ch.name, 17, UI.PAPER, UI.bold_font)
+		nl.clip_text = true
+		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		v.add_child(nl)
+		var tl := UI.label(ch.tag if not (i in taken) else "obsazeno", 14, UI.MUTED)
+		tl.clip_text = true
+		v.add_child(tl)
+		for st in [["RYCH", ch.speed], ["ZRYCH", ch.accel], ["OVL", ch.handling]]:
+			var h := UI.hbox(4)
+			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var l := UI.label(st[0], 11, UI.MUTED, UI.bold_font)
+			l.custom_minimum_size = Vector2(40, 0)
+			h.add_child(l)
+			h.add_child(Bar.new(clampf((float(st[1]) - 0.85) / 0.3, 0.08, 1.0), ch.color))
+			v.add_child(h)
+		b.pressed.connect(func(): on_pick.call(i))
+		b.pressed.connect(func(): Sfx.play("ui", 0.6))
+		g.add_child(b)
+	return g
+
+
+func _track_grid(selected: int, enabled: bool, on_pick: Callable) -> GridContainer:
+	var g := UI.grid(3, 8)
+	for i in Game.TRACKS.size():
+		var td: Dictionary = Game.TRACKS[i]
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_pressed = i == selected
+		b.disabled = not enabled and i != selected
+		b.custom_minimum_size = Vector2(120, 176)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var v := UI.vbox(3)
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 8
+		v.offset_top = 8
+		v.offset_right = -8
+		v.offset_bottom = -8
+		b.add_child(v)
+		v.add_child(TrackThumb.new(i, i == selected))
+		var tn := UI.label(td.name, 16, UI.PAPER, UI.bold_font)
+		tn.clip_text = true
+		tn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		v.add_child(tn)
+		var rec: Dictionary = Game.settings.records.get(Game.record_key(i, int(Game.settings.diff)), {})
+		var info := UI.label("Rekord " + Game.fmt_time(rec.total) if rec.has("total") else td.desc, 13, UI.GOLD if rec.has("total") else UI.MUTED)
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.custom_minimum_size = Vector2(60, 0)
+		v.add_child(info)
+		if enabled:
+			b.pressed.connect(func(): on_pick.call(i))
+			b.pressed.connect(func(): Sfx.play("ui", 0.6))
+		g.add_child(b)
+	return g
+
+
+func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer:
+	var h := UI.hbox(8)
+	for i in Game.DIFFS.size():
+		var d: Dictionary = Game.DIFFS[i]
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_pressed = i == selected
+		b.disabled = not enabled and i != selected
+		b.text = "%s\n%s" % [d.name, d.cc]
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_size_override("font_size", 17)
+		if enabled:
+			b.pressed.connect(func(): on_pick.call(i))
+			b.pressed.connect(func(): Sfx.play("ui", 0.6))
+		h.add_child(b)
+	return h
+
+
+func _wide(b: Button) -> Button:
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content.add_child(b)
+	return b
+
+
+# ---------------------------------------------------------------- screens
+func _home() -> void:
+	_brand()
+	_text("Tři kola, šest jezdců a otazníky plné překvapení. Driftuj v zatáčkách pro turbo a dojeď první.")
+	_wide(UI.button("Závod", _go_setup.bind(1), true))
+	if not Game.is_mobile():
+		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
+	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
+	var mute := UI.button("Zvuk: vypnutý" if Sfx.muted else "Zvuk: zapnutý", Callable())
+	mute.pressed.connect(_toggle_mute.bind(mute))
+	_wide(mute)
+	if not Game.is_mobile():
+		_wide(UI.button("Konec", func(): quit_requested.emit()))
+	var help := _section("Ovládání")
+	var lines := [
+		"Klávesnice: šipky nebo WASD, drift mezerník / Shift, předmět X nebo E, pauza Esc, celá obrazovka F11.",
+		"Ovladač: A plyn, B brzda, RB/RT drift, LB/LT nebo X předmět, Start pauza.",
+		"Drift: drž ho v zatáčce, po modrých a oranžových jiskrách pusť a dostaneš turbo.",
+		"Na mobilu plyn běží sám. Vlevo zatáčíš, vpravo je drift, předmět a brzda.",
+	]
+	for t in lines:
+		var l := UI.label(t, 16, UI.MUTED)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(300, 0)
+		help.add_child(l)
+	_text("Neoficiální fanouškovská hra. Nesouvisí se společností Škoda Auto.", 14)
+
+
+func _setup() -> void:
+	_brand(true)
+	content.add_child(UI.label("Závod" if players == 1 else "2 hráči na jednom počítači", 26, UI.PAPER, UI.bold_font))
+	if players == 2 and int(Game.settings.driver2) == int(Game.settings.driver):
+		Game.settings.driver2 = (int(Game.settings.driver) + 1) % Game.CHARS.size()
+	for p in players:
+		var key := "driver" if p == 0 else "driver2"
+		var other := "driver2" if p == 0 else "driver"
+		var sec := _section("Jezdec" if players == 1 else "Hráč %d – jezdec" % (p + 1))
+		var taken: Array = [int(Game.settings[other])] if players == 2 else []
+		sec.add_child(_driver_grid(int(Game.settings[key]), taken, _pick_driver.bind(key)))
+	var ts := _section("Trať")
+	ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track))
+	var ds := _section("Obtížnost")
+	ds.add_child(_diff_row(int(Game.settings.diff), true, _pick_diff))
+	if players == 2:
+		_text("Hráč 1 (horní obrazovka): WASD, drift mezerník, předmět E.\nHráč 2 (dolní obrazovka): šipky, drift pravý Shift, předmět Enter.\nPřipojené ovladače: první patří hráči 1, druhý hráči 2.", 16)
+	var row := UI.hbox(10)
+	content.add_child(row)
+	var go := UI.button("Závodit!", func(): start_offline.emit(players), true)
+	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(go)
+	row.add_child(UI.button("Zpět", show_screen.bind("home")))
+
+
+func _go_setup(n: int) -> void:
+	players = n
+	show_screen("setup")
+
+
+func _toggle_mute(btn: Button) -> void:
+	var m := Sfx.toggle_mute()
+	btn.text = "Zvuk: vypnutý" if m else "Zvuk: zapnutý"
+
+
+func _pick_driver(i: int, key: String) -> void:
+	Game.settings[key] = i
+	Game.save_settings()
+	show_screen(screen)
+
+
+func _pick_track(i: int) -> void:
+	Game.settings.track = i
+	Game.save_settings()
+	track_changed.emit()
+	show_screen("setup")
+
+
+func _pick_diff(i: int) -> void:
+	Game.settings.diff = i
+	Game.save_settings()
+	show_screen("setup")
+
+
+func _name_changed(t: String) -> void:
+	Game.settings.name = t
+	Game.save_settings()
+
+
+func _wifi() -> void:
+	_brand(true)
+	content.add_child(UI.label("Hra po Wi-Fi", 26, UI.PAPER, UI.bold_font))
+	_text("Všichni musí být připojení ke stejné Wi-Fi. Hrát spolu můžou telefony s Androidem i počítače s Windows, až 6 hráčů.")
+	var ns := _section("Tvoje jméno")
+	var name_edit := LineEdit.new()
+	name_edit.placeholder_text = Game.CHARS[int(Game.settings.driver)].name
+	name_edit.text = String(Game.settings.name)
+	name_edit.max_length = 16
+	name_edit.text_changed.connect(_name_changed)
+	ns.add_child(name_edit)
+	var dsec := _section("Jezdec")
+	dsec.add_child(_driver_grid(int(Game.settings.driver), [], _pick_driver.bind("driver")))
+	_wide(UI.button("Založit hru", _host, true))
+	var hs := _section("Hry v síti")
+	_hosts_box = UI.vbox(6)
+	hs.add_child(_hosts_box)
+	var ms := _section("Připojit podle adresy")
+	var row := UI.hbox(8)
+	ms.add_child(row)
+	var ip_edit := LineEdit.new()
+	ip_edit.placeholder_text = "např. 192.168.1.23"
+	ip_edit.text = String(Game.settings.host_ip)
+	ip_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ip_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER_DECIMAL
+	row.add_child(ip_edit)
+	row.add_child(UI.button("Připojit", func(): _join(ip_edit.text)))
+	_status_l = UI.label(status_text, 17, UI.GOLD)
+	_status_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_l.custom_minimum_size = Vector2(300, 0)
+	_status_l.visible = status_text != ""
+	content.add_child(_status_l)
+	_wide(UI.button("Zpět", show_screen.bind("home")))
+	Net.start_listening()
+	_fill_hosts()
+
+
+func _fill_hosts() -> void:
+	if _hosts_box == null or not is_instance_valid(_hosts_box):
+		return
+	for c in _hosts_box.get_children():
+		c.queue_free()
+	if Net.hosts.is_empty():
+		var l := UI.label("Hledám hry v síti…", 17, UI.MUTED)
+		_hosts_box.add_child(l)
+		return
+	for ip in Net.hosts.keys():
+		var h: Dictionary = Net.hosts[ip]
+		var t := "%s · %d/6 hráčů%s" % [h.name, h.count, " · závod běží" if h.racing else ""]
+		var b := UI.button(t, _join.bind(String(ip)))
+		b.disabled = bool(h.racing)
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		_hosts_box.add_child(b)
+
+
+func _host() -> void:
+	var err := Net.host(Game.player_name(), int(Game.settings.driver))
+	if err != OK:
+		set_status("Hru se nepodařilo založit (chyba %d). Zavři jinou běžící kopii hry a zkus to znovu." % err)
+		return
+	set_status("")
+	show_screen("lobby")
+
+
+func _join(ip: String) -> void:
+	ip = ip.strip_edges()
+	if not ip.is_valid_ip_address():
+		set_status("Zadej adresu ve tvaru 192.168.1.23.")
+		return
+	Game.settings.host_ip = ip
+	Game.save_settings()
+	set_status("Připojuji se k %s…" % ip)
+	if Net.join(ip, Game.player_name(), int(Game.settings.driver)) != OK:
+		set_status("Připojení se nepodařilo spustit.")
+
+
+func _lobby() -> void:
+	_brand(true)
+	content.add_child(UI.label("Lobby", 26, UI.PAPER, UI.bold_font))
+	if Net.is_host:
+		var ips := Net.local_ips()
+		var sec := _section("Tvoje adresa")
+		if ips.is_empty():
+			sec.add_child(UI.label("Připoj se k Wi-Fi", 26, UI.GOLD, UI.display_font))
+		else:
+			sec.add_child(UI.label(", ".join(ips), 30, UI.GOLD, UI.display_font))
+		var t := UI.label("Ostatní otevřou Hra po Wi-Fi a tvoji hru buď uvidí v seznamu, nebo zadají tuhle adresu.", 16, UI.MUTED)
+		t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		t.custom_minimum_size = Vector2(300, 0)
+		sec.add_child(t)
+	var ps := _section("Hráči (%d/6)" % Net.players.size())
+	var ids := Net.players.keys()
+	ids.sort()
+	for pid in ids:
+		var pl: Dictionary = Net.players[pid]
+		var ch: Dictionary = Game.CHARS[int(pl.driver)]
+		var h := UI.hbox(10)
+		h.add_child(Swatch.new(ch.color, ch.helmet))
+		var me := int(pid) == Net.my_id()
+		var nl := UI.label("%s%s" % [pl.name, " (hostitel)" if int(pid) == 1 else ""], 19, UI.GOLD if me else UI.PAPER, UI.bold_font)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(nl)
+		h.add_child(UI.label(ch.name, 16, UI.MUTED))
+		ps.add_child(h)
+	var mine: Dictionary = Net.players.get(Net.my_id(), {})
+	var taken: Array = []
+	for pid in Net.players.keys():
+		if int(pid) != Net.my_id():
+			taken.append(int(Net.players[pid].driver))
+	var dsec := _section("Tvůj jezdec")
+	dsec.add_child(_driver_grid(int(mine.get("driver", Game.settings.driver)), taken, _lobby_driver))
+	var ts := _section("Trať")
+	ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track))
+	var ds := _section("Obtížnost")
+	ds.add_child(_diff_row(Net.diff, Net.is_host, _lobby_diff))
+	var row := UI.hbox(10)
+	content.add_child(row)
+	if Net.is_host:
+		var go := UI.button("Start závodu", Net.start_race, true)
+		go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(go)
+	else:
+		var w := UI.label("Čekáme, až hostitel spustí závod…", 18, UI.MUTED)
+		w.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(w)
+	row.add_child(UI.button("Odejít", _leave_lobby))
+
+
+func _lobby_driver(i: int) -> void:
+	Game.settings.driver = i
+	Game.save_settings()
+	Net.set_my_driver(i)
+
+
+func _lobby_track(i: int) -> void:
+	Game.settings.track = i
+	Game.save_settings()
+	Net.set_track(i, Net.diff)
+
+
+func _lobby_diff(i: int) -> void:
+	Game.settings.diff = i
+	Game.save_settings()
+	Net.set_track(Net.track, i)
+
+
+func _leave_lobby() -> void:
+	Net.leave()
+	show_screen("wifi")
