@@ -189,6 +189,8 @@ static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGene
 	var crowd: Array = []          # groups of fans: Array of [Transform3D, Color]
 	var cloth := Cloth.new()
 	var used: Array = []           # track indices taken by stands and landmarks
+	if not tr.ramp.is_empty():
+		used.append(int(tr.ramp.i))   # nothing over the jump
 	_start_lights(root, tr, ts)
 	_grandstands(root, tr, th, rng, crowd, cloth, used, ts.spots)
 	match String(tr.def.id):
@@ -203,7 +205,10 @@ static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGene
 	_boards(root, tr, used, ts.spots)
 	ts.spots.lights = [Vector3(tr.x[0], 6.5, tr.z[0]), -Vector3(tr.tx[0], 0.0, tr.tz[0])]
 	if not tr.lake.is_empty():
-		ts.spots.lake = [Vector3(float(tr.lake.x), 0.0, float(tr.lake.z)), Vector3(1, 0, 0)]
+		ts.spots.lake = [Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z)), Vector3(1, 0, 0)]
+	if not tr.ramp.is_empty():
+		var ri := int(tr.ramp.i)
+		ts.spots.ramp = [Vector3(tr.x[ri], tr.y[ri] + 1.0, tr.z[ri]), Vector3(tr.nx[ri], 0.0, tr.nz[ri])]
 	_corner_props(root, tr, rng, ts.spots)
 	for group in crowd:
 		if not (group as Array).is_empty():
@@ -244,11 +249,16 @@ static func _t(pos: Vector3, rot := Vector3.ZERO, scale := Vector3.ONE) -> Trans
 
 ## Frame beside the track at sample i: +X points away from the road on
 ## `side` (+1 / -1 along the track normal), Z runs along the track (+Z
-## against the driving direction when side is +1), origin `off` metres
-## from the centre line.
+## against the driving direction when side is +1) and climbs with the
+## road, origin `off` metres from the centre line on the ground.
 static func _frame(tr: Track, i: int, side: float, off: float) -> Transform3D:
 	var away := Vector3(tr.nx[i], 0.0, tr.nz[i]) * side
-	return Transform3D(Basis(away, Vector3.UP, away.cross(Vector3.UP)), Vector3(tr.x[i], 0.0, tr.z[i]) + away * off)
+	var along := away.cross(Vector3.UP)
+	along.y = -side * tr.slope[i]
+	along = along.normalized()
+	var o := Vector3(tr.x[i], 0.0, tr.z[i]) + away * off
+	o.y = tr.surface(i, off * side)
+	return Transform3D(Basis(away, along.cross(away).normalized(), along), o)
 
 
 ## True when the points (local to f) keep `gap` metres from every bit of
@@ -295,7 +305,7 @@ static func _color(hex: String) -> Color:
 # ================================================================== start lights
 static func _start_lights(root: Node3D, tr: Track, ts: Dictionary) -> void:
 	var g := Node3D.new()
-	g.position = Vector3(tr.x[0], 0.0, tr.z[0])
+	g.position = Vector3(tr.x[0], tr.y[0], tr.z[0])
 	g.rotation.y = tr.heading(0)
 	root.add_child(g)
 	var kit := MeshKit.new()
@@ -603,7 +613,7 @@ static func _windmill(root: Node3D, tr: Track, ts: Dictionary, used: Array) -> v
 		for a in 16:
 			var ang := TAU * a / 16.0
 			var r := float(tr.lake.r) + 9.0
-			cands.append(Vector3(float(tr.lake.x) + cos(ang) * r, 0.0, float(tr.lake.z) + sin(ang) * r))
+			cands.append(Vector3(float(tr.lake.x) + cos(ang) * r, tr.lake_y, float(tr.lake.z) + sin(ang) * r))
 	for k in 24:
 		var i := int(k / 24.0 * tr.n)
 		for side in [1.0, -1.0]:
@@ -624,6 +634,7 @@ static func _windmill(root: Node3D, tr: Track, ts: Dictionary, used: Array) -> v
 	var pj := tr.project(spot.x, spot.z, -1)
 	var ti: int = pj[0]
 	var face := Vector3(tr.x[ti] - spot.x, 0.0, tr.z[ti] - spot.z).normalized()
+	spot.y = tr.terrain(spot.x, spot.z) - 0.4
 	var g := Node3D.new()
 	g.transform = Transform3D(Basis.looking_at(face, Vector3.UP, true), spot)
 	root.add_child(g)
@@ -782,7 +793,7 @@ static func _igloos(root: Node3D, tr: Track, rng: RandomNumberGenerator, used: A
 	if not tr.lake.is_empty():
 		for a in [0.3, 2.4, 4.4]:
 			var r := float(tr.lake.r) + 7.0
-			places.append(Vector3(float(tr.lake.x) + cos(a) * r, 0.0, float(tr.lake.z) + sin(a) * r))
+			places.append(Vector3(float(tr.lake.x) + cos(a) * r, tr.lake_y, float(tr.lake.z) + sin(a) * r))
 	for k in 3:
 		var i := int((k * 0.31 + 0.18) * tr.n)
 		places.append(_frame(tr, i, 1.0 if k % 2 == 0 else -1.0, Game.BAR + 9.0).origin)
@@ -794,6 +805,7 @@ static func _igloos(root: Node3D, tr: Track, rng: RandomNumberGenerator, used: A
 		var pj := tr.project(p.x, p.z, -1)
 		var ti: int = pj[0]
 		var face := Vector3(tr.x[ti] - p.x, 0.0, tr.z[ti] - p.z).normalized()
+		p.y = tr.terrain(p.x, p.z) - 0.2
 		_igloo(kit, Transform3D(Basis.looking_at(face, Vector3.UP, true), p), rng)
 		made += 1
 		spots["igloo%d" % made] = [p + Vector3(0, 2.0, 0), face]
@@ -809,7 +821,7 @@ static func _igloos(root: Node3D, tr: Track, rng: RandomNumberGenerator, used: A
 		if _clear(tr, f, [Vector3.ZERO], Game.BAR + 2.0):
 			_crystals(ck, f.origin, rng, 5, 1.0)
 	if not tr.lake.is_empty():
-		var big := Vector3(float(tr.lake.x), 0.0, float(tr.lake.z)) + Vector3(float(tr.lake.r) * 0.35, 0, 0)
+		var big := Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z)) + Vector3(float(tr.lake.r) * 0.35, 0, 0)
 		_crystals(ck, big, rng, 9, 2.2)
 		spots.crystals = [big + Vector3(0, 3.0, 0), Vector3(1, 0, 0)]
 	var cm := StandardMaterial3D.new()

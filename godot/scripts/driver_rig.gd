@@ -142,7 +142,8 @@ static func _meshes(driver: int) -> Dictionary:
 # ================================================================== animation
 func update(k: Kart, delta: float, t: float) -> void:
 	var sr := clampf(absf(k.speed) / maxf(1.0, k.max_speed()), 0.0, 1.0)
-	pose(k.steer, k.slip, k.drift_dir if k.drift_active else 0.0, k.boost > 0.0, k.finished, k.spin > 0.0, sr, delta, t)
+	pose(k.steer, k.slip, k.drift_dir if k.drift_active else 0.0, k.boost > 0.0, k.finished or k.trick > 0.0, k.spin > 0.0,
+		sr, delta, t)
 
 
 ## The whole pose from a few numbers, so menus and the podium can animate a

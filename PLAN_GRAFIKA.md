@@ -163,7 +163,18 @@ Počet částic se řídí kvalitou z fáze 0.
 
 ---
 
-## Fáze 6 – Kopce, skoky a klopené zatáčky  *(největší, volitelná)*
+## Fáze 6 – Kopce, skoky a klopené zatáčky  *(největší, volitelná)* ✅ hotovo (verze 1.7.0)
+
+> **Výsledek (`track.gd`, `kart.gd`, `world_builder.gd`):**
+> - *Výškový profil:* každá trať má kopce a sjezdy ze dvou vln podél kola (údolí ±8 m, kaňon ±11 m, laguna −5 až +7 m, nejprudší stoupání asi 15 %). Startovní rovinka zůstává rovná kvůli tribunám, semaforu a stupňům vítězů. Části trati, které vedou blízko sebe, mají podobnou výšku, aby mezi nimi nevznikl sráz. Zatáčky se klopí podle ostrosti, nejvíc asi o 10°, vnější strana je výš.
+> - *Skok:* na nejrovnějším úseku (mimo start a otazníky) je kopec a těsně za jeho vrcholem žlutočerná rampa přes celou silnici. Motokára letí asi 20–30 m. Mírné hrboly motokáru udrží na zemi, vzlétne jen z rampy a ostrých hřebenů.
+> - *Trik:* tlačítko driftu ve vzduchu udělá otočku kolem osy. Jezdec přitom zvedne ruce, objeví se nápis „Trik!“ a po dopadu přijde krátké turbo. Počítačoví soupeři trik dělají většinou taky, lepší jezdci častěji.
+> - *Fyzika:* do kopce motokára zpomaluje, z kopce pomáhá (jen do běžné nejvyšší rychlosti). Ve vzduchu nejde zrychlit ani driftovat a zatáčení je slabší. Dopad stlačí pérování, zahučí a kamera se otřese. Motokára se naklání podle svahu i klopení, ve vzduchu jde nosem dolů.
+> - *Terén:* země kolem trati je síť výšek po 6 m. U silnice plynule navazuje na její povrch, dál se mění v mírné vlny a na okraji přechází do roviny. Na Vysoké se kreslí každý bod, níž každý druhý. Jezero má rovný břeh. Stromy, kaktusy, kameny, sněhuláci, iglú, mlýn, tribuny, panely, slámu i bariéry hra staví na zem v jejich výšce, banány, rakety, výbuchy a otazníky na silnici v její výšce, stopy smyku se kladou na klopený povrch.
+> - *Kamera:* výšku sleduje trochu měkčeji, takže skok je vidět. Nikdy nezajede pod kopec za motokárou.
+> - *Wi-Fi:* posílá se i výška a stav letu a triku. Klient vidí skoky i triky ostatních (ověřeno na snímku).
+> - **Výkon v cloudu:** Nízká beze změny, Střední asi o 11 % pomalejší (7,2 → 6,4 FPS), Vysoká o 12 % (4,1 → 3,6 FPS). Cenu dělá terén z tisíců trojúhelníků místo jedné roviny. Proto je rozdělený na 16 dlaždic (co je za kamerou, se nekreslí) a na Nízké a Střední má poloviční hustotu.
+> - **Screenshoty:** `--shot-air=0.25` vyfotí obrazovku, až první hráč letí aspoň 0,25 s. `--view=free --at=x,y,z --look=x,y,z` je volná kamera, `--view=spot --spot=ramp` ukáže rampu, `--trackinfo` vypíše výšky a sklony všech tratí.
 
 - **Výškový profil** každé trati: stoupání, klesání, klopené zatáčky a jeden skok s rampou.
 - **Fyzika ve 3D:** let vzduchem, dopad s odpružením, krátké turbo za trik ve vzduchu.
@@ -191,6 +202,6 @@ Riziko: zasahuje do fyziky, AI i sítě, proto až nakonec a samostatně.
 | 3 Motokáry a jezdci ✅ | velká | charakter postav |
 | 4 Svět kolem trati ✅ | velká | živé prostředí |
 | 5 Menu a výsledky ✅ | střední | dojem z celé hry |
-| 6 Kopce a skoky | největší | nová hratelnost |
+| 6 Kopce a skoky ✅ | největší | nová hratelnost |
 
 Doporučené tempo: **0 + 1 dohromady**, potom vždy jedna fáze. Po každé fázi společně zkontrolujeme výkon na telefonu.

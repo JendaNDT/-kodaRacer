@@ -40,9 +40,11 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 
 | Trať | Nálada | Poznávací znamení |
 | --- | --- | --- |
-| Zelené údolí | slunečné odpoledne | větrný mlýn u jezera, dřevěný most přes trať |
-| Pouštní kaňon | západ slunce | skalní oblouk přes trať |
+| Zelené údolí | slunečné odpoledne | větrný mlýn u jezera, dřevěný most přes trať, kopce do 8 m |
+| Pouštní kaňon | západ slunce | skalní oblouk přes trať, nejvyšší kopce (až 11 m) |
 | Ledová laguna | zataženo, sněží | iglú, svítící ledové krystaly, zamrzlé jezero |
+
+Každá trať má kopce, sjezdy, klopené zatáčky a jeden skok: žlutočernou rampu za vrcholem kopce.
 
 Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách. Po závodě stojí první tři motokáry na stupních vítězů u startovní rovinky, létají konfety a pod nimi je výsledková tabulka.
 
@@ -66,6 +68,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 - **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
+- **Trik**: když letíš z rampy, zmáčkni ve vzduchu drift. Motokára se otočí a po dopadu dostaneš turbo.
 - **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš. Předmět se losuje jako na hracím automatu: obrázky se protáčejí, zpomalí a vyhraný zacvakne.
 
 | Předmět | Co dělá |

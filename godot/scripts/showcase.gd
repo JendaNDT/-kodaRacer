@@ -5,6 +5,7 @@ extends RefCounted
 ##   --view=front|back|side|close   where the camera stands (close: --driver=N)
 ##   --pose=drive|steer|cheer|dizzy|boost|star|mix   what the drivers do
 ##   --steer=0.8                     steering for the steer pose
+##   --view=free --at=x,y,z --look=x,y,z   any camera (overviews of the hills)
 ##   --view=spot --spot=bridge       aim at a trackside landmark instead,
 ##                                   from the side it faces (--dist,
 ##                                   --height, --angle to swing around)
@@ -20,7 +21,7 @@ static func hold(race: Race) -> void:
 	var base := (tr.n - int(round(16.0 / tr.step))) % tr.n
 	var fwd := Vector3(sin(tr.heading(base)), 0.0, cos(tr.heading(base)))
 	var side := Vector3(tr.nx[base], 0.0, tr.nz[base])
-	var ctr := Vector3(tr.x[base], 0.0, tr.z[base])
+	var ctr := Vector3(tr.x[base], tr.y[base], tr.z[base])
 	var karts := race.karts.duplicate()
 	karts.sort_custom(func(p: Kart, q: Kart) -> bool: return p.driver < q.driver)
 	for i in karts.size():
@@ -32,9 +33,17 @@ static func hold(race: Race) -> void:
 		k.x = p.x
 		k.z = p.z
 		k.heading = tr.heading(base)
+		var pj := tr.project(k.x, k.z, base)
+		k.idx = pj[0]
+		k.lat = pj[1]
+		k.along = pj[2]
+		k.y = tr.road_y(k.idx, k.lat, k.along)
+		k.vy = 0.0
+		k.air = false
 		k.prev_x = k.x
 		k.prev_z = k.z
 		k.prev_h = k.heading
+		k.prev_y = k.y
 		var kp := pose
 		if pose == "mix":
 			kp = ["drive", "steer", "cheer", "dizzy", "boost", "star"][i % 6]
@@ -66,6 +75,15 @@ static func hold(race: Race) -> void:
 			elif Engine.get_process_frames() % 120 == 0:
 				print("SPOTS ", spots.keys())
 			cam.fov = 50.0
+		"free":
+			# --at=x,y,z --look=x,y,z (metres)
+			var at := String(a.get("at", "0,200,0")).split_floats(",")
+			var lk := String(a.get("look", "0,0,0")).split_floats(",")
+			cam.position = Vector3(at[0], at[1], at[2])
+			look = Vector3(lk[0], lk[1], lk[2])
+			up = Vector3.FORWARD if absf(cam.position.x - look.x) + absf(cam.position.z - look.z) < 1.0 else Vector3.UP
+			cam.fov = float(a.get("fov", "60"))
+			cam.far = 4000.0
 		"close":
 			var d := clampi(int(a.get("driver", "0")), 0, karts.size() - 1)
 			var k: Kart = karts[d]

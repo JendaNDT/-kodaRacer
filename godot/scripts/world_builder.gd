@@ -70,47 +70,21 @@ static func build(tr: Track) -> Dictionary:
 	gimg.generate_mipmaps()
 	var gmat := StandardMaterial3D.new()
 	gmat.albedo_texture = ImageTexture.create_from_image(gimg)
-	gmat.uv1_scale = Vector3(GROUND / 24.0, GROUND / 24.0, 1.0)
 	gmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	gmat.roughness = 1.0
-	var gplane := PlaneMesh.new()
-	gplane.size = Vector2(GROUND, GROUND)
-	gplane.material = gmat
-	var ground := MeshInstance3D.new()
-	ground.mesh = gplane
-	ground.position = Vector3(tr.cx, 0.0, tr.cz)
-	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(ground)
+	root.add_child(_land(tr, gmat))
 
-	# --- lake in the infield where there is room
-	tr.lake = {}
-	if th.lake != null:
-		var bx := 0.0
-		var bz := 0.0
-		var bd := 0.0
-		var gx := tr.min_x
-		while gx <= tr.max_x:
-			var gz := tr.min_z
-			while gz <= tr.max_z:
-				if tr.inside(gx, gz):
-					var d := tr.min_dist(gx, gz)
-					if d > bd:
-						bd = d
-						bx = gx
-						bz = gz
-				gz += 16.0
-			gx += 16.0
-		var r := minf(70.0, bd - Game.BAR - 8.0)
-		if r > 12.0:
-			var shore := _disc(r + 3.0, Color(th.ground2), 0.02, false)
-			shore.position = Vector3(bx, 0.0, bz)
-			root.add_child(shore)
-			var lake := _disc(r, th.lake, 0.035, true)
-			lake.position = Vector3(bx, 0.0, bz)
-			(lake.get_child(0) as MeshInstance3D).material_override = Trackside.lake_material(th.lake,
-				th.mood.horizon, th.deco == "pines")
-			root.add_child(lake)
-			tr.lake = {"x": bx, "z": bz, "r": r + 3.0}
+	# --- lake in the infield where there is room (Track found the spot)
+	if not tr.lake.is_empty():
+		var r := float(tr.lake.water)
+		var shore := _disc(r + 3.0, Color(th.ground2), 0.02, false)
+		shore.position = Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z))
+		root.add_child(shore)
+		var lake := _disc(r, th.lake, 0.035, true)
+		lake.position = Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z))
+		(lake.get_child(0) as MeshInstance3D).material_override = Trackside.lake_material(th.lake,
+			th.mood.horizon, th.deco == "pines")
+		root.add_child(lake)
 
 	# --- road and kerbs
 	var road_col: Color = th.road
@@ -153,8 +127,10 @@ static func build(tr: Track) -> Dictionary:
 		k.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(k)
 
-	# --- start line and gantry
+	# --- start line and gantry, the jump ramp
 	root.add_child(_start_gantry(tr))
+	if not tr.ramp.is_empty():
+		root.add_child(_ramp(tr))
 
 	# --- tyre barriers, skipping spots that would fold into the road
 	var tyre_xf: Array = []
@@ -167,7 +143,7 @@ static func build(tr: Track) -> Dictionary:
 			var px := tr.x[i] + tr.nx[i] * off
 			var pz := tr.z[i] + tr.nz[i] * off
 			if not tr.near(px, pz, Game.BAR - 0.2):
-				tyre_xf.append(Transform3D(Basis.IDENTITY, Vector3(px, 0.62, pz)))
+				tyre_xf.append(Transform3D(Basis.IDENTITY, Vector3(px, tr.road_y(i, off, 0.0, false) + 0.62, pz)))
 				tyre_cols.append(th.kerb_a if (tyre_cols.size() / 2) % 2 == 1 else th.kerb_b)
 			d += 2.3
 	var tyre_mesh := CylinderMesh.new()
@@ -207,8 +183,9 @@ static func build(tr: Track) -> Dictionary:
 		for lane in [-0.6, -0.2, 0.2, 0.6]:
 			var bx: float = tr.x[i] + tr.nx[i] * lane * Game.HW
 			var bz: float = tr.z[i] + tr.nz[i] * lane * Game.HW
+			var by: float = tr.road_y(i, lane * Game.HW, 0.0) + 1.4
 			var node := Node3D.new()
-			node.position = Vector3(bx, 1.4, bz)
+			node.position = Vector3(bx, by, bz)
 			var mi := MeshInstance3D.new()
 			mi.mesh = box_mesh
 			mi.material_override = box_mat
@@ -225,7 +202,7 @@ static func build(tr: Track) -> Dictionary:
 			q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.add_child(q)
 			root.add_child(node)
-			boxes.append({"x": bx, "z": bz, "node": node, "mesh": mi, "active": true, "respawn": 0.0,
+			boxes.append({"x": bx, "y": by, "z": bz, "node": node, "mesh": mi, "active": true, "respawn": 0.0,
 				"phase": k * 0.7 + float(f) * 10.0, "scale": 1.0})
 			k += 1
 
@@ -236,6 +213,8 @@ static func build(tr: Track) -> Dictionary:
 
 
 # ------------------------------------------------------------------ pieces
+## A strip along the track between offsets o0 and o1, `y` above the road
+## surface (it follows the hills and banked corners).
 static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> ArrayMesh:
 	var cnt := tr.n
 	v_len = tr.length / maxf(1.0, round(tr.length / v_len))
@@ -249,12 +228,13 @@ static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> A
 	for i in cnt + 1:
 		var j := i % cnt
 		var v := i * tr.step / v_len
-		verts[i * 2] = Vector3(tr.x[j] + tr.nx[j] * o0, y, tr.z[j] + tr.nz[j] * o0)
-		verts[i * 2 + 1] = Vector3(tr.x[j] + tr.nx[j] * o1, y, tr.z[j] + tr.nz[j] * o1)
+		verts[i * 2] = Vector3(tr.x[j] + tr.nx[j] * o0, tr.road_y(j, o0, 0.0, false) + y, tr.z[j] + tr.nz[j] * o0)
+		verts[i * 2 + 1] = Vector3(tr.x[j] + tr.nx[j] * o1, tr.road_y(j, o1, 0.0, false) + y, tr.z[j] + tr.nz[j] * o1)
 		uvs[i * 2] = Vector2(0, v)
 		uvs[i * 2 + 1] = Vector2(1, v)
-		norms[i * 2] = Vector3.UP
-		norms[i * 2 + 1] = Vector3.UP
+		var up := tr.normal(j, 0.0, 0.0, false)
+		norms[i * 2] = up
+		norms[i * 2 + 1] = up
 		if i < cnt:
 			# wound so the front face looks up: the sun lights the road and kerbs
 			var a := i * 2
@@ -268,6 +248,164 @@ static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> A
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	return m
+
+
+## The land: the height grid from Track in 4×4 tiles (so the ones behind
+## the camera are skipped), every node on High, every second one below
+## (12 m is plenty: next to the road the land is a flat continuation of
+## it), and flat ground at 0 around it out to the horizon. Texture
+## coordinates in metres so everything joins up.
+static func _land(tr: Track, mat: Material) -> Node3D:
+	tr.land()
+	var stp := 1 if Gfx.level() == 2 else 2
+	var cols: Array = []
+	var ix := 0
+	while true:
+		cols.append(mini(ix, tr.f_w - 1))
+		if ix >= tr.f_w - 1:
+			break
+		ix += stp
+	var rows: Array = []
+	var iz := 0
+	while true:
+		rows.append(mini(iz, tr.f_h - 1))
+		if iz >= tr.f_h - 1:
+			break
+		iz += stp
+	var g := Node3D.new()
+	var tiles := 4
+	for ty in tiles:
+		for tx_ in tiles:
+			var r0 := (rows.size() - 1) * ty / tiles
+			var r1 := (rows.size() - 1) * (ty + 1) / tiles
+			var c0 := (cols.size() - 1) * tx_ / tiles
+			var c1 := (cols.size() - 1) * (tx_ + 1) / tiles
+			g.add_child(_land_tile(tr, mat, rows.slice(r0, r1 + 1), cols.slice(c0, c1 + 1)))
+	# flat ground around the grid: four big strips at height 0
+	var c := Track.FCELL
+	var x0 := tr.f_x0
+	var z0 := tr.f_z0
+	var x1 := tr.f_x0 + (tr.f_w - 1) * c
+	var z1 := tr.f_z0 + (tr.f_h - 1) * c
+	var ex0 := tr.cx - GROUND * 0.5
+	var ez0 := tr.cz - GROUND * 0.5
+	var ex1 := tr.cx + GROUND * 0.5
+	var ez1 := tr.cz + GROUND * 0.5
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idx := PackedInt32Array()
+	for rect in [[ex0, ez0, ex1, z0], [ex0, z1, ex1, ez1], [ex0, z0, x0, z1], [x1, z0, ex1, z1]]:
+		var b := verts.size()
+		for p in [Vector2(rect[0], rect[1]), Vector2(rect[2], rect[1]), Vector2(rect[0], rect[3]), Vector2(rect[2], rect[3])]:
+			verts.append(Vector3(p.x, 0.0, p.y))
+			norms.append(Vector3.UP)
+			uvs.append(p / 24.0)
+		idx.append_array(PackedInt32Array([b, b + 1, b + 2, b + 1, b + 3, b + 2]))
+	g.add_child(_mesh_node(verts, norms, uvs, idx, mat))
+	return g
+
+
+static func _land_tile(tr: Track, mat: Material, rows: Array, cols: Array) -> MeshInstance3D:
+	var c := Track.FCELL
+	var w := cols.size()
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idx := PackedInt32Array()
+	for r: int in rows:
+		for q: int in cols:
+			var px := tr.f_x0 + q * c
+			var pz := tr.f_z0 + r * c
+			verts.append(Vector3(px, tr.node_y(q, r), pz))
+			var hl := tr.node_y(maxi(q - 1, 0), r)
+			var hr := tr.node_y(mini(q + 1, tr.f_w - 1), r)
+			var hd := tr.node_y(q, maxi(r - 1, 0))
+			var hu := tr.node_y(q, mini(r + 1, tr.f_h - 1))
+			norms.append(Vector3((hl - hr) / (2.0 * c), 1.0, (hd - hu) / (2.0 * c)).normalized())
+			uvs.append(Vector2(px, pz) / 24.0)
+	for r in rows.size() - 1:
+		for q in w - 1:
+			var a := r * w + q
+			idx.append_array(PackedInt32Array([a, a + 1, a + w, a + 1, a + w + 1, a + w]))
+	return _mesh_node(verts, norms, uvs, idx, mat)
+
+
+static func _mesh_node(verts: PackedVector3Array, norms: PackedVector3Array, uvs: PackedVector2Array,
+		idx: PackedInt32Array, mat: Material) -> MeshInstance3D:
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = norms
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mi := MeshInstance3D.new()
+	mi.mesh = m
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## The jump: a wedge across the road with yellow and black stripes, rising
+## to its lip, the drop behind it.
+static func _ramp(tr: Track) -> MeshInstance3D:
+	var img := Image.create_empty(32, 32, false, Image.FORMAT_RGBA8)
+	for yy in 32:
+		for xx in 32:
+			img.set_pixel(xx, yy, Color("ffc21a") if (xx + yy) % 32 < 16 else Color("1d1f26"))
+	img.generate_mipmaps()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	mat.roughness = 0.6
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var i0: int = tr.ramp.i
+	var segs := int(round(float(tr.ramp.len) / tr.step))
+	var hw := Game.HW
+	var top: Array = []     # [left, right] per row
+	var base: Array = []
+	for k in segs + 1:
+		var i := (i0 + k) % tr.n
+		var lift := float(tr.ramp.h) * minf(1.0, float(k) / segs) + 0.04
+		var row: Array = []
+		var low: Array = []
+		for la in [-hw, hw]:
+			var g := Vector3(tr.x[i] + tr.nx[i] * la, tr.road_y(i, la, 0.0, false), tr.z[i] + tr.nz[i] * la)
+			row.append(g + Vector3(0, lift, 0))
+			low.append(g + Vector3(0, 0.02, 0))
+		top.append(row)
+		base.append(low)
+	var quad := func(a: Vector3, b: Vector3, c: Vector3, d: Vector3, ua: Vector2, ub: Vector2, uc: Vector2, ud: Vector2) -> void:
+		var nrm := (d - a).cross(b - a).normalized()   # the side the winding shows
+		for v in [[a, ua], [b, ub], [c, uc], [a, ua], [c, uc], [d, ud]]:
+			st.set_normal(nrm)
+			st.set_uv(v[1])
+			st.add_vertex(v[0])
+	for k in segs:
+		var u0 := float(k) * tr.step / 3.0
+		var u1 := float(k + 1) * tr.step / 3.0
+		# top surface, wound to face up
+		quad.call(top[k][0], top[k + 1][0], top[k + 1][1], top[k][1],
+			Vector2(0, u0), Vector2(0, u1), Vector2(hw * 2.0 / 3.0, u1), Vector2(hw * 2.0 / 3.0, u0))
+		for sd in 2:
+			var a: Vector3 = base[k][sd]
+			var b: Vector3 = base[k + 1][sd]
+			var c: Vector3 = top[k + 1][sd]
+			var d: Vector3 = top[k][sd]
+			if sd == 0:
+				quad.call(a, b, c, d, Vector2(u0, 0), Vector2(u1, 0), Vector2(u1, 0.4), Vector2(u0, 0.4))
+			else:
+				quad.call(b, a, d, c, Vector2(u1, 0), Vector2(u0, 0), Vector2(u0, 0.4), Vector2(u1, 0.4))
+	# the face at the lip
+	quad.call(base[segs][0], base[segs][1], top[segs][1], top[segs][0],
+		Vector2(0, 0), Vector2(hw * 2.0 / 3.0, 0), Vector2(hw * 2.0 / 3.0, 0.45), Vector2(0, 0.45))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = mat
+	return mi
 
 
 ## Re-creates a mesh with one normal per face for a low-poly look.
@@ -366,7 +504,7 @@ static func _disc(r: float, color: Color, y: float, shiny: bool) -> Node3D:
 
 static func _start_gantry(tr: Track) -> Node3D:
 	var g := Node3D.new()
-	g.position = Vector3(tr.x[0], 0.0, tr.z[0])
+	g.position = Vector3(tr.x[0], tr.y[0], tr.z[0])
 	g.rotation.y = tr.heading(0)
 	var cimg := Image.create_empty(16, 2, false, Image.FORMAT_RGBA8)
 	for yy in 2:
@@ -523,9 +661,10 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		for t in trees:
 			var s: float = 0.8 + t[2] * 0.8
 			var rot: float = t[3] * 6.0
-			trunk_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0], 1.5 * s, t[1])))
-			fol_xf.append(_xf(rot, Vector3(s, s * (1.0 if pine else 1.15), s), Vector3(t[0], (6.0 if pine else 5.4) * s, t[1])))
-			cap_xf.append(_xf(rot, Vector3(s, s, s), Vector3(t[0], 8.4 * s, t[1])))
+			var gy := tr.terrain(t[0], t[1]) - 0.2
+			trunk_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0], gy + 1.5 * s, t[1])))
+			fol_xf.append(_xf(rot, Vector3(s, s * (1.0 if pine else 1.15), s), Vector3(t[0], gy + (6.0 if pine else 5.4) * s, t[1])))
+			cap_xf.append(_xf(rot, Vector3(s, s, s), Vector3(t[0], gy + 8.4 * s, t[1])))
 			var c := base
 			c.h = fposmod(c.h + (t[4] - 0.5) * 0.05, 1.0)
 			c.v = clampf(c.v + (t[4] - 0.5) * 0.15, 0.0, 1.0)
@@ -552,7 +691,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			var bcols: Array = []
 			for t in bushes:
 				var s: float = 0.7 + t[2] * 0.9
-				bush_xf.append(_xf(t[3] * 6.0, Vector3(s * 1.3, s, s * 1.3), Vector3(t[0], 0.6 * s, t[1])))
+				bush_xf.append(_xf(t[3] * 6.0, Vector3(s * 1.3, s, s * 1.3), Vector3(t[0], tr.terrain(t[0], t[1]) + 0.6 * s, t[1])))
 				bcols.append(base.lightened(0.08 + t[4] * 0.1))
 			root.add_child(_multi(flat(bush), Trackside.wind_material(0.06, 0.0), bush_xf, bcols))
 	elif deco == "cactus":
@@ -575,15 +714,16 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		var acols: Array = []
 		for t in cact:
 			var s: float = 0.7 + t[2] * 0.7
-			body_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0], 3.0 * s, t[1])))
+			var gy := tr.terrain(t[0], t[1]) - 0.2
+			body_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0], gy + 3.0 * s, t[1])))
 			var c := base
 			c.v = clampf(c.v + (t[4] - 0.5) * 0.12, 0.0, 1.0)
 			ccols.append(c)
 			var a: float = t[3] * TAU
-			arm_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0] + cos(a) * 1.2 * s, 4.4 * s, t[1] + sin(a) * 1.2 * s)))
+			arm_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0] + cos(a) * 1.2 * s, gy + 4.4 * s, t[1] + sin(a) * 1.2 * s)))
 			acols.append(c)
 			if t[4] > 0.4:
-				arm_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0] - cos(a) * 1.2 * s, 3.4 * s, t[1] - sin(a) * 1.2 * s)))
+				arm_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0] - cos(a) * 1.2 * s, gy + 3.4 * s, t[1] - sin(a) * 1.2 * s)))
 				acols.append(c)
 		root.add_child(_multi(flat(body), Trackside.wind_material(0.012, 0.0), body_xf, ccols))
 		root.add_child(_multi(flat(arm), Trackside.wind_material(0.012, 0.0), arm_xf, acols))
@@ -598,7 +738,7 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		for t in rocks:
 			var s: float = 0.6 + t[2] * 2.2
 			var b := Basis.from_euler(Vector3(t[3], t[4] * 6.0, 0)) * Basis.from_scale(Vector3(s, s * 0.7, s))
-			rock_xf.append(Transform3D(b, Vector3(t[0], 0.4 * s, t[1])))
+			rock_xf.append(Transform3D(b, Vector3(t[0], tr.terrain(t[0], t[1]) + 0.4 * s, t[1])))
 			rcols.append(Color(th.mount).lightened(0.05 + t[4] * 0.15))
 		root.add_child(_multi(flat(rock), _vc_mat(), rock_xf, rcols))
 
@@ -695,6 +835,6 @@ static func _snowmen(root: Node3D, tr: Track, rng: RandomNumberGenerator) -> voi
 			g.add_child(eye)
 		var pj := tr.project(p[0], p[1], -1)
 		var i: int = pj[0]
-		g.position = Vector3(p[0], 0, p[1])
+		g.position = Vector3(p[0], tr.terrain(p[0], p[1]) - 0.3, p[1])
 		g.rotation.y = atan2(tr.x[i] - float(p[0]), tr.z[i] - float(p[1]))
 		root.add_child(g)

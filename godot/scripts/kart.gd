@@ -1,9 +1,14 @@
 class_name Kart
 extends Node3D
 ## One kart: its model (KartModel + DriverRig), effects, suspension and
-## the arcade driving model (ported 1:1 from the web prototype).
+## the arcade driving model (ported from the web prototype), plus height:
+## it follows hills and banked corners, flies off crests and the ramp and
+## can do a trick in the air for a turbo on landing.
 
-const SNAP_FIELDS := 24
+const SNAP_FIELDS := 26
+const TRICK_TIME := 0.42    # one barrel roll
+const SLOPE_PULL := 16.0    # how much hills slow you down (or help) per unit of slope
+const STICK := 2.0          # grip on crests, in units of gravity
 ## Drift spark / turbo colours for drift levels 1–3 (blue, orange, purple).
 const DRIFT_COLS := [Color(0.35, 0.78, 1.0), Color(1.0, 0.64, 0.18), Color(0.78, 0.36, 1.0)]
 const DRIFT_BOOST := [0.0, 0.7, 1.3, 1.75]
@@ -61,6 +66,13 @@ var braking := false
 var bump_cd := 0.0
 var wrong_t := 0.0
 var obs := {}
+var y := 0.0
+var vy := 0.0
+var air := false            # flying (off a crest or the ramp)
+var air_t := 0.0
+var trick := 0.0            # > 0 while the trick roll plays
+var tricked := false        # a trick was done on this flight
+var along := 0.0            # metres ahead of sample idx
 
 # --- visuals
 var body: Node3D            # hops and spins with the kart (wheels included)
@@ -99,9 +111,15 @@ var rumble_t := 0.0
 var prev_x := 0.0
 var prev_z := 0.0
 var prev_h := 0.0
+var prev_y := 0.0
 var vis_x := 0.0
 var vis_z := 0.0
 var vis_h := 0.0
+var vis_y := 0.0
+var vis_up := Vector3.UP
+var yaw := 0.0              # where the kart points on screen (for the camera)
+var was_air := false
+var land_v := 0.0
 
 static var _m := {}
 
@@ -453,10 +471,16 @@ func reset(px: float, pz: float, h: float) -> void:
 	bump_cd = 0.0; wrong_t = 0.0; autopilot = false
 	var pj := race.track.project(x, z, -1)
 	idx = pj[0]
+	lat = pj[1]
+	along = pj[2]
 	s = race.track.arc_pos(idx, pj[2])
 	last_s = s
-	prev_x = x; prev_z = z; prev_h = heading
-	vis_x = x; vis_z = z; vis_h = heading
+	y = race.track.road_y(idx, lat, along)
+	vy = 0.0; air = false; air_t = 0.0; trick = 0.0; tricked = false; was_air = false; land_v = 0.0
+	prev_x = x; prev_z = z; prev_h = heading; prev_y = y
+	vis_x = x; vis_z = z; vis_h = heading; vis_y = y
+	vis_up = race.track.normal(idx, lat, along)
+	yaw = heading
 	for f in flames + cores:
 		f.visible = false
 	skid_last = [null, null]
@@ -469,7 +493,7 @@ func reset(px: float, pz: float, h: float) -> void:
 	susp_y = 0.0; susp_v = 0.0; pitch = 0.0; pitch_v = 0.0; accel_f = 0.0
 	prev_speed = 0.0; prev_hop = 0.0; rumble_t = 0.0
 	rig.reset()
-	position = Vector3(x, 0, z)
+	position = Vector3(x, y, z)
 	rotation = Vector3(0, heading, 0)
 
 
@@ -517,6 +541,7 @@ func update(dt: float, inp: Dictionary) -> void:
 	boost = maxf(0.0, boost - dt)
 	star = maxf(0.0, star - dt)
 	hop = maxf(0.0, hop - dt)
+	trick = maxf(0.0, trick - dt)
 	invuln = maxf(0.0, invuln - dt)
 	bump_cd = maxf(0.0, bump_cd - dt)
 
@@ -527,13 +552,15 @@ func update(dt: float, inp: Dictionary) -> void:
 		steer = 0.0
 	else:
 		steer = Game.approach(steer, float(inp.steer), 7.0 * dt)
-		var slow := offroad and boost <= 0.0 and star <= 0.0
+		var slow := offroad and boost <= 0.0 and star <= 0.0 and not air
 		var cap := mx
 		if slow:
 			cap *= 0.5
 		if star > 0.0:
 			cap *= 1.18
-		if boost > 0.0:
+		if air:
+			speed = Game.approach(speed, 0.0, 1.5 * dt)   # no grip in the air
+		elif boost > 0.0:
 			cap = maxf(cap, mx * boost_mul)
 			speed = minf(cap, speed + 70.0 * dt)
 		elif inp.gas:
@@ -548,17 +575,22 @@ func update(dt: float, inp: Dictionary) -> void:
 				speed = maxf(-float(base.rev), speed - 16.0 * dt)
 		else:
 			speed = Game.approach(speed, 0.0, float(base.drag) * dt)
-		if speed > cap:
+		if speed > cap and not air:
 			speed = Game.approach(speed, cap, (45.0 if slow else 18.0) * dt)
 
 		# drifting
 		var a_sp := absf(speed)
 		var drift_in: bool = inp.drift
-		if drift_in and not drift_prev and hop <= 0.0:
+		if air:
+			# the drift button in the air is a trick: a roll, turbo on landing
+			if drift_in and not drift_prev and not tricked and air_t > 0.06:
+				tricked = true
+				trick = TRICK_TIME
+		elif drift_in and not drift_prev and hop <= 0.0:
 			hop = 0.26
 			hop_max = 0.26
 			hop_h = 0.45
-		if not drift_active and drift_in and absf(float(inp.steer)) > 0.25 and speed > mx * 0.4:
+		if not drift_active and not air and drift_in and absf(float(inp.steer)) > 0.25 and speed > mx * 0.4:
 			drift_active = true
 			drift_dir = signf(float(inp.steer))
 			drift_charge = 0.0
@@ -575,15 +607,25 @@ func update(dt: float, inp: Dictionary) -> void:
 					drift_level = lvl
 		if not drift_active:
 			var f := clampf(a_sp / (mx * 0.22), 0.0, 1.0) * (1.0 - 0.28 * clampf(a_sp / mx, 0.0, 1.0))
+			if air:
+				f *= 0.35
 			heading -= steer * float(base.turn) * handling * f * signf(speed) * dt
 		drift_prev = drift_in
 		if inp.item and item != 0 and roulette <= 0.0:
 			race.use_item(self)
 	slip = Game.approach(slip, drift_dir * 0.4 if drift_active else 0.0, 3.0 * dt)
 
+	if not air:
+		# uphill slows you down, downhill helps (only up to the usual top speed)
+		var tr := race.track
+		var fx := sin(heading)
+		var fz := cos(heading)
+		var dh := tr.slope[idx] * (fx * tr.tx[idx] + fz * tr.tz[idx]) + tr.bank[idx] * (fx * tr.nx[idx] + fz * tr.nz[idx])
+		speed -= SLOPE_PULL * dh * signf(speed) * dt
 	x += sin(heading) * speed * dt
 	z += cos(heading) * speed * dt
 	constrain()
+	_vertical(dt)
 
 	if roulette > 0.0:
 		roulette -= dt
@@ -591,10 +633,44 @@ func update(dt: float, inp: Dictionary) -> void:
 			race.give_item(self)
 
 
+## Height: stick to the road while it does not drop away faster than
+## gravity would pull the kart down, otherwise fly until it lands again.
+func _vertical(dt: float) -> void:
+	var gy := race.track.road_y(idx, lat, along)
+	if air:
+		air_t += dt
+		vy -= Game.GRAVITY * dt
+		y += vy * dt
+		if y <= gy:
+			land_v = maxf(0.0, -vy)
+			y = gy
+			vy = 0.0
+			air = false
+			trick = 0.0
+			if tricked:
+				tricked = false
+				boost = maxf(boost, 0.9)
+				boost_mul = 1.25
+		return
+	# tyres grip: only a road that falls away clearly faster than gravity
+	# (the ramp's lip, a sharp crest) lets the kart take off
+	var free_y := y + vy * dt - STICK * Game.GRAVITY * dt * dt
+	if gy < free_y - 0.04 and absf(speed) > 3.0:
+		air = true
+		air_t = 0.0
+		tricked = false
+		vy -= Game.GRAVITY * dt
+		y = free_y
+		return
+	vy = clampf((gy - y) / dt, -30.0, 30.0)
+	y = gy
+
+
 func constrain() -> void:
 	var tr := race.track
 	var pj := tr.project(x, z, idx)
 	idx = pj[0]
+	along = pj[2]
 	var la: float = pj[1]
 	var lim := Game.BAR - Game.KART_R
 	if absf(la) > lim:
@@ -634,7 +710,9 @@ func pack(out: PackedFloat32Array, o: int) -> void:
 	out[o + 13] = drift_dir * (drift_level + 1) if drift_active else 0.0
 	out[o + 14] = lap; out[o + 15] = s; out[o + 16] = rank; out[o + 17] = 1.0 if finished else 0.0
 	out[o + 18] = finish_time; out[o + 19] = item * 10 + item_n; out[o + 20] = roulette
-	out[o + 21] = last_lap; out[o + 22] = wrong_t; out[o + 23] = (1 if offroad else 0) + (2 if braking else 0)
+	out[o + 21] = last_lap; out[o + 22] = wrong_t
+	out[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0)
+	out[o + 24] = y; out[o + 25] = trick
 
 
 func unpack(d: PackedFloat32Array, o: int) -> void:
@@ -655,6 +733,12 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	last_lap = d[o + 21]; wrong_t = d[o + 22]; var fl := int(d[o + 23])
 	offroad = fl & 1 != 0
 	braking = fl & 2 != 0
+	air = fl & 4 != 0
+	y = d[o + 24]; trick = d[o + 25]
+	var pj := race.track.project(x, z, idx)
+	idx = pj[0]
+	lat = pj[1]
+	along = pj[2]
 
 
 # ================================================================== visuals
@@ -662,6 +746,7 @@ func begin_tick() -> void:
 	prev_x = x
 	prev_z = z
 	prev_h = heading
+	prev_y = y
 
 
 ## alpha: physics interpolation fraction; smooth > 0 eases toward network state instead.
@@ -669,24 +754,30 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 	var px: float
 	var pz: float
 	var ph: float
+	var py: float
 	if smooth:
 		var k := 1.0 - exp(-14.0 * delta)
 		vis_x = lerpf(vis_x, x, k)
 		vis_z = lerpf(vis_z, z, k)
+		vis_y = lerpf(vis_y, y, k)
 		vis_h += Game.wrap_angle(heading - vis_h) * k
 		if Vector2(vis_x - x, vis_z - z).length() > 12.0:
-			vis_x = x; vis_z = z; vis_h = heading
-		px = vis_x; pz = vis_z; ph = vis_h
+			vis_x = x; vis_z = z; vis_h = heading; vis_y = y
+		px = vis_x; pz = vis_z; ph = vis_h; py = vis_y
 	else:
 		px = lerpf(prev_x, x, alpha)
 		pz = lerpf(prev_z, z, alpha)
+		py = lerpf(prev_y, y, alpha)
 		ph = prev_h + Game.wrap_angle(heading - prev_h) * alpha
 	var mx := maxf(1.0, max_speed())
 	var sr := clampf(absf(speed) / mx, 0.0, 1.5)
-	position = Vector3(px, 0.0, pz)
-	rotation = Vector3(0.0, ph - slip, 0.0)
+	yaw = ph - slip
+	_orient(Vector3(px, py, pz), delta)
 	body.position.y = hop_y()
 	body.rotation.y = (1.0 - spin / spin_total) * PI * 4.0 if spin > 0.0 else 0.0
+	# the trick: a full roll, quick at first and settling at the end
+	var tu := 1.0 - trick / TRICK_TIME if trick > 0.0 else 0.0
+	body.rotation.z = -TAU * (1.0 - pow(1.0 - tu, 2.0)) if trick > 0.0 else 0.0
 	_suspension(delta, sr)
 	chassis.position.y = susp_y + sin(t * 38.0 + driver) * 0.015 * sr
 	chassis.rotation.x = pitch - (0.03 if boost > 0.0 else 0.0)
@@ -714,15 +805,35 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 		p.scale_amount_min = 1.5 if drift_level == 3 else 1.0
 		p.scale_amount_max = p.scale_amount_min
 	var moving := absf(speed) > 8.0
-	var on_road_slide := not offroad and absf(speed) > 6.0 and (drift_active or spin > 0.0)
+	var on_road_slide := not offroad and not air and absf(speed) > 6.0 and (drift_active or spin > 0.0)
 	for i in 2:
-		wheel_dust[i].emitting = offroad and moving and hop_y() < 0.2
+		wheel_dust[i].emitting = offroad and moving and hop_y() < 0.2 and not air
 		wheel_smoke[i].emitting = on_road_slide
 	_render_skids()
 	stars.visible = spin > 0.0
 	if stars.visible:
 		stars.rotation.y = t * 5.0
 		stars.position.y = float(model.top) + 0.45 + hop_y()
+
+
+## Stands the kart on the road surface (slope and bank); in the air the
+## nose follows the flight, down as it falls.
+func _orient(pos: Vector3, delta: float) -> void:
+	var tr := race.track
+	var f := Vector3(sin(yaw), 0.0, cos(yaw))
+	var want: Vector3
+	if air:
+		var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+		var fwd := Vector3(f.x, clampf(vy / maxf(absf(speed), 12.0), -0.6, 0.6) * 0.7, f.z).normalized()
+		want = fwd.cross(right).normalized()
+	else:
+		want = tr.normal(idx, lat, along)
+	vis_up = vis_up.lerp(want, 1.0 - exp(-(5.0 if air else 14.0) * delta)).normalized()
+	var zf := (f - vis_up * f.dot(vis_up)).normalized()
+	var b := Basis(vis_up.cross(zf), vis_up, zf)
+	transform = Transform3D(b, pos)
+	# the soft shadow spot stays on the ground while flying
+	blob.position.y = 0.1 - (maxf(0.0, pos.y - tr.road_y(idx, lat, along)) if air else 0.0)
 
 
 func _render_flames(delta: float) -> void:
@@ -761,7 +872,7 @@ func _render_flames(delta: float) -> void:
 
 ## Tyre marks from both rear wheels while drifting, braking hard or spinning.
 func _render_skids() -> void:
-	var skid := (drift_active or braking or spin > 0.0) and not offroad and absf(speed) > 6.0 and hop_y() < 0.15
+	var skid := (drift_active or braking or spin > 0.0) and not offroad and not air and absf(speed) > 6.0 and hop_y() < 0.15
 	var strength := 0.75 if braking and not drift_active else 1.0
 	var rw: Dictionary = model.rear
 	for i in 2:
@@ -772,7 +883,7 @@ func _render_skids() -> void:
 		if skid_last[i] == null:
 			skid_last[i] = wp
 		elif wp.distance_to(skid_last[i]) >= SkidMarks.STEP:
-			race.skids.add(skid_last[i], wp, strength)
+			race.skids.add(skid_last[i], wp, strength, vis_up)
 			skid_last[i] = wp
 
 
@@ -793,6 +904,9 @@ func _suspension(delta: float, sr: float) -> void:
 	if prev_hop > 0.0 and hop <= 0.0:   # just landed
 		susp_v -= 0.9 + 1.1 * clampf(hop_h, 0.0, 2.5)
 	prev_hop = hop
+	if was_air and not air:              # down from a jump
+		susp_v -= 1.2 + clampf(land_v, 0.0, 14.0) * 0.16
+	was_air = air
 	if offroad and absf(speed) > 6.0:
 		rumble_t -= delta
 		if rumble_t <= 0.0:

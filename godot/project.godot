@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Škoda Racer"
 config/description="3D motokárové závody pro Android a Windows s crossplay přes Wi-Fi a rozdělenou obrazovkou."
-config/version="1.6.0"
+config/version="1.7.0"
 run/main_scene="res://main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "GL Compatibility")

@@ -242,6 +242,8 @@ func _build_sounds() -> void:
 	b = _buf(0.18); _noise(b, 0, 0.16, 0, 320, 0, 1.2); _tone(b, 0, 0.12, 90, 0, W.SINE, 0.6); sounds.bump = _to_stream(b)
 	b = _buf(0.82); _noise(b, 0, 0.8, 0, 1600, 90, 1.4); sounds.explode = _to_stream(b)
 	b = _buf(0.12); _tone(b, 0, 0.1, 520, 300, W.TRI, 0.3); sounds.drop = _to_stream(b)
+	b = _buf(0.32); _tone(b, 0, 0.3, 380, 1400, W.TRI, 0.3); _noise(b, 0, 0.28, 1, 1800, 4200, 0.35); sounds.trick = _to_stream(b)
+	b = _buf(0.22); _noise(b, 0, 0.2, 0, 240, 0, 1.3); _tone(b, 0, 0.16, 70, 40, W.SINE, 0.8); sounds.land = _to_stream(b)
 	b = _buf(0.52); _noise(b, 0, 0.5, 1, 3000, 600, 0.7); sounds.missile = _to_stream(b)
 	b = _buf(0.5)
 	var steps := [0, 4, 7, 12, 16, 19, 24]

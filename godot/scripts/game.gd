@@ -8,6 +8,7 @@ const BAR := 18.0         # barrier distance from the centre line
 const KART_R := 1.25      # kart collision radius
 const MAX_KARTS := 6
 const SIM_DT := 1.0 / 120.0
+const GRAVITY := 30.0     # arcade gravity for jumps (m/s²)
 
 var BASE := {"max": 40.0, "accel": 24.0, "brake": 45.0, "rev": 12.0, "drag": 9.0, "turn": 2.1}
 
@@ -39,6 +40,8 @@ var TRACKS := [
 			Vector2(160, -170), Vector2(110, -120), Vector2(50, -130), Vector2(0, -200), Vector2(-80, -230), Vector2(-170, -200),
 			Vector2(-210, -120), Vector2(-180, -40), Vector2(-100, 0)],
 		"boxes": [0.1, 0.36, 0.6, 0.84],
+		# amp: height of the rolling hills, jump_hill: the hill before the ramp, land: rolls of the land around
+		"hills": {"amp": 9.0, "jump_hill": 3.0, "land": 3.5},
 		"theme": {"ground": Color("4caa3c"), "ground2": Color("41983a"),
 			"ground3": Color("5cb84a"), "road": Color("44464d"), "kerb_a": Color("e8333a"), "kerb_b": Color("f4f4f4"),
 			"dust": Color("8a6a45"), "surface": "grass", "deco": "trees", "mount": Color("5d8c68"),
@@ -56,6 +59,7 @@ var TRACKS := [
 			Vector2(90, -200), Vector2(80, -280), Vector2(150, -330), Vector2(160, -400), Vector2(60, -440), Vector2(-80, -420),
 			Vector2(-150, -340), Vector2(-130, -240), Vector2(-180, -150), Vector2(-150, -60), Vector2(-90, -10)],
 		"boxes": [0.08, 0.3, 0.55, 0.78],
+		"hills": {"amp": 11.0, "jump_hill": 3.5, "land": 3.0},
 		"theme": {"ground": Color("d9aa62"), "ground2": Color("c99852"),
 			"ground3": Color("e6bb7c"), "road": Color("594b43"), "kerb_a": Color("d9480f"), "kerb_b": Color("fff1dc"),
 			"dust": Color("d8b07a"), "surface": "sand", "deco": "cactus", "mount": Color("c0622f"),
@@ -73,6 +77,7 @@ var TRACKS := [
 			Vector2(20, -250), Vector2(-60, -300), Vector2(-160, -280), Vector2(-220, -200), Vector2(-200, -100), Vector2(-130, -60),
 			Vector2(-90, 10), Vector2(-50, 20)],
 		"boxes": [0.12, 0.38, 0.62, 0.86],
+		"hills": {"amp": 5.5, "jump_hill": 3.0, "land": 2.5},
 		"theme": {"ground": Color("e4ebf4"), "ground2": Color("d5dfec"),
 			"ground3": Color("f4f7fb"), "road": Color("4b5564"), "kerb_a": Color("2a7de1"), "kerb_b": Color("f7fbff"),
 			"dust": Color("ffffff"), "surface": "snow", "deco": "pines", "mount": Color("dbe6f3"),

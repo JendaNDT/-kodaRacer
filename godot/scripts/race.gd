@@ -225,7 +225,7 @@ func _make_views() -> void:
 		vp.add_child(cam)
 		cam.current = true
 		var p := {"root": pane, "vp": vp, "cam": cam, "kart": locals[i] if i < locals.size() else null,
-			"yaw": 0.0, "fov": 72.0, "shake": 0.0, "hud": null, "snapped": false, "lines": null}
+			"yaw": 0.0, "fov": 72.0, "shake": 0.0, "hud": null, "snapped": false, "lines": null, "cy": 0.0}
 		if mode != Mode.DEMO and p.kart != null:
 			var sl := SpeedLines.new()
 			pane.add_child(sl)
@@ -443,7 +443,7 @@ func _kart_collisions() -> void:
 			var dx := b.x - a.x
 			var dz := b.z - a.z
 			var d2 := dx * dx + dz * dz
-			if d2 >= mn * mn or d2 < 1e-6:
+			if d2 >= mn * mn or d2 < 1e-6 or absf(a.y - b.y) > 1.6:
 				continue
 			var d := sqrt(d2)
 			var nx := dx / d
@@ -545,6 +545,9 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 			if use:
 				out.item = true
 				ai.item_t = 0.6 + randf() * 1.5
+	# most flights get a trick (turbo on landing); better drivers try more often
+	if k.air and k.air_t > 0.12 and not k.tricked:
+		out.drift = fposmod(float(k.driver * 7 + k.lap * 3), 10.0) < 10.0 * float(ai.skill) - 2.0
 	if k.human and Game.cmd_args.has("fxtest"):
 		# screenshots only: the autopilot drifts through corners
 		var want: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
@@ -687,11 +690,12 @@ func _drop_banana(k: Kart) -> void:
 		var sg := signf(la)
 		px -= track.nx[pj[0]] * sg * d
 		pz -= track.nz[pj[0]] * sg * d
+	var py := track.ground(px, pz, k.idx)
 	var node := _banana_node()
-	node.position = Vector3(px, 0.25, pz)
+	node.position = Vector3(px, py + 0.25, pz)
 	node.rotation.y = randf() * TAU
 	fx.add_child(node)
-	bananas.append({"x": px, "z": pz, "node": node, "owner": k, "age": 0.0})
+	bananas.append({"x": px, "y": py, "z": pz, "node": node, "owner": k, "age": 0.0})
 	if bananas.size() > 24:
 		var old: Dictionary = bananas.pop_front()
 		old.node.queue_free()
@@ -702,10 +706,11 @@ func _fire_missile(k: Kart) -> void:
 	var target: Kart = order[k.rank - 2] if k.rank >= 2 else null
 	var px := k.x + sin(k.heading) * 2.8
 	var pz := k.z + cos(k.heading) * 2.8
+	var py := track.ground(px, pz, k.idx) + 0.9
 	var node := _missile_node()
-	node.position = Vector3(px, 0.9, pz)
+	node.position = Vector3(px, py, pz)
 	fx.add_child(node)
-	missiles.append({"x": px, "z": pz, "h": k.heading, "v": maxf(k.speed + 26.0, 64.0), "owner": k, "target": target,
+	missiles.append({"x": px, "y": py, "z": pz, "h": k.heading, "v": maxf(k.speed + 26.0, 64.0), "owner": k, "target": target,
 		"life": 9.0, "age": 0.0, "idx": k.idx, "node": node})
 	sound_at("missile", k.x, k.z, k.local_slot >= 0)
 
@@ -719,7 +724,7 @@ func _explode(px: float, pz: float) -> void:
 
 
 func _explode_fx(px: float, pz: float) -> void:
-	Effects.explosion(fx, Vector3(px, 0.0, pz))
+	Effects.explosion(fx, Vector3(px, track.ground(px, pz), pz))
 	for p in panes:
 		var c: Camera3D = p.cam
 		var d := Vector2(px - c.global_position.x, pz - c.global_position.z).length()
@@ -740,7 +745,7 @@ func _update_items(dt: float) -> void:
 		for k in karts:
 			var dx: float = k.x - b.x
 			var dz: float = k.z - b.z
-			if dx * dx + dz * dz < 2.6 * 2.6:
+			if dx * dx + dz * dz < 2.6 * 2.6 and k.y < float(b.y) + 1.2:
 				b.active = false
 				b.respawn = 2.5
 				if k.item == 0 and k.roulette <= 0.0 and not k.finished:
@@ -754,7 +759,7 @@ func _update_items(dt: float) -> void:
 				continue
 			var dx: float = k.x - b.x
 			var dz: float = k.z - b.z
-			if dx * dx + dz * dz < 1.9 * 1.9:
+			if dx * dx + dz * dz < 1.9 * 1.9 and k.y - float(b.y) < 1.0:
 				k.hit(1.1, false)
 				b.node.queue_free()
 				bananas.remove_at(i)
@@ -784,6 +789,7 @@ func _update_items(dt: float) -> void:
 		m.z += cos(m.h) * m.v * dt
 		var pj := tr.project(m.x, m.z, m.idx)
 		m.idx = pj[0]
+		m.y = tr.road_y(pj[0], pj[1], pj[2]) + 0.9   # skims along the road, over hills and the ramp
 		var boom: bool = m.life <= 0.0 or absf(float(pj[1])) > Game.BAR - 0.6
 		if not boom:
 			for k in karts:
@@ -791,7 +797,7 @@ func _update_items(dt: float) -> void:
 					continue
 				var dx: float = k.x - m.x
 				var dz: float = k.z - m.z
-				if dx * dx + dz * dz < 4.0:
+				if dx * dx + dz * dz < 4.0 and absf(k.y + 0.6 - float(m.y)) < 1.6:
 					k.hit(1.6, true)
 					boom = true
 					break
@@ -875,14 +881,16 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 	while bananas.size() < nb:
 		var node := _banana_node()
 		fx.add_child(node)
-		bananas.append({"x": 0.0, "z": 0.0, "node": node, "owner": null, "age": 0.0, "fresh": true})
+		bananas.append({"x": 0.0, "y": 0.0, "z": 0.0, "node": node, "owner": null, "age": 0.0, "fresh": true})
 	while bananas.size() > nb:
 		var b: Dictionary = bananas.pop_back()
 		b.node.queue_free()
 	for b in bananas:
+		if absf(float(b.x) - d[o]) + absf(float(b.z) - d[o + 1]) > 0.01:
+			b.y = track.ground(d[o], d[o + 1])
 		b.x = d[o]
 		b.z = d[o + 1]
-		b.node.position = Vector3(b.x, 0.25, b.z)
+		b.node.position = Vector3(b.x, float(b.y) + 0.25, b.z)
 		if b.get("fresh", false):
 			b.fresh = false
 			sound_at("drop", b.x, b.z)
@@ -890,7 +898,7 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 	while missiles.size() < nm:
 		var node := _missile_node()
 		fx.add_child(node)
-		missiles.append({"x": 0.0, "z": 0.0, "h": 0.0, "node": node, "fresh": true})
+		missiles.append({"x": 0.0, "y": 0.0, "z": 0.0, "h": 0.0, "idx": -1, "node": node, "fresh": true})
 	while missiles.size() > nm:
 		var m: Dictionary = missiles.pop_back()
 		m.node.queue_free()
@@ -898,6 +906,9 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 		m.x = d[o]
 		m.z = d[o + 1]
 		m.h = d[o + 2]
+		var mp := track.project(m.x, m.z, int(m.idx) if int(m.idx) >= 0 else track.nearest(m.x, m.z))
+		m.idx = mp[0]
+		m.y = track.road_y(mp[0], mp[1], mp[2]) + 0.9
 		if m.get("fresh", false):
 			m.fresh = false
 			sound_at("missile", m.x, m.z)
@@ -952,9 +963,9 @@ func _process(delta: float) -> void:
 	Atmosphere.animate(atm)
 	Trackside.update(ts, self)
 	for b in bananas:
-		b.node.position.y = 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
+		b.node.position.y = float(b.y) + 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
 	for m in missiles:
-		m.node.position = Vector3(m.x, 0.9, m.z)
+		m.node.position = Vector3(m.x, m.y, m.z)
 		m.node.rotation.y = m.h
 	if mode == Mode.CLIENT:
 		time += dt
@@ -1034,12 +1045,12 @@ func _update_box_visuals(dt: float) -> void:
 		node.scale = Vector3.ONE * float(b.scale)
 		var ph: float = b.phase
 		b.mesh.rotation = Vector3(sin(time * 1.1 + ph) * 0.35, time * 1.6 + ph, 0)
-		node.position.y = 1.4 + sin(time * 2.2 + ph) * 0.18
+		node.position.y = float(b.y) + sin(time * 2.2 + ph) * 0.18
 
 
 func _reset_obs(k: Kart) -> void:
 	k.obs = {"spin": 0.0, "boost": 0.0, "roulette": 0.0, "item": 0, "level": 0, "hop": 0.0, "star": 0.0,
-		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0}
+		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0, "trick": 0.0, "air": false}
 
 
 ## Turns state changes into sounds, messages and effects. Works the same
@@ -1052,9 +1063,20 @@ func _observe(k: Kart, dt: float) -> void:
 		hud = panes[k.local_slot].hud
 	if k.spin > 0.0 and float(o.spin) <= 0.0:
 		sound_at("hit", k.x, k.z, loc)
-		burst(Vector3(k.x, 1.6, k.z), Color(1.0, 0.88, 0.4), 14, 5.0)
+		burst(Vector3(k.x, k.y + 1.6, k.z), Color(1.0, 0.88, 0.4), 14, 5.0)
 		if loc:
 			shake(k.local_slot, 0.5)
+	# jumps: a whoosh for the trick, a thump on landing
+	if k.trick > 0.0 and float(o.trick) <= 0.0:
+		sound_at("trick", k.x, k.z, loc, 0.8)
+		if loc and hud != null:
+			hud.show_msg("Trik!", UI.GOLD)
+	o.trick = k.trick
+	if bool(o.air) and not k.air:
+		sound_at("land", k.x, k.z, loc, 0.7)
+		if loc:
+			shake(k.local_slot, 0.25)
+	o.air = k.air
 	if k.boost > float(o.boost) + 0.05:
 		sound_at("boost", k.x, k.z, loc, 0.9)
 		k.on_boost(int(o.level) if not k.drift_active else 0)
@@ -1138,6 +1160,9 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 		return
 	var cam: Camera3D = p.cam
 	var kp := k.position
+	# height is followed a little softer, so a jump lifts the kart in the picture
+	p.cy = kp.y if not p.snapped else lerpf(float(p.cy), kp.y, 1.0 - exp(-6.0 * delta))
+	kp.y = p.cy
 	var size: Vector2 = p.root.size
 	var aspect := size.x / maxf(1.0, size.y)
 	var tgt_fov := 72.0
@@ -1150,7 +1175,7 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 	var look: Vector3
 	var follow := 1.0 - exp(-12.0 * delta)
 	if mode == Mode.DEMO:
-		var yaw := k.rotation.y + sin(time * 0.18) * 0.9
+		var yaw := k.yaw + sin(time * 0.18) * 0.9
 		p.yaw += Game.wrap_angle(yaw - float(p.yaw)) * kk * 0.6
 		desired = kp + Vector3(-sin(p.yaw) * 12.0, 5.2, -cos(p.yaw) * 12.0)
 		look = kp + Vector3(0, 1.4, 0)
@@ -1161,7 +1186,7 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 		look = kp + Vector3(0, 1.2, 0)
 		follow = 1.0 - exp(-3.0 * delta)
 	else:
-		var yaw := k.rotation.y + k.slip * 0.45
+		var yaw := k.yaw + k.slip * 0.45
 		if not p.snapped:
 			p.yaw = yaw
 		p.yaw += Game.wrap_angle(yaw - float(p.yaw)) * kk
@@ -1176,6 +1201,10 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 		p.snapped = true
 	else:
 		cam.position = cam.position.lerp(desired, follow)
+	# never inside a hill behind the kart
+	var floor_y := track.ground(cam.position.x, cam.position.z, k.idx) + 1.4
+	if cam.position.y < floor_y:
+		cam.position.y = floor_y
 	if p.shake > 0.0:
 		cam.position += Vector3(randf() - 0.5, randf() - 0.5, 0.0) * float(p.shake)
 		p.shake = maxf(0.0, float(p.shake) - delta * 1.5)

@@ -8,7 +8,7 @@ extends MultiMeshInstance3D
 const LIFE := 7.0
 const WIDTH := 0.36
 const STEP := 0.75    # metres between strip joints
-const Y := 0.08       # just above the road (0.04) and the kerbs (0.065)
+const Y := 0.08       # above the road surface: over the road (0.04) and the kerbs (0.065)
 
 const SHADER := """
 shader_type spatial;
@@ -53,7 +53,7 @@ func _init() -> void:
 	multimesh = mm
 	material_override = _mat
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	custom_aabb = AABB(Vector3(-4000, -1, -4000), Vector3(8000, 2, 8000))
+	custom_aabb = AABB(Vector3(-4000, -100, -4000), Vector3(8000, 200, 8000))
 
 
 ## Advances the fade clock (0 while the race is paused).
@@ -62,18 +62,19 @@ func tick(dt: float) -> void:
 	_mat.set_shader_parameter("now", _clock)
 
 
-## One strip from a to b; strength 0..1 is how dark it starts.
-func add(a: Vector3, b: Vector3, strength: float) -> void:
+## One strip from a to b (points on the road, up: the road's up direction);
+## strength 0..1 is how dark it starts.
+func add(a: Vector3, b: Vector3, strength: float, up := Vector3.UP) -> void:
 	var d := b - a
-	d.y = 0.0
 	var l := d.length()
 	if l < 0.05 or l > 12.0:   # 12 m = a teleport (respawn, network catch-up)
 		return
 	var mm := multimesh
 	var i := _next % mm.instance_count
-	var basis := Basis.from_euler(Vector3(0.0, atan2(d.x, d.z), 0.0)) * Basis.from_scale(Vector3(1.0, 1.0, l + 0.06))
-	var mid := (a + b) * 0.5
-	mid.y = Y
+	var zf := d / l
+	var xs := up.cross(zf).normalized()
+	var basis := Basis(xs, zf.cross(xs), zf) * Basis.from_scale(Vector3(1.0, 1.0, l + 0.06))
+	var mid := (a + b) * 0.5 + up * Y
 	mm.set_instance_transform(i, Transform3D(basis, mid))
 	mm.set_instance_custom_data(i, Color(_clock, clampf(strength, 0.0, 1.0), 0.0, 0.0))
 	_next += 1

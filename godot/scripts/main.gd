@@ -18,6 +18,7 @@ var _fps_worst := 0.0
 var _bench: PackedFloat32Array = PackedFloat32Array()
 var _bench_last := 0
 var _fade: ColorRect
+var _air_t := 0.0
 var _fade_tw: Tween
 var _fading := false
 var _bench_draws := 0
@@ -53,6 +54,27 @@ func _ready() -> void:
 		Game.settings.show_fps = true
 	if a.has("timescale"):
 		Engine.time_scale = float(a.timescale)   # slow motion for effect screenshots
+	if a.has("trackinfo"):
+		# heights of every track: range, steepest slope and bank, the jump
+		for i in Game.TRACKS.size():
+			var tr := Race.get_track(i)
+			var lo := INF
+			var hi := -INF
+			var sl := 0.0
+			var bk := 0.0
+			var crest := 0.0
+			for j in tr.n:
+				lo = minf(lo, tr.y[j])
+				hi = maxf(hi, tr.y[j])
+				sl = maxf(sl, absf(tr.slope[j]))
+				bk = maxf(bk, absf(tr.bank[j]))
+				var c := -(tr.y[(j + 1) % tr.n] - 2.0 * tr.y[j] + tr.y[(j - 1 + tr.n) % tr.n]) / (tr.step * tr.step)
+				crest = maxf(crest, c)
+			# a crest throws a kart at speed v into the air when v*v*crest > gravity
+			print("TRACK %s len=%d y=%.1f..%.1f slope=%.3f bank=%.3f lift_at=%.0f m/s ramp=%s at %.0f m" % [tr.def.id,
+				tr.length, lo, hi, sl, bk, sqrt(Game.GRAVITY / maxf(crest, 1e-6)), str(tr.ramp), float(tr.ramp.get("i", 0)) * tr.step])
+		get_tree().quit()
+		return
 	if a.has("bench"):
 		# fixed demo race, frame times measured after a warm-up
 		_test_mode = "bench"
@@ -316,6 +338,11 @@ func _process(delta: float) -> void:
 	_test_t += delta
 	if Game.cmd_args.has("showcase") and race != null:
 		Showcase.hold(race)
+	# --shot-air=0.25: take the screenshot once the first player has flown that long
+	if _shot_path != "" and Game.cmd_args.has("shot-air") and race != null and not race.locals.is_empty():
+		_air_t = _air_t + delta if (race.locals[0] as Kart).air else 0.0
+		if _air_t >= float(Game.cmd_args["shot-air"]):
+			_shot_delay = _test_t
 	if _shot_path != "" and _test_t >= _shot_delay:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(_shot_path)
