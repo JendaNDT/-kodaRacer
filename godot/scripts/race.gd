@@ -32,6 +32,17 @@ var order: Array = []
 var locals: Array = []
 var bananas: Array = []
 var missiles: Array = []
+var blues: Array = []           # blue missiles flying along the track to the leader
+var oils: Array = []            # oil puddles
+var item_uses := {}             # item -> how many times used (tests)
+var net_seen := {}              # Wi-Fi client: which new items came in snapshots (tests)
+var zap_t := 0.0                # the lightning's white flash over the screen
+var zap_rect: ColorRect
+var _cycle := 0
+const OIL_TIME := 20.0
+const OIL_R := 2.4
+const BLUE_SPEED := 85.0
+const BLUE_BLAST := 7.0         # the blue missile's blast hits everyone this close to the leader
 var explosions: Array = []
 var explosion_id := 0
 var seen_explosion := 0
@@ -123,6 +134,13 @@ func _init() -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
+	# the lightning's flash; hidden when not flashing (a full-screen blend costs)
+	zap_rect = ColorRect.new()
+	zap_rect.color = Color(0.9, 0.95, 1.0, 0.0)
+	zap_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	zap_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zap_rect.visible = false
+	add_child(zap_rect)
 
 
 ## roster: Array of {driver, human, peer, name, local} in grid order (index 0 = front row).
@@ -502,6 +520,10 @@ func _kart_collisions() -> void:
 				b.hit(1.0, false)
 			elif b.star > 0.0 and a.star <= 0.0:
 				a.hit(1.0, false)
+			elif a.shrink > 0.0 and b.shrink <= 0.0:
+				a.hit(1.0, false)   # a kart made small by the lightning is run over
+			elif b.shrink > 0.0 and a.shrink <= 0.0:
+				b.hit(1.0, false)
 			if sin(a.heading) * nx + cos(a.heading) * nz > 0.5:
 				a.speed *= 0.97
 			if -(sin(b.heading) * nx + cos(b.heading) * nz) > 0.5:
@@ -536,6 +558,15 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 		var ahead: float = ((int(pj[0]) - k.idx + n) % n) * tr.step
 		if ahead > 2.0 and ahead < 30.0 and absf(float(pj[1]) - lane) < 3.0:
 			lane = float(pj[1]) + (-5.0 if float(pj[1]) > 0.0 else 5.0)
+	for b in oils:
+		var bdx: float = b.x - k.x
+		var bdz: float = b.z - k.z
+		if bdx * bdx + bdz * bdz > 40.0 * 40.0:
+			continue
+		var pj := tr.project(b.x, b.z, k.idx)
+		var ahead: float = ((int(pj[0]) - k.idx + n) % n) * tr.step
+		if ahead > 2.0 and ahead < 36.0 and absf(float(pj[1]) - lane) < OIL_R + 1.5:
+			lane = float(pj[1]) + (-(OIL_R + 3.5) if float(pj[1]) > 0.0 else OIL_R + 3.5)
 	lane = clampf(lane, -Game.HW * 0.65, Game.HW * 0.65)
 	var look := 4 + int(absf(k.speed) * 0.22)
 	var j := (k.idx + look) % n
@@ -581,9 +612,13 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 			elif k.item == Game.Item.MISSILE:
 				var ah: Kart = order[k.rank - 2] if k.rank >= 2 else null
 				use = ah != null and ah.progress() - k.progress() < 140.0
-			elif k.item == Game.Item.BANANA:
+			elif k.item == Game.Item.BANANA or k.item == Game.Item.OIL:
 				var bh: Kart = order[k.rank] if k.rank < order.size() else null
 				use = (bh != null and k.progress() - bh.progress() < 18.0) or randf() < 0.01
+			elif k.item == Game.Item.BLUE or k.item == Game.Item.LIGHTNING:
+				use = true
+			elif k.item == Game.Item.SHIELD:
+				use = k.shield <= 0.0 and (_threatened(k) or randf() < 0.004)
 			if ai.item_t < -9.0:
 				use = true
 			if use:
@@ -602,11 +637,25 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 
 
 # ---------------------------------------------------------------- items
+## The draw depends on the place: defensive items at the front, stronger
+## ones at the back; the blue missile only for the last places, the
+## lightning only for the last two.
 func give_item(k: Kart) -> void:
+	k.ai.item_t = 0.8 + randf() * 2.5
+	if Game.cmd_args.has("item-cycle"):
+		# tests: every item in turn
+		_cycle += 1
+		k.item = 1 + _cycle % Game.ITEM_COUNT
+		k.item_n = 1
+		return
 	var p := clampf((k.rank - 1.0) / (karts.size() - 1.0), 0.0, 1.0)
+	var mid := 1.0 - absf(2.0 * p - 1.0)
+	var last_two := k.rank >= karts.size() - 1 and karts.size() > 2
 	var w := [
-		[Game.Item.BANANA, 1, lerpf(55, 5, p)], [Game.Item.TURBO, 1, lerpf(30, 25, p)], [Game.Item.MISSILE, 1, lerpf(15, 28, p)],
-		[Game.Item.TURBO, 3, lerpf(0, 25, p)], [Game.Item.STAR, 1, lerpf(0, 18, p)],
+		[Game.Item.BANANA, 1, lerpf(44, 4, p)], [Game.Item.OIL, 1, lerpf(20, 2, p)], [Game.Item.TURBO, 1, lerpf(24, 18, p)],
+		[Game.Item.SHIELD, 1, 3.0 + 14.0 * mid], [Game.Item.MISSILE, 1, lerpf(9, 22, p)],
+		[Game.Item.TURBO, 3, lerpf(0, 20, p)], [Game.Item.STAR, 1, lerpf(0, 13, p)],
+		[Game.Item.BLUE, 1, 9.0 * smoothstep(0.55, 1.0, p)], [Game.Item.LIGHTNING, 1, 4.0 if last_two else 0.0],
 	]
 	var sum := 0.0
 	for e in w:
@@ -633,6 +682,15 @@ func use_item(k: Kart) -> void:
 		_fire_missile(k)
 	elif k.item == Game.Item.STAR:
 		k.star = 7.0
+	elif k.item == Game.Item.BLUE:
+		_fire_blue(k)
+	elif k.item == Game.Item.OIL:
+		_drop_oil(k)
+	elif k.item == Game.Item.LIGHTNING:
+		_lightning(k)
+	elif k.item == Game.Item.SHIELD:
+		k.shield = Game.SHIELD_TIME
+	item_uses[k.item] = int(item_uses.get(k.item, 0)) + 1
 	k.item_n -= 1
 	if k.item_n <= 0:
 		k.item = 0
@@ -660,10 +718,16 @@ func _banana_node() -> Node3D:
 	return g
 
 
-func _missile_node() -> Node3D:
+func _missile_node(blue := false) -> Node3D:
 	var g := Node3D.new()
+	if blue:
+		g.scale = Vector3.ONE * 1.35
 	var red := StandardMaterial3D.new()
-	red.albedo_color = Color("e63946")
+	red.albedo_color = Color("2f6fe8") if blue else Color("e63946")
+	if blue:
+		red.emission_enabled = true
+		red.emission = Color(0.2, 0.45, 1.0)
+		red.emission_energy_multiplier = 0.6
 	red.roughness = 0.3
 	var white := StandardMaterial3D.new()
 	white.albedo_color = Color("f5f5f5")
@@ -706,7 +770,7 @@ func _missile_node() -> Node3D:
 	trail.initial_velocity_min = 1.0
 	trail.initial_velocity_max = 2.0
 	trail.gravity = Vector3.ZERO
-	trail.color = Color(1.0, 0.55, 0.15)
+	trail.color = Color(0.4, 0.7, 1.0) if blue else Color(1.0, 0.55, 0.15)
 	trail.color_ramp = Kart.fade_ramp()
 	trail.position.z = -1.0
 	trail.emitting = true
@@ -759,16 +823,150 @@ func _fire_missile(k: Kart) -> void:
 	sound_at("missile", k.x, k.z, k.local_slot >= 0)
 
 
-func _explode(px: float, pz: float) -> void:
+## A missile or the blue missile flying at this kart (the computer then raises its shield).
+func _threatened(k: Kart) -> bool:
+	for m in missiles:
+		if m.get("target") == k and Vector2(float(m.x) - k.x, float(m.z) - k.z).length() < 70.0:
+			return true
+	for b in blues:
+		if b.get("target") == k:   # a Wi-Fi client does not know the targets
+			return true
+	return false
+
+
+## Blue missile: flies high along the track to whoever leads and blows up
+## over them, catching the karts close by too.
+func _fire_blue(k: Kart) -> void:
+	var target: Kart = order[0] if order[0] != k else (order[1] if order.size() > 1 else null)
+	var node := _missile_node(true)
+	fx.add_child(node)
+	var b := {"x": k.x, "y": k.y + 1.5, "z": k.z, "h": k.heading, "prog": k.progress() + 3.0, "owner": k,
+		"target": target, "life": 30.0, "dive": 0.0, "node": node}
+	blues.append(b)
+	_place_blue(b)
+	sound_at("blue", k.x, k.z, k.local_slot >= 0)
+
+
+## The blue missile's place `prog` metres along the race, high over the road.
+func _place_blue(b: Dictionary) -> void:
+	var tr := track
+	var s := fposmod(float(b.prog), tr.length)
+	var i := int(s / tr.step) % tr.n
+	var j := (i + 1) % tr.n
+	var u := clampf((s - i * tr.step) / tr.step, 0.0, 1.0)
+	var nx := lerpf(tr.x[i], tr.x[j], u)
+	var nz := lerpf(tr.z[i], tr.z[j], u)
+	if absf(nx - float(b.x)) + absf(nz - float(b.z)) > 0.001:
+		b.h = atan2(nx - float(b.x), nz - float(b.z))
+	b.x = nx
+	b.z = nz
+	b.y = lerpf(tr.y[i], tr.y[j], u) + 4.0
+
+
+func _drop_oil(k: Kart) -> void:
+	var px := k.x - sin(k.heading) * 4.2
+	var pz := k.z - cos(k.heading) * 4.2
+	var pj := track.project(px, pz, k.idx)
+	var la: float = pj[1]
+	if absf(la) > Game.HW:
+		var d := absf(la) - Game.HW
+		var sg := signf(la)
+		px -= track.nx[pj[0]] * sg * d
+		pz -= track.nz[pj[0]] * sg * d
+		pj = track.project(px, pz, pj[0])
+	var node := _oil_node()
+	fx.add_child(node)
+	var o := {"x": px, "y": 0.0, "z": pz, "node": node, "owner": k, "age": 0.0}
+	_place_oil(o, pj)
+	oils.append(o)
+	if oils.size() > 8:
+		var old: Dictionary = oils.pop_front()
+		old.node.queue_free()
+	sound_at("oil", k.x, k.z, k.local_slot >= 0)
+
+
+## Lies flat on the road, tilted with its slope and bank.
+func _place_oil(o: Dictionary, pj: Array) -> void:
+	o.y = track.road_y(pj[0], pj[1], pj[2], false)
+	var up := track.normal(pj[0], pj[1], pj[2], false)
+	var fwd := Vector3(track.tx[pj[0]], 0.0, track.tz[pj[0]])
+	fwd = (fwd - up * fwd.dot(up)).normalized()
+	var node: Node3D = o.node
+	node.transform = Transform3D(Basis(up.cross(fwd), up, fwd), Vector3(o.x, float(o.y) + 0.04, o.z))
+
+
+func _oil_node() -> Node3D:
+	var g := Node3D.new()
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.03, 0.03, 0.05)
+	dark.metallic = 0.4
+	dark.roughness = 0.08
+	var sheen := StandardMaterial3D.new()
+	sheen.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sheen.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sheen.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	sheen.albedo_color = Color(0.22, 0.3, 0.45, 0.35)
+	# a blobby puddle: a big round patch and a few smaller ones at its edge
+	for e in [[Vector2.ZERO, 1.0], [Vector2(1.5, 0.6), 0.55], [Vector2(-1.2, 1.0), 0.5], [Vector2(0.4, -1.6), 0.45]]:
+		var c := CylinderMesh.new()
+		c.top_radius = OIL_R * float(e[1])
+		c.bottom_radius = c.top_radius
+		c.height = 0.03
+		c.radial_segments = 18
+		c.rings = 1
+		var mi := MeshInstance3D.new()
+		mi.mesh = c
+		mi.material_override = dark
+		mi.position = Vector3(e[0].x, 0.0, e[0].y)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		g.add_child(mi)
+	var s := CylinderMesh.new()
+	s.top_radius = OIL_R * 0.28
+	s.bottom_radius = s.top_radius
+	s.height = 0.01
+	s.radial_segments = 14
+	s.rings = 1
+	var si := MeshInstance3D.new()
+	si.mesh = s
+	si.material_override = sheen
+	si.position = Vector3(-0.7, 0.025, -0.5)
+	si.scale = Vector3(1.6, 1.0, 0.5)
+	si.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	g.add_child(si)
+	return g
+
+
+## Lightning: everyone else shrinks for a while (slower, can be run over).
+## The star protects, a shield is used up instead.
+func _lightning(k: Kart) -> void:
+	for o in karts:
+		if o == k or o.finished or o.star > 0.0:
+			continue
+		if o.shield > 0.0:
+			o.shield = 0.0
+			continue
+		o.shrink = Game.SHRINK_TIME
+		o.speed *= 0.6
+		o.drift_active = false
+		o.drift_level = 0
+		o.drift_charge = 0.0
+
+
+## kind 0: a missile, 1: the blue missile's blast
+func _explode(px: float, pz: float, kind := 0) -> void:
 	explosion_id += 1
-	explosions.append([explosion_id, px, pz])
+	explosions.append([explosion_id, px, pz, kind])
 	if explosions.size() > 3:
 		explosions.pop_front()
-	_explode_fx(px, pz)
+	_explode_fx(px, pz, kind)
 
 
-func _explode_fx(px: float, pz: float) -> void:
-	Effects.explosion(fx, Vector3(px, track.ground(px, pz), pz))
+func _explode_fx(px: float, pz: float, kind := 0) -> void:
+	var gp := Vector3(px, track.ground(px, pz), pz)
+	Effects.explosion(fx, gp)
+	if kind == 1:
+		Effects.flash(fx, gp + Vector3(0, 2.0, 0), Color(0.45, 0.7, 1.0), 16.0, 0.5)
+		Effects.shockwave(fx, gp + Vector3(0, 0.3, 0), Color(0.4, 0.7, 1.0), BLUE_BLAST * 2.2, 0.7)
 	for p in panes:
 		var c: Camera3D = p.cam
 		var d := Vector2(px - c.global_position.x, pz - c.global_position.z).length()
@@ -859,6 +1057,69 @@ func _update_items(dt: float) -> void:
 			_explode(m.x, m.z)
 			m.node.queue_free()
 			missiles.remove_at(i)
+	# oil: a long skid for whoever drives in (the owner gets a moment to get away)
+	for i in range(oils.size() - 1, -1, -1):
+		var o: Dictionary = oils[i]
+		o.age += dt
+		if o.age >= OIL_TIME:
+			o.node.queue_free()
+			oils.remove_at(i)
+			continue
+		for k in karts:
+			if k == o.owner and o.age < 1.0:
+				continue
+			var dx: float = k.x - o.x
+			var dz: float = k.z - o.z
+			if dx * dx + dz * dz < (OIL_R + 0.4) * (OIL_R + 0.4) and absf(k.y - float(o.y)) < 1.0 and not k.air:
+				k.hit(1.9, false)
+	for i in range(blues.size() - 1, -1, -1):
+		if _update_blue(blues[i], dt):
+			blues[i].node.queue_free()
+			blues.remove_at(i)
+
+
+## Moves one blue missile; true when it has blown up.
+func _update_blue(b: Dictionary, dt: float) -> bool:
+	b.life -= dt
+	var tg: Kart = b.target
+	if tg == null or tg.finished:
+		# the leader crossed the line: on to whoever leads now
+		tg = null
+		for k in order:
+			if not k.finished and k != b.owner:
+				tg = k
+				break
+		b.target = tg
+	if tg == null or b.life <= 0.0:
+		_explode(b.x, b.z, 1)
+		return true
+	var gap := tg.progress() - float(b.prog)
+	if float(b.dive) <= 0.0 and gap > 10.0:
+		b.prog = float(b.prog) + minf(BLUE_SPEED * dt, gap - 9.0)
+		_place_blue(b)
+		return false
+	# right behind the leader: it drops onto them
+	b.dive = float(b.dive) + dt
+	var to := Vector3(tg.x - float(b.x), tg.y + 0.8 - float(b.y), tg.z - float(b.z))
+	var step := BLUE_SPEED * 0.7 * dt
+	if to.length() <= step + 1.2 or float(b.dive) > 1.2:
+		_blue_blast(tg)
+		return true
+	var mv := to.normalized() * step
+	b.x = float(b.x) + mv.x
+	b.y = float(b.y) + mv.y
+	b.z = float(b.z) + mv.z
+	b.h = atan2(to.x, to.z)
+	b.prog = tg.progress() - 1.0
+	return false
+
+
+func _blue_blast(tg: Kart) -> void:
+	_explode(tg.x, tg.z, 1)
+	for k in karts:
+		var d := Vector2(k.x - tg.x, k.z - tg.z).length()
+		if k == tg or (d < BLUE_BLAST and absf(k.y - tg.y) < 3.0):
+			k.hit(1.8, true)
 
 
 # ================================================================== network
@@ -866,7 +1127,7 @@ func _pack() -> PackedFloat32Array:
 	var nk := karts.size()
 	var head := 14
 	var d := PackedFloat32Array()
-	d.resize(head + nk * Kart.SNAP_FIELDS + bananas.size() * 2 + missiles.size() * 3)
+	d.resize(head + nk * Kart.SNAP_FIELDS + bananas.size() * 2 + missiles.size() * 3 + blues.size() * 4 + oils.size() * 3)
 	d[0] = {"countdown": 0, "race": 1}.get(state, 1)
 	d[1] = countdown
 	d[2] = race_time
@@ -879,7 +1140,9 @@ func _pack() -> PackedFloat32Array:
 			bits |= 1 << i
 	d[6] = bits
 	d[7] = explosions.size()
-	# header slots 8-13 are reserved; explosions (id, x, z) go after the projectiles
+	d[8] = blues.size()
+	d[9] = oils.size()
+	# header slots 10-13 are reserved; explosions (id * 4 + kind, x, z) go after the projectiles
 	var o := head
 	for k in karts:
 		k.pack(d, o)
@@ -893,9 +1156,20 @@ func _pack() -> PackedFloat32Array:
 		d[o + 1] = m.z
 		d[o + 2] = m.h
 		o += 3
+	for b in blues:
+		d[o] = b.x
+		d[o + 1] = b.z
+		d[o + 2] = b.y
+		d[o + 3] = b.h
+		o += 4
+	for p in oils:
+		d[o] = p.x
+		d[o + 1] = p.z
+		d[o + 2] = p.age
+		o += 3
 	var ex := PackedFloat32Array()
 	for e in explosions:
-		ex.append_array(PackedFloat32Array([e[0], e[1], e[2]]))
+		ex.append_array(PackedFloat32Array([int(e[0]) * 4 + int(e[3]), e[1], e[2]]))
 	d.append_array(ex)
 	return d
 
@@ -961,14 +1235,58 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 			m.fresh = false
 			sound_at("missile", m.x, m.z)
 		o += 3
+	var nbl := int(d[8])
+	if nbl > 0:
+		net_seen["modrá raketa"] = true
+	if int(d[9]) > 0:
+		net_seen["olej"] = true
+	for k in karts:
+		if k.shield > 0.0:
+			net_seen["štít"] = true
+		if k.shrink > 0.0:
+			net_seen["blesk"] = true
+	while blues.size() < nbl:
+		var node := _missile_node(true)
+		fx.add_child(node)
+		blues.append({"x": 0.0, "y": 0.0, "z": 0.0, "h": 0.0, "node": node, "fresh": true})
+	while blues.size() > nbl:
+		var b: Dictionary = blues.pop_back()
+		b.node.queue_free()
+	for b in blues:
+		b.x = d[o]
+		b.z = d[o + 1]
+		b.y = d[o + 2]
+		b.h = d[o + 3]
+		if b.get("fresh", false):
+			b.fresh = false
+			sound_at("blue", b.x, b.z)
+		o += 4
+	var nol := int(d[9])
+	while oils.size() < nol:
+		var node := _oil_node()
+		fx.add_child(node)
+		oils.append({"x": INF, "y": 0.0, "z": 0.0, "node": node, "age": 0.0})
+	while oils.size() > nol:
+		var p: Dictionary = oils.pop_back()
+		p.node.queue_free()
+	for p in oils:
+		if absf(float(p.x) - d[o]) + absf(float(p.z) - d[o + 1]) > 0.01:
+			if p.x == INF:
+				sound_at("oil", d[o], d[o + 1])
+			p.x = d[o]
+			p.z = d[o + 1]
+			_place_oil(p, track.project(p.x, p.z, track.nearest(p.x, p.z)))
+		p.age = d[o + 2]
+		o += 3
 	var ne := int(d[7])
 	for i in ne:
 		if o + 2 >= d.size():
 			break
-		var eid := int(d[o])
+		var code := int(d[o])
+		var eid := code >> 2
 		if eid > seen_explosion:
 			seen_explosion = eid
-			_explode_fx(d[o + 1], d[o + 2])
+			_explode_fx(d[o + 1], d[o + 2], code & 3)
 		o += 3
 	_compute_order_client()
 
@@ -1078,6 +1396,23 @@ func _process(delta: float) -> void:
 	for m in missiles:
 		m.node.position = Vector3(m.x, m.y, m.z)
 		m.node.rotation.y = m.h
+	for b in blues:
+		var bn: Node3D = b.node
+		bn.position = bn.position.lerp(Vector3(b.x, b.y, b.z), 1.0 - exp(-20.0 * dt)) if bn.position != Vector3.ZERO \
+			else Vector3(b.x, b.y, b.z)
+		bn.rotation = Vector3(0.0, float(b.h), time * 9.0)
+	for o in oils:
+		# the puddle dries up in its last second
+		var left := OIL_TIME - float(o.age)
+		var sc := clampf(left, 0.05, 1.0)
+		(o.node as Node3D).scale = Vector3(sc, 1.0, sc)
+	if mode == Mode.CLIENT:
+		for o in oils:
+			o.age = float(o.age) + dt
+	if zap_t > 0.0:
+		zap_t = maxf(0.0, zap_t - delta)
+		zap_rect.color.a = 0.6 * zap_t / 0.4
+		zap_rect.visible = zap_t > 0.0
 	if mode == Mode.CLIENT:
 		time += dt
 	for k in karts:
@@ -1161,7 +1496,7 @@ func _update_box_visuals(dt: float) -> void:
 
 func _reset_obs(k: Kart) -> void:
 	k.obs = {"spin": 0.0, "boost": 0.0, "roulette": 0.0, "item": 0, "level": 0, "hop": 0.0, "star": 0.0,
-		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0, "trick": 0.0, "air": false}
+		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0, "trick": 0.0, "air": false, "shield": 0.0, "shrink": 0.0}
 
 
 ## Turns state changes into sounds, messages and effects. Works the same
@@ -1242,6 +1577,21 @@ func _observe(k: Kart, dt: float) -> void:
 				_trial_finish(k)
 			else:
 				_save_record(k)
+	if k.shield > float(o.shield) + 1.0:
+		sound_at("shield", k.x, k.z, loc, 0.8)
+	elif k.shield <= 0.0 and float(o.shield) > 0.1:
+		# the bubble swallowed a hit
+		sound_at("pop", k.x, k.z, loc)
+		burst(Vector3(k.x, k.y + 1.0, k.z), Color(0.5, 0.9, 1.0), 18, 6.0)
+	if k.shrink > float(o.shrink) + 1.0:
+		# struck by the lightning: a bolt from the sky and a flash over the screen
+		Effects.flash(fx, Vector3(k.x, k.y + 4.0, k.z), Color(1.0, 0.95, 0.6), 7.0, 0.3)
+		burst(Vector3(k.x, k.y + 1.2, k.z), Color(1.0, 0.95, 0.5), 10, 7.0)
+		if zap_t < 0.3:
+			zap_t = 0.4
+			Sfx.play("zap", 0.9)
+	o.shield = k.shield
+	o.shrink = k.shrink
 	o.spin = k.spin
 	o.boost = k.boost
 	o.roulette = k.roulette

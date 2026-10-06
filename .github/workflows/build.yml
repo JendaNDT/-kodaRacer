@@ -78,19 +78,26 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" trial-test.log; then exit 1; fi
           grep -q "TEST PASS: time trial with ghost" trial-test.log
 
+      - name: Test – new items (blue missile, oil, lightning, shield)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --itemtest --fast=8 2>&1 | tee item-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" item-test.log; then exit 1; fi
+          grep -q "TEST PASS: every item works" item-test.log
+
       - name: Test – take-offs only from the ramp (turbo and star, all tracks)
         run: |
           ~/godot-bin/godot --headless --path godot -- --jumptest --fast=8 2>&1 | tee jump-test.log
           if grep -E "SCRIPT ERROR|Parse Error" jump-test.log; then exit 1; fi
           grep -q "TEST PASS: take-offs only from the ramp" jump-test.log
 
-      - name: Test – Wi-Fi game with 120 ms delay each way (host and client on one machine)
+      - name: Test – Wi-Fi game with 120 ms delay each way, every item handed out in turn
         run: |
-          ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=260 > host.log 2>&1 &
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --timeout=260 > host.log 2>&1 &
           sleep 3
           ~/godot-bin/godot --headless --path godot -- --nettest=client --fake-lag=120 --fake-jitter=20 --timeout=260 > client.log 2>&1 || true
           wait || true
-          grep -h "TEST\|PREDICTION" host.log client.log
+          grep -h "TEST\|PREDICTION\|CLIENT SAW" host.log client.log
+          for w in "modrá raketa" olej štít blesk; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
           if grep -hE "SCRIPT ERROR|Parse Error" host.log client.log; then exit 1; fi
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log

@@ -5,7 +5,7 @@ extends Node3D
 ## it follows hills and banked corners, flies off the ramp (never off a
 ## crest) and can do a trick in the air for a turbo on landing.
 
-const SNAP_FIELDS := 34
+const SNAP_FIELDS := 36
 const CORR_RATE := 9.0       # how fast a predicted kart eases into the host's position (1/s)
 const CORR_SNAP := 4.0       # a bigger difference (m) is not eased, the kart moves there at once
 const TRICK_TIME := 0.42    # one barrel roll
@@ -41,6 +41,10 @@ var slip := 0.0
 var boost := 0.0
 var boost_mul := 1.3
 var star := 0.0
+var vis_scale := 1.0
+var bubble: MeshInstance3D   # the shield, made the first time it is needed
+var shield := 0.0            # > 0: a bubble that swallows one hit
+var shrink := 0.0            # > 0: made small by the lightning (slower, can be run over)
 var spin := 0.0
 var spin_total := 1.0
 var hop := 0.0
@@ -196,6 +200,26 @@ static func _shared() -> Dictionary:
 		pm.distance_fade_min_distance = 1.5
 		pm.distance_fade_max_distance = 5.0
 		_m["pmat_add" if additive else "pmat_mix"] = pm
+	# the shield: a glassy bubble, clear in the middle and bright at the rim
+	var sph := SphereMesh.new()
+	sph.radius = 1.85
+	sph.height = 3.1
+	sph.radial_segments = 24
+	sph.rings = 12
+	_m.bubble = sph
+	var sh := Shader.new()
+	sh.code = """shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_back, fog_disabled;
+uniform vec4 tint : source_color = vec4(0.35, 0.85, 1.0, 1.0);
+void fragment() {
+	float rim = 1.0 - abs(dot(normalize(NORMAL), normalize(VIEW)));
+	float shine = smoothstep(0.82, 0.98, dot(normalize(NORMAL), normalize(vec3(-0.4, 0.7, 0.6))));
+	ALBEDO = tint.rgb * (0.12 + 0.9 * rim * rim * rim) + vec3(shine * 0.6);
+}
+"""
+	var bm := ShaderMaterial.new()
+	bm.shader = sh
+	_m.bubblem = bm
 	return _m
 
 
@@ -474,7 +498,7 @@ func set_name_tag(text: String) -> void:
 # ================================================================== state
 func reset(px: float, pz: float, h: float) -> void:
 	x = px; z = pz; heading = h
-	speed = 0.0; steer = 0.0; slip = 0.0; boost = 0.0; boost_mul = 1.3; star = 0.0
+	speed = 0.0; steer = 0.0; slip = 0.0; boost = 0.0; boost_mul = 1.3; star = 0.0; shield = 0.0; shrink = 0.0
 	spin = 0.0; spin_total = 1.0; hop = 0.0; hop_max = 0.3; hop_h = 0.45; invuln = 0.0
 	item = 0; item_n = 0; roulette = 0.0; roll_tick = 0.0
 	lap = 0; max_lap = 0; lap_start = 0.0; lap_times = []; last_lap = 0.0
@@ -514,7 +538,7 @@ func progress() -> float:
 
 
 func max_speed() -> float:
-	return float(Game.BASE.max) * float(race.diff.speed) * float(ch.speed)
+	return float(Game.BASE.max) * float(race.diff.speed) * float(ch.speed) * (Game.SHRINK_SPEED if shrink > 0.0 else 1.0)
 
 
 func hop_y() -> float:
@@ -523,6 +547,10 @@ func hop_y() -> float:
 
 func hit(dur: float, big: bool) -> bool:
 	if star > 0.0 or invuln > 0.0 or finished:
+		return false
+	if shield > 0.0:
+		shield = 0.0            # the bubble pops instead
+		invuln = 0.5
 		return false
 	spin = dur
 	spin_total = dur
@@ -552,6 +580,8 @@ func update(dt: float, inp: Dictionary) -> void:
 	var handling: float = ch.handling
 	boost = maxf(0.0, boost - dt)
 	star = maxf(0.0, star - dt)
+	shield = maxf(0.0, shield - dt)
+	shrink = maxf(0.0, shrink - dt)
 	hop = maxf(0.0, hop - dt)
 	trick = maxf(0.0, trick - dt)
 	invuln = maxf(0.0, invuln - dt)
@@ -733,6 +763,7 @@ func pack(out: PackedFloat32Array, o: int) -> void:
 	out[o + 30] = invuln; out[o + 31] = bump_cd
 	out[o + 32] = (1 if drift_prev else 0) + (2 if tricked else 0)
 	out[o + 33] = ack
+	out[o + 34] = shield; out[o + 35] = shrink
 
 
 func unpack(d: PackedFloat32Array, o: int) -> void:
@@ -761,6 +792,7 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	drift_prev = f2 & 1 != 0
 	tricked = f2 & 2 != 0
 	ack = int(d[o + 33])
+	shield = d[o + 34]; shrink = d[o + 35]
 	last_s = s
 	var pj := race.track.project(x, z, idx)
 	idx = pj[0]
@@ -842,6 +874,18 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 		for mt in glow_mats:
 			mt.emission_enabled = false
 	star_fx.emitting = star > 0.0
+	if shield > 0.0 and bubble == null:
+		bubble = MeshInstance3D.new()
+		bubble.mesh = _shared().bubble
+		bubble.material_override = _shared().bubblem
+		bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bubble.position = Vector3(0, 0.85, 0)
+		add_child(bubble)
+	if bubble != null:
+		# blinks in its last two seconds
+		bubble.visible = shield > 0.0 and (shield > 2.0 or fmod(t * 8.0, 1.0) < 0.6)
+		if bubble.visible:
+			bubble.scale = Vector3.ONE * (1.0 + 0.04 * sin(t * 5.0))
 	var lvl := clampi(drift_level, 1, 3)
 	for p in sparks:
 		p.emitting = drift_active and drift_level > 0
@@ -875,7 +919,9 @@ func _orient(pos: Vector3, delta: float) -> void:
 	vis_up = vis_up.lerp(want, 1.0 - exp(-(5.0 if air else 14.0) * delta)).normalized()
 	var zf := (f - vis_up * f.dot(vis_up)).normalized()
 	var b := Basis(vis_up.cross(zf), vis_up, zf)
-	transform = Transform3D(b, pos)
+	# the lightning shrinks the whole kart (driver, wheels, effects)
+	vis_scale = Game.approach(vis_scale, Game.SHRINK_SCALE if shrink > 0.0 else 1.0, 2.5 * delta)
+	transform = Transform3D(b.scaled_local(Vector3.ONE * vis_scale), pos)
 	# the soft shadow spot stays on the ground while flying
 	blob.position.y = 0.1 - (maxf(0.0, pos.y - tr.road_y(idx, lat, along)) if air else 0.0)
 
