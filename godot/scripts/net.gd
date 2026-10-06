@@ -14,7 +14,8 @@ signal joined
 signal join_failed(reason: String)
 signal session_ended(reason: String)
 signal hosts_changed
-signal race_started(track: int, diff: int, roster: Array)
+signal race_started(track: int, diff: int, roster: Array, cup: Dictionary)
+signal cup_points(points: Dictionary)
 signal snapshot_received(data: PackedFloat32Array)
 signal back_to_lobby
 signal peer_left(id: int)
@@ -26,6 +27,8 @@ var is_host := false
 var players := {}      # peer id -> {"name": String, "driver": int}
 var track := 0
 var diff := 1
+var cup_mode := false  # the lobby is set to a championship over all tracks
+var cup := {}          # host: the championship being driven {round, points, roster, diff}
 var in_race := false
 var inputs := {}       # peer id -> {"steer", "buttons", "seq"}
 var hosts := {}        # ip -> {"name", "count", "racing", "t"}
@@ -102,6 +105,8 @@ func leave() -> void:
 	active = false
 	is_host = false
 	in_race = false
+	cup_mode = false
+	cup = {}
 	players = {}
 	inputs = {}
 	if _udp != null:
@@ -295,6 +300,13 @@ func set_track(t: int, d: int) -> void:
 	_sync_lobby()
 
 
+func set_cup_mode(on: bool) -> void:
+	if not is_host:
+		return
+	cup_mode = on
+	_sync_lobby()
+
+
 func _free_driver(want: int, id: int) -> int:
 	var taken := {}
 	for pid in players.keys():
@@ -311,14 +323,15 @@ func _free_driver(want: int, id: int) -> int:
 func _sync_lobby() -> void:
 	lobby_changed.emit()
 	if is_host and active:
-		_lobby.rpc(players, track, diff)
+		_lobby.rpc(players, track, diff, cup_mode)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _lobby(p: Dictionary, t: int, d: int) -> void:
+func _lobby(p: Dictionary, t: int, d: int, cm: bool) -> void:
 	players = p
 	track = t
 	diff = d
+	cup_mode = cm
 	lobby_changed.emit()
 
 
@@ -326,6 +339,67 @@ func _lobby(p: Dictionary, t: int, d: int) -> void:
 func start_race() -> void:
 	if not is_host:
 		return
+	if cup_mode and cup.is_empty():
+		var first := _new_roster()
+		var pts := {}
+		for r in first:
+			pts[int(r.driver)] = 0
+		cup = {"round": clampi(int(Game.cmd_args.get("cup-start", "0")), 0, Game.TRACKS.size() - 1), "points": pts,
+			"roster": first, "diff": diff}
+	if not cup.is_empty():
+		_launch(int(cup.round), int(cup.diff), cup.roster, {"round": cup.round, "points": cup.points, "diff": cup.diff})
+	else:
+		_launch(track, diff, _new_roster(), {})
+
+
+## Host, after a championship race: add the points, then the next track
+## with the grid in reverse order of the standings; after the last one
+## everybody goes back to the lobby.
+func next_cup_round(race_points: Dictionary) -> void:
+	if not is_host or cup.is_empty():
+		return
+	for d in race_points:
+		cup.points[d] = int(cup.points.get(d, 0)) + int(race_points[d])
+	cup.round = int(cup.round) + 1
+	if int(cup.round) >= Game.TRACKS.size():
+		return_to_lobby()
+		return
+	var order: Array = []
+	var pos := {}
+	for i in cup.roster.size():
+		var r: Dictionary = (cup.roster[i] as Dictionary).duplicate()
+		if bool(r.human) and not players.has(int(r.peer)):
+			r.human = false   # left the game: the computer drives on for them
+			r.peer = 0
+		order.append(r)
+		pos[int(r.driver)] = i
+	order.sort_custom(func(a, b):
+		var pa := int(cup.points[int(a.driver)])
+		var pb := int(cup.points[int(b.driver)])
+		return pa < pb if pa != pb else pos[int(a.driver)] < pos[int(b.driver)])
+	cup.roster = order
+	start_race()
+
+
+## Host: the points of the race shown on everybody's results.
+func send_cup_points(pts: Dictionary) -> void:
+	if is_host and active and players.size() > 1:
+		_cup_pts.rpc(pts)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _cup_pts(pts: Dictionary) -> void:
+	cup_points.emit(pts)
+
+
+func _launch(t: int, d: int, roster: Array, cupd: Dictionary) -> void:
+	in_race = true
+	inputs = {}
+	_race_start.rpc(t, d, roster, cupd)
+	race_started.emit(t, d, roster, cupd)
+
+
+func _new_roster() -> Array:
 	var humans: Array = []
 	var used := {}
 	for pid in players.keys():
@@ -338,23 +412,20 @@ func start_race() -> void:
 		if not used.has(i):
 			ai.append({"driver": i, "human": false, "peer": 0, "name": ""})
 	ai.shuffle()
-	var roster := ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
-	in_race = true
-	inputs = {}
-	_race_start.rpc(track, diff, roster)
-	race_started.emit(track, diff, roster)
+	return ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
 
 
 @rpc("authority", "call_remote", "reliable")
-func _race_start(t: int, d: int, roster: Array) -> void:
+func _race_start(t: int, d: int, roster: Array, cupd: Dictionary) -> void:
 	in_race = true
-	race_started.emit(t, d, roster)
+	race_started.emit(t, d, roster, cupd)
 
 
 func return_to_lobby() -> void:
 	if not is_host:
 		return
 	in_race = false
+	cup = {}
 	inputs = {}
 	_to_lobby.rpc()
 	back_to_lobby.emit()

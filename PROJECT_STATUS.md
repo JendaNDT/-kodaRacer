@@ -6,7 +6,7 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.9.0: projet celé mistrovství (6 závodů) a podívat se na FPS na Střední, hlavně v lese. Dál můžeme vybírat z backlogu, třeba mistrovství i přes Wi-Fi, časovku proti vlastnímu rekordu nebo hru přes internet.**
+**Vyzkoušet verzi 1.10.0: časovku (dvakrát za sebou na stejné trati, podruhé už pojede duch) a mistrovství po Wi-Fi mezi dvěma zařízeními. Dál z backlogu: hra přes internet, rozdělená obrazovka i v síťové hře nebo vlastní podpisový klíč pro Google Play.**
 Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední zůstávají.
 
 ## ✅ Hotovo
@@ -18,7 +18,7 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka
 - Dotykové ovládání pro Android (volant, drift, předmět, brzda, automatický plyn), tlačítko Zpět = pauza
 - Ikona aplikace a úvodní obrazovka
-- GitHub Actions: import projektu, test celého závodu, test celého mistrovství, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
+- GitHub Actions: import projektu, test celého závodu, test celého mistrovství, test časovky s duchem, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
 - **Fáze 0 grafiky:** kvalita grafiky Nízká/Střední/Vysoká v menu i v pauze, počítadlo FPS, kontrola verze u Wi-Fi hry, měření výkonu `--bench`, hudba se generuje na pozadí
 - **Fáze 1 grafiky:** stíny od slunce (Střední a Vysoká), záře plamenů, jiskřiček, hvězdy, rakety, krabic a slunce, filmové barvy AgX se sytostí, SSAO na Vysoké, vlastní nálada tratí (údolí odpoledne, kaňon při západu slunce, laguna zatažená se sněžením), sluneční disk a plující mraky
 - **Fáze 2 grafiky:** stopy smyku, rychlostní čáry, 3. úroveň driftu (fialové jiskry, nejdelší turbo), plamen turba se zábleskem, výbuch rakety s tlakovou vlnou, hvězdičky nad hlavou po zásahu, lesk a střepy krabic, konfety v cíli, vlající vlajky, prach / písek / sníh od kol podle trati
@@ -29,6 +29,7 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - **Fáze 6 grafiky (verze 1.7.0):** kopce a sjezdy na všech tratích (údolí ±8 m, kaňon ±11 m, laguna až 7 m), klopené zatáčky, kopec se žlutočernou rampou a skokem přes 20 m, trik ve vzduchu tlačítkem driftu (otočka, nápis „Trik!“, turbo po dopadu), do kopce pomaleji, z kopce rychleji, dopad s pérováním a zvukem, motokára se naklání podle svahu, terén kolem trati navazuje na silnici, všechno okolí stojí na zemi, předměty jezdí po kopcích, kamera sleduje výšku a nezajede do kopce, výška a skoky jdou i přes Wi-Fi
 - **Tři nové tratě (verze 1.8.0), celkem jich je šest:** Podzimní les (barevné stromy a jedle, padající listí, dřevěná rozhledna s vlajkou, rybník), Noční město (domy s rozsvícenými okny, lampy se světlem na silnici, hvězdy a měsíc, televizní věž, neonová brána přes trať, panorama města na obzoru), Sopečný ostrov (palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero). Každá má vlastní kopce a skok.
 - **Mistrovství (verze 1.9.0):** všech šest tratí za sebou se stejnými soupeři, body 10/8/6/4/2/1, po každém závodě dvě tabulky (tento závod s přičtenými body a celkové pořadí), vedoucí startuje příště ze zadu, na startu každého závodu pás „ZÁVOD 2/6“, na konci tři nejlepší z celého mistrovství na stupních vítězů a uložený nejlepší pohár pro každou obtížnost. Funguje pro jednoho i dva hráče. Restart v pauze zopakuje jen aktuální závod. Hra teď drží v paměti jen trať, která je na obrazovce (šest tratí by telefon zahltilo).
+- **Mistrovství po Wi-Fi a časovka (verze 1.10.0):** v lobby přepínač Jeden závod / Mistrovství. Body počítá hostitel a posílá je všem, další závod spouští hostitel, až dojedou všichni hráči. Kdo mezi závody odejde, za toho jede dál počítač. Časovka: sám na trati, bez otazníků, se třemi turby, proti průhlednému duchovi nejlepší jízdy (uložený zvlášť pro každou trať a obtížnost). Po každém kole rozdíl proti duchovi, ve výsledcích časy kol s rozdíly, nejlepší čas časovky u tratí v menu.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -40,7 +41,6 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
 - Predikce vlastní motokáry u síťového klienta (teď se ovládání projeví se zpožděním odezvy Wi-Fi)
 - Vlastní podpisový klíč a verze pro Google Play
-- Mistrovství i ve hře po Wi-Fi (teď jen sám nebo dva na jednom počítači), časovka proti vlastnímu rekordu
 
 ## 🐛 Známé bugy
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
@@ -70,6 +70,8 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - **Stupně vítězů stojí přímo u trati**, ne v samostatné scéně: nic se nenačítá, po Wi-Fi není potřeba nic posílat navíc (každý si pódium postaví sám podle výsledků) a motokáry na něm jsou stejné modely jako v závodě. Náhled v menu má vlastní malý 3D svět (SubViewport), takže nezávisí na trati v pozadí.
 - **Výška trati se počítá z oblouku podél kola, ne z mapy výšek:** silnice má výšku a klopení v každém bodě osy (po 2 m), fyzika z toho jen interpoluje, takže je přesná a levná. Terén kolem je zvláštní síť po 6 m, která u silnice pokračuje jejím povrchem. Rampa je samostatný kus, terén ji neřeší. Motokára zůstává v rovině „2D + výška“: zatáčení, srážky, AI i síť fungují jako dřív, výška se k tomu jen přidává.
 - **Nové tratě jsou jen data a pár stavebnic:** tvar (body křivky), barvy, nálada oblohy a kopce jsou v `game.gd`, okolí podle typu (`deco`: autumn, city, palms) ve `world_builder.gd`, dominanta podle id v `trackside.gd`. Hra, AI, síť, minimapa i menu pracují s libovolným počtem tratí. Nová trať musí projít `--trackinfo`: části trati, které jsou daleko od sebe po trati, musí být v prostoru aspoň ~85 m od sebe a nejostřejší zatáčka mít poloměr kolem 28 m a víc.
+- **Duch v časovce je záznam, ne simulace:** desetkrát za sekundu se uloží poloha, výška a natočení motokáry. Duch se mezi záznamy jen dopočítá a natočí podle povrchu, takže sedí na trati přesně tak, jak se jelo. Soubor má pro tři kola jen pár desítek kilobajtů (`user://ghost_<trať>_<obtížnost>.dat`).
+- **Mistrovství po Wi-Fi vede hostitel:** body počítá jen on (u klientů by se odhad pořadí nedojetých motokár mohl lišit) a posílá je ostatním. Test `--nettest=host --cup --cup-start=4` projede poslední dva závody mistrovství po síti. V GitHub Actions neběží, protože síťové závody jedou ve skutečném čase a test by trval přes 5 minut.
 - **Stíny motokár ze zjednodušeného modelu:** detailní model stín nevrhá, místo něj ho vrhá neviditelná jednodušší kopie (stín se kreslí pro každé pásmo stínů zvlášť).
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.

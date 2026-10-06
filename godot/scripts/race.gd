@@ -63,8 +63,21 @@ var touch_ctl: Control
 var pause_panel: Control
 var results_panel: Control
 var results_body: VBoxContainer
-var cup := {}                   # set by Main for a championship round: {round, points, ...}
+var cup := {}                   # set by Main for a championship round: {round, points, diff}
 var cup_body: VBoxContainer
+var cup_next: Button
+var net_points := {}            # Wi-Fi client: this race's points as the host counts them
+var trial := false              # time trial: alone, no item boxes, three turbos, against a ghost
+var ghost := {}                 # the best drive on this track: {t, laps, driver, data}
+var ghost_node: Node3D
+var ghost_i := 0
+var ghost_idx := 0
+var ghost_shown := false        # the ghost was out on the track (tests check it)
+var trial_prev := 0.0           # the record before this drive (0 = none)
+var rec := PackedFloat32Array() # this drive: every GHOST_DT seconds t, x, y, z, yaw, in the air
+var rec_next := 0.0
+const GHOST_DT := 0.1
+const GHOST_F := 6
 
 
 static func get_track(i: int) -> Track:
@@ -122,10 +135,10 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		world.get_parent().remove_child(world)
 	holder.add_child(world)
 	for b in boxes:
-		b.active = true
-		b.respawn = 0.0
+		b.active = not trial
+		b.respawn = INF if trial else 0.0
 		b.scale = 1.0
-		b.node.visible = true
+		b.node.visible = not trial
 		b.node.scale = Vector3.ONE
 	fx = Node3D.new()
 	holder.add_child(fx)
@@ -172,13 +185,18 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		_reset_obs(k)
 	_make_views()
 	Game.set_local_players(maxi(1, locals.size()))
+	if trial:
+		_start_trial()
 	if not cup.is_empty():
 		get_tree().create_timer(0.5).timeout.connect(_cup_banner)
 	Sfx.music(mode != Mode.DEMO, false)
 
 
 ## Remove the cached world before this race is freed so it can be reused.
+## A finished championship saves its result here, whichever way you leave.
 func dispose() -> void:
+	if results_shown and _cup_last() and not locals.is_empty():
+		_save_cup()
 	if world != null and world.get_parent() == holder:
 		holder.remove_child(world)
 	for i in 2:
@@ -362,6 +380,8 @@ func _step(dt: float) -> void:
 	_kart_collisions()
 	for k in karts:
 		k.constrain()
+	if trial and state == "race" and race_time >= rec_next and not locals[0].finished:
+		_record(locals[0])
 	_update_items(dt)
 	_compute_ranks()
 	for k in karts:
@@ -375,6 +395,10 @@ func _step(dt: float) -> void:
 
 func _go() -> void:
 	state = "race"
+	if trial:
+		for k in locals:
+			k.item = Game.Item.TURBO   # three turbos to spend where they help most
+			k.item_n = 3
 	for k in karts:
 		k.lap_start = 0.0
 		if k.human:
@@ -969,6 +993,8 @@ func _process(delta: float) -> void:
 	_update_box_visuals(dt)
 	Atmosphere.animate(atm)
 	Trackside.update(ts, self)
+	if ghost_node != null:
+		_move_ghost()
 	for b in bananas:
 		b.node.position.y = float(b.y) + 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
 	for m in missiles:
@@ -1116,19 +1142,28 @@ func _observe(k: Kart, dt: float) -> void:
 				k.lap_times.append(k.last_lap)
 			if k.lap >= 2 and k.lap <= Game.LAPS and hud != null:
 				var lap_time := "Kolo %d: %s" % [k.lap - 1, Game.fmt_time(k.last_lap)]
+				var sub_col := UI.MUTED
+				var split := _ghost_split(k, k.lap - 1)
+				if split != INF:
+					# time trial: ahead of the ghost (green) or behind it (red) after this many laps
+					lap_time += " · " + _signed(split)
+					sub_col = UI.GO if split < 0.0 else UI.KERB
 				if k.lap == Game.LAPS:
-					hud.show_banner("POSLEDNÍ KOLO", UI.GOLD, lap_time)
+					hud.show_banner("POSLEDNÍ KOLO", UI.GOLD, lap_time, sub_col)
 					Sfx.play("final_lap")
 					Sfx.music(true, true)
 				else:
-					hud.show_banner("KOLO %d/%d" % [k.lap, Game.LAPS], UI.PAPER, lap_time)
+					hud.show_banner("KOLO %d/%d" % [k.lap, Game.LAPS], UI.PAPER, lap_time, sub_col)
 					Sfx.play("lap")
 		if k.finished and not bool(o.finished):
 			var place := _place_of(k)
 			if hud != null:
 				hud.show_msg("Vítězství!" if place == 1 else "Cíl! %d. místo" % place, UI.GOLD if place == 1 else UI.GO)
 			Sfx.play("finish")
-			_save_record(k)
+			if trial:
+				_trial_finish(k)
+			else:
+				_save_record(k)
 	o.spin = k.spin
 	o.boost = k.boost
 	o.roulette = k.roulette
@@ -1393,6 +1428,9 @@ func _show_results() -> void:
 	if not cup.is_empty():
 		_show_cup_results()
 		return
+	if trial:
+		_show_trial_results()
+		return
 	var title := "Výsledky"
 	var sub := ""
 	if locals.size() == 1:
@@ -1448,7 +1486,7 @@ func _show_results() -> void:
 ## drivers cheering, confetti flying; the camera circles them on a single
 ## full-screen view.
 func _start_podium() -> void:
-	if ts.get("podium", {}).is_empty() or mode == Mode.DEMO:
+	if ts.get("podium", {}).is_empty() or mode == Mode.DEMO or trial:
 		return
 	podium_t = 0.0
 	confetti_t = 0.3
@@ -1507,6 +1545,159 @@ func _podium_order() -> Array:
 	return out
 
 
+# ---------------------------------------------------------------- time trial
+const GHOST_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_opaque, cull_back;
+void fragment() {
+	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
+	ALBEDO = vec3(0.6, 0.88, 1.0);
+	ALPHA = 0.16 + 0.6 * rim;
+}
+"""
+
+
+static var _ghost_shader: Shader
+
+
+func _start_trial() -> void:
+	ghost = Game.load_ghost(track_idx, diff_idx)
+	trial_prev = float(ghost.get("t", 0.0))
+	rec = PackedFloat32Array()
+	rec_next = 0.0
+	if ghost.is_empty():
+		return
+	# the ghost: the recorded kart, see-through with a glowing edge
+	var show := KartShow.new()
+	show.setup(clampi(int(ghost.get("driver", 0)), 0, Game.CHARS.size() - 1), false)
+	show.steer_amp = 0.0
+	if _ghost_shader == null:
+		_ghost_shader = Shader.new()
+		_ghost_shader.code = GHOST_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = _ghost_shader
+	var stack: Array = [show]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is GeometryInstance3D:
+			(n as GeometryInstance3D).material_override = mat
+			(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		stack.append_array(n.get_children())
+	ghost_node = show
+	fx.add_child(ghost_node)
+	ghost_i = 0
+	ghost_idx = -1
+	_move_ghost()
+
+
+func _record(k: Kart) -> void:
+	rec.append_array(PackedFloat32Array([race_time, k.x, k.y, k.z, k.heading - k.slip, 1.0 if k.air else 0.0]))
+	rec_next += GHOST_DT
+
+
+## The ghost where the best drive was at this moment of the race; it waits
+## at the start during the countdown and leaves the track after its finish.
+func _move_ghost() -> void:
+	var d: PackedFloat32Array = ghost.data
+	var n := d.size() / GHOST_F
+	if n < 2:
+		return
+	var t := race_time if state == "race" else 0.0
+	if t > d[(n - 1) * GHOST_F]:
+		ghost_node.visible = false
+		return
+	ghost_node.visible = true
+	while ghost_i < n - 2 and d[(ghost_i + 1) * GHOST_F] <= t:
+		ghost_i += 1
+	var a := ghost_i * GHOST_F
+	var b := a + GHOST_F
+	var u := clampf((t - d[a]) / maxf(1e-4, d[b] - d[a]), 0.0, 1.0)
+	var pos := Vector3(lerpf(d[a + 1], d[b + 1], u), lerpf(d[a + 2], d[b + 2], u), lerpf(d[a + 3], d[b + 3], u))
+	var yaw := d[a + 4] + Game.wrap_angle(d[b + 4] - d[a + 4]) * u
+	var pj := track.project(pos.x, pos.z, ghost_idx)
+	ghost_idx = pj[0]
+	var up := Vector3.UP if d[a + 5] > 0.5 else track.normal(pj[0], pj[1], pj[2])
+	var f := Vector3(sin(yaw), 0.0, cos(yaw))
+	var zf := (f - up * f.dot(up)).normalized()
+	ghost_node.transform = Transform3D(Basis(up.cross(zf), up, zf), pos)
+	if state == "race":
+		ghost_shown = true
+
+
+## Seconds ahead (−) or behind (+) the ghost after `laps` laps; INF without one.
+func _ghost_split(k: Kart, laps: int) -> float:
+	if not trial or ghost.is_empty() or laps < 1 or k.lap_times.size() < laps:
+		return INF
+	var gl: Array = ghost.get("laps", [])
+	if gl.size() < laps:
+		return INF
+	var mine := 0.0
+	var theirs := 0.0
+	for i in laps:
+		mine += float(k.lap_times[i])
+		theirs += float(gl[i])
+	return mine - theirs
+
+
+static func _signed(sec: float) -> String:
+	return ("−%.2f s" % -sec) if sec < 0.0 else ("+%.2f s" % sec)
+
+
+func _trial_finish(k: Kart) -> void:
+	_record(k)
+	if trial_prev <= 0.0 or k.finish_time < trial_prev:
+		k.set_meta("new_record", true)
+		Game.save_ghost(track_idx, diff_idx, {"t": k.finish_time, "laps": k.lap_times.duplicate(), "driver": k.driver,
+			"data": rec})
+
+
+func _show_trial_results() -> void:
+	var k: Kart = locals[0]
+	var best_new: bool = k.get_meta("new_record", false)
+	var title := "Nový rekord!" if best_new and trial_prev > 0.0 else ("Časovka" if not best_new else "První zapsaný čas")
+	var sub := "Čas %s" % Game.fmt_time(k.finish_time)
+	if trial_prev > 0.0:
+		sub += " · rekord byl %s (%s)" % [Game.fmt_time(trial_prev), _signed(k.finish_time - trial_prev)]
+	else:
+		sub += " · příště pojedeš proti jeho duchovi"
+	var p := _panel(title, false)
+	results_panel = p[0]
+	var inner: VBoxContainer = p[1]
+	var tl: Label = p[2]
+	tl.add_theme_color_override("font_color", UI.GOLD if best_new else UI.PAPER)
+	var sl := UI.label(sub, 18, UI.MUTED)
+	sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sl.custom_minimum_size = Vector2(470, 0)
+	inner.add_child(sl)
+	var best := INF
+	for t in k.lap_times:
+		best = minf(best, float(t))
+	var gl: Array = ghost.get("laps", [])
+	for i in k.lap_times.size():
+		var lt := float(k.lap_times[i])
+		var h := UI.hbox(10)
+		var nl := UI.label("Kolo %d" % (i + 1), 19, UI.PAPER, UI.bold_font)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(nl)
+		if i < gl.size():
+			var dd := lt - float(gl[i])
+			h.add_child(UI.label(_signed(dd), 17, UI.GO if dd < 0.0 else UI.KERB))
+		h.add_child(UI.label(Game.fmt_time(lt), 19, UI.GOLD if lt == best else UI.PAPER, UI.bold_font if lt == best else null))
+		inner.add_child(h)
+		var line := ColorRect.new()
+		line.color = UI.LINE
+		line.custom_minimum_size = Vector2(0, 1)
+		inner.add_child(line)
+	var row := UI.hbox(10)
+	inner.add_child(row)
+	var first := UI.button("Jet znovu", func(): restart_requested.emit(), true)
+	row.add_child(first)
+	row.add_child(UI.button("Hlavní menu", func(): menu_requested.emit()))
+	for c in row.get_children():
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	first.grab_focus.call_deferred()
+
+
 # ---------------------------------------------------------------- championship
 func _cup_last() -> bool:
 	return not cup.is_empty() and int(cup.round) >= Game.TRACKS.size() - 1
@@ -1523,6 +1714,8 @@ func _cup_banner() -> void:
 ## Points for this race from the current standings (unfinished karts by
 ## their estimated time).
 func _cup_race_points() -> Dictionary:
+	if mode == Mode.CLIENT and not net_points.is_empty():
+		return net_points
 	var pts := {}
 	var rows := standings()
 	for i in rows.size():
@@ -1594,24 +1787,48 @@ func _show_cup_results() -> void:
 	right.add_child(cup_body)
 	cols.add_child(right)
 	_fill_results()
+	if mode == Mode.CLIENT:
+		inner.add_child(UI.label("Hostitel vás vrátí do lobby." if last else "Další závod spouští hostitel.", 18, UI.MUTED))
 	var row := UI.hbox(10)
 	inner.add_child(row)
+	var next := func(): cup_next_requested.emit(_cup_race_points())
+	var buttons: Array = []    # [text, action]; the first one is the main button
+	match mode:
+		Mode.HOST:
+			# over Wi-Fi the host leads: next race once every player is in, or back to the lobby
+			buttons = [["Zpět do lobby", lobby_requested.emit], ["Ukončit hru", menu_requested.emit]] if last else \
+				[["Další závod: " + nxt, next], ["Zpět do lobby", lobby_requested.emit]]
+		Mode.CLIENT:
+			buttons = [["Odejít", menu_requested.emit]]
+		_:
+			buttons = [["Nové mistrovství", restart_requested.emit], ["Hlavní menu", menu_requested.emit]] if last else \
+				[["Další závod: " + nxt, next], ["Ukončit mistrovství", menu_requested.emit]]
 	var first: Button
-	if last:
-		first = UI.button("Nové mistrovství", func():
-			_save_cup()
-			restart_requested.emit(), true)
-		row.add_child(first)
-		row.add_child(UI.button("Hlavní menu", func():
-			_save_cup()
-			menu_requested.emit()))
-	else:
-		first = UI.button("Další závod: " + nxt, func(): cup_next_requested.emit(_cup_race_points()), true)
-		row.add_child(first)
-		row.add_child(UI.button("Ukončit mistrovství", func(): menu_requested.emit()))
-	for c in row.get_children():
-		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for i in buttons.size():
+		var b := UI.button(String(buttons[i][0]), buttons[i][1], i == 0)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(b)
+		if i == 0:
+			first = b
+	if mode == Mode.HOST and not last:
+		cup_next = first
+	_cup_wait_check()
 	first.grab_focus.call_deferred()
+
+
+## Host: "next race" waits until every player over Wi-Fi has finished.
+func _cup_wait_check() -> void:
+	if cup_next == null or not is_instance_valid(cup_next):
+		return
+	var waiting := false
+	for k in karts:
+		if k.human and not k.finished:
+			waiting = true
+	cup_next.disabled = waiting
+	if waiting:
+		cup_next.text = "Čekáme na ostatní hráče…"
+	else:
+		cup_next.text = "Další závod: " + String(Game.TRACKS[int(cup.round) + 1].name)
 
 
 ## The best championship place of the local players goes into the records.
@@ -1669,6 +1886,9 @@ func _fill_results() -> void:
 		line.custom_minimum_size = Vector2(0, 1)
 		results_body.add_child(line)
 	if cup_body != null and not cup.is_empty():
+		if mode == Mode.HOST:
+			Net.send_cup_points(_cup_race_points())
+			_cup_wait_check()
 		for c in cup_body.get_children():
 			c.queue_free()
 		var table := _cup_table(_cup_race_points())

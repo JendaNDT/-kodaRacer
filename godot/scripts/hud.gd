@@ -63,6 +63,15 @@ func setup(p_race: Race, p_kart: Kart, p_compact: bool) -> void:
 	tl.add_child(lap_l)
 	time_l = _shadowed(UI.label("0:00.00", int(22 * k), UI.PAPER, UI.bold_font))
 	tl.add_child(time_l)
+	if race.trial:
+		# time trial: no places, the record to beat instead
+		pos_row.visible = false
+		tl.move_child(time_l, 0)
+		time_l.add_theme_font_size_override("font_size", int(46 * k))
+		time_l.add_theme_font_override("font", UI.display_font)
+		var best := Game.trial_best(race.track_idx, race.diff_idx)
+		tl.add_child(_shadowed(UI.label("REKORD " + (Game.fmt_time(best) if best > 0.0 else "–"), int(20 * k), UI.GOLD,
+			UI.bold_font)))
 
 	var box_size := 78.0 * k
 	item_box = Panel.new()
@@ -321,10 +330,11 @@ func _make_banner() -> void:
 
 ## A band with kerbs slides across the screen: new lap, last lap; `sub` is
 ## a smaller line under it (the time of the lap just driven).
-func show_banner(text: String, color: Color, sub := "") -> void:
+func show_banner(text: String, color: Color, sub := "", sub_color := UI.MUTED) -> void:
 	banner_l.text = text
 	banner_l.add_theme_color_override("font_color", color)
 	banner_sub.text = sub
+	banner_sub.add_theme_color_override("font_color", sub_color)
 	banner_sub.visible = sub != ""
 	banner.visible = true
 	var w := size.x

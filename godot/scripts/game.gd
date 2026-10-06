@@ -161,6 +161,32 @@ func save_cup(diff: int, place: int) -> void:
 		save_settings()
 
 
+## Time trial: best time per track and difficulty (0 = none), its ghost
+## (the recorded drive) is in its own file.
+func trial_best(track: int, diff: int) -> float:
+	return float(settings.trials.get(record_key(track, diff), 0.0))
+
+
+func ghost_path(track: int, diff: int) -> String:
+	return "user://ghost_%s.dat" % record_key(track, diff)
+
+
+func load_ghost(track: int, diff: int) -> Dictionary:
+	var f := FileAccess.open(ghost_path(track, diff), FileAccess.READ)
+	if f == null:
+		return {}
+	var g = f.get_var()
+	return g if typeof(g) == TYPE_DICTIONARY and g.has("data") else {}
+
+
+func save_ghost(track: int, diff: int, ghost: Dictionary) -> void:
+	var f := FileAccess.open(ghost_path(track, diff), FileAccess.WRITE)
+	if f != null:
+		f.store_var(ghost)
+	settings.trials[record_key(track, diff)] = float(ghost.t)
+	save_settings()
+
+
 ## Item types: 0 none, 1 turbo, 2 banana, 3 missile, 4 star
 enum Item { NONE, TURBO, BANANA, MISSILE, STAR }
 var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
@@ -168,7 +194,7 @@ var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
 # ---------------------------------------------------------------- settings
 const SETTINGS_PATH := "user://settings.cfg"
 var settings := {
-	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {}, "cups": {},
+	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {}, "cups": {}, "trials": {},
 	"quality": -1, "show_fps": false,
 }
 
@@ -261,6 +287,8 @@ func load_settings() -> void:
 		settings.records = {}
 	if typeof(settings.cups) != TYPE_DICTIONARY:
 		settings.cups = {}
+	if typeof(settings.trials) != TYPE_DICTIONARY:
+		settings.trials = {}
 
 
 func save_settings() -> void:

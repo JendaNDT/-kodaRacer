@@ -25,6 +25,8 @@ var _bench_draws := 0
 var _bench_prims := 0
 # the championship being driven: {players, diff, round, roster, points}; empty = none
 var cup := {}
+var trial := false      # the last race started was a time trial
+var _trial_runs := 0
 
 
 func _ready() -> void:
@@ -38,6 +40,7 @@ func _ready() -> void:
 	ui_root.add_child(menu)
 	menu.start_offline.connect(func(n: int): fade_to(start_offline.bind(n)))
 	menu.start_cup.connect(func(n: int): fade_to(start_cup.bind(n)))
+	menu.start_trial.connect(func(): fade_to(start_trial))
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
 	menu.quality_changed.connect(_start_demo)
@@ -48,6 +51,9 @@ func _ready() -> void:
 	Net.session_ended.connect(_on_session_ended)
 	Net.peer_left.connect(_on_peer_left)
 	Net.snapshot_received.connect(_on_snapshot)
+	Net.cup_points.connect(func(pts: Dictionary):
+		if race != null:
+			race.net_points = pts)
 	var a := Game.cmd_args
 	if a.has("track"):
 		Game.settings.track = clampi(int(a.track), 0, Game.TRACKS.size() - 1)
@@ -103,6 +109,15 @@ func _ready() -> void:
 	if a.has("screenshot"):
 		_shot_path = String(a.screenshot)
 		_shot_delay = float(a.get("delay", "4"))
+	if a.has("trialtest"):
+		# two time trials in a row: the first saves a ghost, the second races it
+		_test_mode = "trial"
+		var gp := Game.ghost_path(int(Game.settings.track), int(Game.settings.diff))
+		if FileAccess.file_exists(gp):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(gp))
+		Game.settings.trials.erase(Game.record_key(int(Game.settings.track), int(Game.settings.diff)))
+		start_trial()
+		return
 	if a.has("cuptest"):
 		# a whole championship with the autopilot: every round must finish.
 		# --cup-start=5 jumps to a later round (made-up points), --shot-round=N
@@ -137,16 +152,23 @@ func _ready() -> void:
 		_start_demo()
 		if a.nettest == "host":
 			Net.host("Hostitel", 0)
+			Net.cup_mode = a.has("cup")   # --cup: a championship (--cup-start=4: only the last races)
 		else:
 			Net.join("127.0.0.1", "Klient", 1)
 		return
 	if a.has("showcase"):
 		return
-	menu.cup_mode = a.has("cup")   # screenshots of the championship setup
+	menu.setup_mode = String(a.get("mode", "race"))   # screenshots of the setup screen (race, cup, trial)
 	show_menu(String(a.get("screen", "home")))
 	if a.has("host"):
 		menu._host()
-	if a.has("race"):
+		Net.set_cup_mode(a.has("cup"))
+	if a.has("trial"):
+		start_trial()
+		race.fast = int(a.get("fast", "1"))
+		if a.has("autopilot"):
+			race.locals[0].autopilot = true
+	elif a.has("race"):
 		start_offline(int(a.get("players", "1")))
 		race.fast = int(a.get("fast", "1"))
 		if a.has("autopilot"):
@@ -258,7 +280,11 @@ func _new_race() -> Race:
 	ui_root.move_child(race, 0)
 	race.restart_requested.connect(func(): fade_to(_restart))
 	race.menu_requested.connect(func(): fade_to(_on_race_menu))
-	race.cup_next_requested.connect(func(pts: Dictionary): fade_to(_next_cup_round.bind(pts)))
+	race.cup_next_requested.connect(func(pts: Dictionary):
+		if Net.active:
+			Net.next_cup_round(pts)   # the host starts the next race for everybody
+		else:
+			fade_to(_next_cup_round.bind(pts)))
 	race.lobby_requested.connect(func(): Net.return_to_lobby())
 	return race
 
@@ -274,6 +300,7 @@ func _start_demo() -> void:
 
 func start_offline(players: int) -> void:
 	cup = {}
+	trial = false
 	var roster := _offline_roster(players)
 	menu.visible = false
 	_new_race().start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff), roster)
@@ -282,6 +309,7 @@ func start_offline(players: int) -> void:
 ## A championship: every track once with the same six drivers, points
 ## after each race; the grid of the next race is the standings reversed.
 func start_cup(players: int) -> void:
+	trial = false
 	var roster := _offline_roster(players)
 	var pts := {}
 	for r in roster:
@@ -301,10 +329,28 @@ func _start_cup_round() -> void:
 			k.autopilot = true
 
 
+## Time trial: you alone on the chosen track against the ghost of your best drive.
+func start_trial() -> void:
+	cup = {}
+	trial = true
+	last_players = 1
+	menu.visible = false
+	var d := int(Game.settings.driver)
+	var r := _new_race()
+	r.trial = true
+	r.start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff),
+		[{"driver": d, "human": true, "peer": 0, "local": 0, "name": Game.player_name()}])
+	if _test_mode == "trial":
+		r.fast = int(Game.cmd_args.get("fast", "8"))
+		r.locals[0].autopilot = true
+
+
 ## "Restart" from the pause menu or the results: the same race again, in a
 ## championship the same round; after its last race a new championship.
 func _restart() -> void:
-	if cup.is_empty():
+	if trial:
+		start_trial()
+	elif cup.is_empty():
 		start_offline(last_players)
 	elif race != null and race.results_shown and int(cup.round) >= Game.TRACKS.size() - 1:
 		start_cup(last_players)
@@ -356,7 +402,7 @@ func _offline_roster(players: int) -> Array:
 	return ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
 
 
-func _on_net_race(track: int, diff: int, roster: Array) -> void:
+func _on_net_race(track: int, diff: int, roster: Array, cupd: Dictionary) -> void:
 	var me := Net.my_id()
 	var r: Array = []
 	for e in roster:
@@ -365,7 +411,9 @@ func _on_net_race(track: int, diff: int, roster: Array) -> void:
 		r.append(d)
 	menu.visible = false
 	Net.stop_listening()
-	_new_race().start(Race.Mode.HOST if Net.is_host else Race.Mode.CLIENT, track, diff, r)
+	var nr := _new_race()
+	nr.cup = cupd
+	nr.start(Race.Mode.HOST if Net.is_host else Race.Mode.CLIENT, track, diff, r)
 	fade_in()   # no fade out first: the host's countdown must not wait
 	if _test_mode != "":
 		for k in race.karts:
@@ -480,7 +528,23 @@ func _process(delta: float) -> void:
 			_test_mode = ""
 			get_tree().quit(1)
 		return
-	if _test_mode == "cup" and race != null:
+	if _test_mode == "trial" and race != null:
+		if race.results_shown:
+			if _done_at < 0.0:
+				_done_at = _test_t
+				print("TRIAL run %d: %s ghost=%s" % [_trial_runs + 1, Game.fmt_time(race.locals[0].finish_time),
+					"yes" if not race.ghost.is_empty() else "no"])
+			elif _test_t - _done_at > 1.0:
+				_done_at = -1.0
+				_trial_runs += 1
+				if _trial_runs >= 2:
+					var g := Game.load_ghost(race.track_idx, race.diff_idx)
+					_finish_test(not g.is_empty() and race.ghost_shown, "time trial with ghost, best %s" % Game.fmt_time(float(g.get("t", 0.0))))
+				else:
+					start_trial()
+		elif _test_t > float(Game.cmd_args.get("timeout", "400")):
+			_finish_test(false, "timeout")
+	elif _test_mode == "cup" and race != null:
 		if race.results_shown and _shot_path != "" and int(Game.cmd_args.get("shot-round", "0")) == int(cup.round) + 1:
 			_shot_delay = minf(_shot_delay, _test_t + 3.0)
 		elif race.results_shown:
@@ -514,14 +578,21 @@ func _process(delta: float) -> void:
 					all_in = false
 			if all_in and _done_at < 0.0:
 				_done_at = _test_t
-			if _done_at >= 0.0 and _test_t - _done_at > float(Game.cmd_args.get("linger", "5")):
-				_finish_test(true, "host results, all players finished")
+			if _done_at >= 0.0 and not race.cup.is_empty() and not race._cup_last() and _test_t - _done_at > 1.5:
+				_done_at = -1.0
+				print("CUP host round %d done: %s" % [int(race.cup.round) + 1, str(race._cup_race_points())])
+				Net.next_cup_round(race._cup_race_points())
+			elif _done_at >= 0.0 and _test_t - _done_at > float(Game.cmd_args.get("linger", "5")):
+				_finish_test(true, "host championship finished" if not race.cup.is_empty() else "host results, all players finished")
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
 	elif _test_mode == "net_client":
-		if race != null and race.mode == Race.Mode.CLIENT and race.results_shown:
+		if race != null and race.mode == Race.Mode.CLIENT and race.results_shown and (race.cup.is_empty() or race._cup_last()):
 			var me: Kart = race.locals[0]
-			_finish_test(me.finished, "client finished place %d" % race._place_of(me))
+			if race.cup.is_empty():
+				_finish_test(me.finished, "client finished place %d" % race._place_of(me))
+			else:
+				_finish_test(me.finished, "client championship place %d" % race._cup_place(me))
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
 

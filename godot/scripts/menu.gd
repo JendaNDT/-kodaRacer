@@ -6,6 +6,7 @@ extends Control
 
 signal start_offline(players: int)
 signal start_cup(players: int)
+signal start_trial
 signal quit_requested
 signal track_changed
 signal quality_changed
@@ -15,7 +16,7 @@ var scroll: ScrollContainer
 var content: VBoxContainer
 var screen := "home"
 var players := 1
-var cup_mode := false         # setup screen: championship instead of one race
+var setup_mode := "race"      # setup screen: "race", "cup" (championship) or "trial" (time trial)
 var status_text := ""
 var _hosts_box: VBoxContainer
 var _status_l: Label
@@ -248,7 +249,7 @@ func _kart_picture(d: int, height: float) -> Control:
 	return tr
 
 
-func _track_grid(selected: int, enabled: bool, on_pick: Callable) -> GridContainer:
+func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false) -> GridContainer:
 	var g := UI.grid(3, 8)
 	for i in Game.TRACKS.size():
 		var td: Dictionary = Game.TRACKS[i]
@@ -273,6 +274,9 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable) -> GridContain
 		v.add_child(tn)
 		var rec: Dictionary = Game.settings.records.get(Game.record_key(i, int(Game.settings.diff)), {})
 		var info := UI.label("Rekord " + Game.fmt_time(rec.total) if rec.has("total") else td.desc, 13, UI.GOLD if rec.has("total") else UI.MUTED)
+		if trial:
+			var tt := Game.trial_best(i, int(Game.settings.diff))
+			info = UI.label("Časovka " + Game.fmt_time(tt) if tt > 0.0 else "Zatím bez času", 13, UI.GO if tt > 0.0 else UI.MUTED)
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.custom_minimum_size = Vector2(60, 0)
 		v.add_child(info)
@@ -312,7 +316,8 @@ func _home() -> void:
 	_brand()
 	_text("Tři kola, šest jezdců a otazníky plné překvapení. Driftuj v zatáčkách pro turbo a dojeď první.")
 	_wide(UI.button("Závod", _go_setup.bind(1), true))
-	_wide(UI.button("Mistrovství (6 tratí)", _go_setup.bind(1, true)))
+	_wide(UI.button("Mistrovství (6 tratí)", _go_setup.bind(1, "cup")))
+	_wide(UI.button("Časovka proti rekordu", _go_setup.bind(1, "trial")))
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
 	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
@@ -346,19 +351,25 @@ func _home() -> void:
 
 func _setup() -> void:
 	_brand(true)
-	var heading := ("Mistrovství" if cup_mode else "Závod") if players == 1 else "2 hráči na jednom počítači"
+	if players == 2 and setup_mode == "trial":
+		setup_mode = "race"
+	var heading: String = {"race": "Závod", "cup": "Mistrovství", "trial": "Časovka"}[setup_mode] if players == 1 \
+		else "2 hráči na jednom počítači"
 	content.add_child(UI.label(heading, 26, UI.PAPER, UI.bold_font))
-	# one race or the championship over all tracks
+	# one race, the championship over all tracks or a time trial (alone)
 	var modes := UI.hbox(8)
 	content.add_child(modes)
-	for m in 2:
+	var opts := [["race", "Jeden závod"], ["cup", "Mistrovství"]]
+	if players == 1:
+		opts.append(["trial", "Časovka"])
+	for o in opts:
 		var mb := Button.new()
-		mb.text = ["Jeden závod", "Mistrovství"][m]
+		mb.text = String(o[1])
 		mb.toggle_mode = true
-		mb.button_pressed = cup_mode == (m == 1)
+		mb.button_pressed = setup_mode == String(o[0])
 		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mb.pressed.connect(func():
-			cup_mode = m == 1
+			setup_mode = String(o[0])
 			Sfx.play("ui", 0.6)
 			show_screen("setup"))
 		modes.add_child(mb)
@@ -371,7 +382,7 @@ func _setup() -> void:
 		var taken: Array = [int(Game.settings[other])] if players == 2 else []
 		sec.add_child(KartStage.new(int(Game.settings[key]), 170.0 if players == 2 else 200.0))
 		sec.add_child(_driver_grid(int(Game.settings[key]), taken, _pick_driver.bind(key)))
-	if cup_mode:
+	if setup_mode == "cup":
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
 		cs.add_child(_cup_tracks())
 		var pts := Game.CUP_POINTS.map(func(p): return str(p))
@@ -381,10 +392,16 @@ func _setup() -> void:
 		cs.add_child(info)
 	else:
 		var ts := _section("Trať")
-		ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track))
+		ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track, setup_mode == "trial"))
+		if setup_mode == "trial":
+			var info := UI.label("Jedeš sám, bez soupeřů a otazníků, se třemi turby. Proti tobě jede průhledný duch tvé nejlepší jízdy.",
+				16, UI.MUTED)
+			info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			info.custom_minimum_size = Vector2(300, 0)
+			ts.add_child(info)
 	var ds := _section("Obtížnost")
 	ds.add_child(_diff_row(int(Game.settings.diff), true, _pick_diff))
-	if cup_mode:
+	if setup_mode == "cup":
 		var best := Game.cup_best(int(Game.settings.diff))
 		var cups := ["", "zlatý pohár", "stříbrný pohár", "bronzový pohár"]
 		var txt := "Zatím bez poháru na této obtížnosti." if best == 0 else \
@@ -394,16 +411,26 @@ func _setup() -> void:
 		_text("Hráč 1 (horní obrazovka): WASD, drift mezerník, předmět E.\nHráč 2 (dolní obrazovka): šipky, drift pravý Shift, předmět Enter.\nPřipojené ovladače: první patří hráči 1, druhý hráči 2.", 16)
 	var row := UI.hbox(10)
 	content.add_child(row)
-	var go := UI.button("Začít mistrovství!" if cup_mode else "Závodit!",
-		func(): (start_cup if cup_mode else start_offline).emit(players), true)
+	var go_text: String = {"race": "Závodit!", "cup": "Začít mistrovství!", "trial": "Začít časovku!"}[setup_mode]
+	var go := UI.button(go_text, _start_setup, true)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(go)
 	row.add_child(UI.button("Zpět", show_screen.bind("home")))
 
 
-func _go_setup(n: int, cup := false) -> void:
+func _start_setup() -> void:
+	match setup_mode:
+		"cup":
+			start_cup.emit(players)
+		"trial":
+			start_trial.emit()
+		_:
+			start_offline.emit(players)
+
+
+func _go_setup(n: int, mode := "race") -> void:
 	players = n
-	cup_mode = cup
+	setup_mode = mode
 	show_screen("setup")
 
 
@@ -600,14 +627,34 @@ func _lobby() -> void:
 	var dsec := _section("Tvůj jezdec")
 	dsec.add_child(KartStage.new(int(mine.get("driver", Game.settings.driver)), 180.0))
 	dsec.add_child(_driver_grid(int(mine.get("driver", Game.settings.driver)), taken, _lobby_driver))
-	var ts := _section("Trať")
-	ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track))
+	# one race or the championship over all tracks (the host decides)
+	var ms := _section("Režim")
+	var modes := UI.hbox(8)
+	ms.add_child(modes)
+	for m in 2:
+		var mb := Button.new()
+		mb.text = ["Jeden závod", "Mistrovství"][m]
+		mb.toggle_mode = true
+		mb.button_pressed = Net.cup_mode == (m == 1)
+		mb.disabled = not Net.is_host and Net.cup_mode != (m == 1)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if Net.is_host:
+			mb.pressed.connect(func():
+				Sfx.play("ui", 0.6)
+				Net.set_cup_mode(m == 1))
+		modes.add_child(mb)
+	if Net.cup_mode:
+		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
+		cs.add_child(_cup_tracks())
+	else:
+		var ts := _section("Trať")
+		ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track))
 	var ds := _section("Obtížnost")
 	ds.add_child(_diff_row(Net.diff, Net.is_host, _lobby_diff))
 	var row := UI.hbox(10)
 	content.add_child(row)
 	if Net.is_host:
-		var go := UI.button("Start závodu", Net.start_race, true)
+		var go := UI.button("Začít mistrovství" if Net.cup_mode else "Start závodu", Net.start_race, true)
 		go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(go)
 	else:
