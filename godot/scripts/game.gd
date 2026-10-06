@@ -145,6 +145,22 @@ var TRACKS := [
 	},
 ]
 
+## Championship: every track once, in this order of points for places 1–6.
+const CUP_POINTS := [10, 8, 6, 4, 2, 1]
+
+
+## Best place reached in a championship on this difficulty (0 = none yet).
+func cup_best(diff: int) -> int:
+	return int(settings.cups.get(str(diff), 0))
+
+
+func save_cup(diff: int, place: int) -> void:
+	var best := cup_best(diff)
+	if best == 0 or place < best:
+		settings.cups[str(diff)] = place
+		save_settings()
+
+
 ## Item types: 0 none, 1 turbo, 2 banana, 3 missile, 4 star
 enum Item { NONE, TURBO, BANANA, MISSILE, STAR }
 var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
@@ -152,7 +168,7 @@ var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
 # ---------------------------------------------------------------- settings
 const SETTINGS_PATH := "user://settings.cfg"
 var settings := {
-	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {},
+	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {}, "cups": {},
 	"quality": -1, "show_fps": false,
 }
 
@@ -243,6 +259,8 @@ func load_settings() -> void:
 	settings.show_fps = bool(settings.show_fps)
 	if typeof(settings.records) != TYPE_DICTIONARY:
 		settings.records = {}
+	if typeof(settings.cups) != TYPE_DICTIONARY:
+		settings.cups = {}
 
 
 func save_settings() -> void:

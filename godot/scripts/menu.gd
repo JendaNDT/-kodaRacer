@@ -5,6 +5,7 @@ extends Control
 ## kart turns on a pedestal, the driver buttons show each kart in 3D.
 
 signal start_offline(players: int)
+signal start_cup(players: int)
 signal quit_requested
 signal track_changed
 signal quality_changed
@@ -14,6 +15,7 @@ var scroll: ScrollContainer
 var content: VBoxContainer
 var screen := "home"
 var players := 1
+var cup_mode := false         # setup screen: championship instead of one race
 var status_text := ""
 var _hosts_box: VBoxContainer
 var _status_l: Label
@@ -310,6 +312,7 @@ func _home() -> void:
 	_brand()
 	_text("Tři kola, šest jezdců a otazníky plné překvapení. Driftuj v zatáčkách pro turbo a dojeď první.")
 	_wide(UI.button("Závod", _go_setup.bind(1), true))
+	_wide(UI.button("Mistrovství (6 tratí)", _go_setup.bind(1, true)))
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
 	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
@@ -343,7 +346,22 @@ func _home() -> void:
 
 func _setup() -> void:
 	_brand(true)
-	content.add_child(UI.label("Závod" if players == 1 else "2 hráči na jednom počítači", 26, UI.PAPER, UI.bold_font))
+	var heading := ("Mistrovství" if cup_mode else "Závod") if players == 1 else "2 hráči na jednom počítači"
+	content.add_child(UI.label(heading, 26, UI.PAPER, UI.bold_font))
+	# one race or the championship over all tracks
+	var modes := UI.hbox(8)
+	content.add_child(modes)
+	for m in 2:
+		var mb := Button.new()
+		mb.text = ["Jeden závod", "Mistrovství"][m]
+		mb.toggle_mode = true
+		mb.button_pressed = cup_mode == (m == 1)
+		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mb.pressed.connect(func():
+			cup_mode = m == 1
+			Sfx.play("ui", 0.6)
+			show_screen("setup"))
+		modes.add_child(mb)
 	if players == 2 and int(Game.settings.driver2) == int(Game.settings.driver):
 		Game.settings.driver2 = (int(Game.settings.driver) + 1) % Game.CHARS.size()
 	for p in players:
@@ -353,23 +371,57 @@ func _setup() -> void:
 		var taken: Array = [int(Game.settings[other])] if players == 2 else []
 		sec.add_child(KartStage.new(int(Game.settings[key]), 170.0 if players == 2 else 200.0))
 		sec.add_child(_driver_grid(int(Game.settings[key]), taken, _pick_driver.bind(key)))
-	var ts := _section("Trať")
-	ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track))
+	if cup_mode:
+		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
+		cs.add_child(_cup_tracks())
+		var pts := Game.CUP_POINTS.map(func(p): return str(p))
+		var info := UI.label("Body za 1.–6. místo: %s. Kdo jede nejlíp, startuje příště ze zadu." % ", ".join(pts), 16, UI.MUTED)
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.custom_minimum_size = Vector2(300, 0)
+		cs.add_child(info)
+	else:
+		var ts := _section("Trať")
+		ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track))
 	var ds := _section("Obtížnost")
 	ds.add_child(_diff_row(int(Game.settings.diff), true, _pick_diff))
+	if cup_mode:
+		var best := Game.cup_best(int(Game.settings.diff))
+		var cups := ["", "zlatý pohár", "stříbrný pohár", "bronzový pohár"]
+		var txt := "Zatím bez poháru na této obtížnosti." if best == 0 else \
+			"Nejlepší výsledek: %d. místo%s" % [best, (" – " + cups[best]) if best <= 3 else ""]
+		ds.add_child(UI.label(txt, 16, UI.place_color(best) if best > 0 and best <= 3 else UI.MUTED))
 	if players == 2:
 		_text("Hráč 1 (horní obrazovka): WASD, drift mezerník, předmět E.\nHráč 2 (dolní obrazovka): šipky, drift pravý Shift, předmět Enter.\nPřipojené ovladače: první patří hráči 1, druhý hráči 2.", 16)
 	var row := UI.hbox(10)
 	content.add_child(row)
-	var go := UI.button("Závodit!", func(): start_offline.emit(players), true)
+	var go := UI.button("Začít mistrovství!" if cup_mode else "Závodit!",
+		func(): (start_cup if cup_mode else start_offline).emit(players), true)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(go)
 	row.add_child(UI.button("Zpět", show_screen.bind("home")))
 
 
-func _go_setup(n: int) -> void:
+func _go_setup(n: int, cup := false) -> void:
 	players = n
+	cup_mode = cup
 	show_screen("setup")
+
+
+## The tracks of the championship in their order, small maps in a row.
+func _cup_tracks() -> GridContainer:
+	var g := UI.grid(3, 6)
+	for i in Game.TRACKS.size():
+		var v := UI.vbox(2)
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var th := TrackThumb.new(i, false)
+		th.custom_minimum_size = Vector2(0, 54)
+		v.add_child(th)
+		var l := UI.label("%d. %s" % [i + 1, Game.TRACKS[i].name], 14, UI.PAPER)
+		l.clip_text = true
+		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		v.add_child(l)
+		g.add_child(v)
+	return g
 
 
 func _small_button(text: String) -> Button:

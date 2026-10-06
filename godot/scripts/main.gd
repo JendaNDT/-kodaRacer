@@ -23,6 +23,8 @@ var _fade_tw: Tween
 var _fading := false
 var _bench_draws := 0
 var _bench_prims := 0
+# the championship being driven: {players, diff, round, roster, points}; empty = none
+var cup := {}
 
 
 func _ready() -> void:
@@ -35,6 +37,7 @@ func _ready() -> void:
 	menu = Menu.new()
 	ui_root.add_child(menu)
 	menu.start_offline.connect(func(n: int): fade_to(start_offline.bind(n)))
+	menu.start_cup.connect(func(n: int): fade_to(start_cup.bind(n)))
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
 	menu.quality_changed.connect(_start_demo)
@@ -100,6 +103,20 @@ func _ready() -> void:
 	if a.has("screenshot"):
 		_shot_path = String(a.screenshot)
 		_shot_delay = float(a.get("delay", "4"))
+	if a.has("cuptest"):
+		# a whole championship with the autopilot: every round must finish.
+		# --cup-start=5 jumps to a later round (made-up points), --shot-round=N
+		# takes the screenshot on that round's results
+		_test_mode = "cup"
+		start_cup(int(a.get("players", "1")))
+		if a.has("cup-start"):
+			var pts := 30
+			for r in cup.roster:
+				cup.points[int(r.driver)] = pts
+				pts -= 4
+			cup.round = int(a["cup-start"])
+			_start_cup_round()
+		return
 	if a.has("autotest"):
 		_test_mode = "autotest"
 		menu.visible = false
@@ -125,6 +142,7 @@ func _ready() -> void:
 		return
 	if a.has("showcase"):
 		return
+	menu.cup_mode = a.has("cup")   # screenshots of the championship setup
 	show_menu(String(a.get("screen", "home")))
 	if a.has("host"):
 		menu._host()
@@ -238,8 +256,9 @@ func _new_race() -> Race:
 	race = Race.new()
 	ui_root.add_child(race)
 	ui_root.move_child(race, 0)
-	race.restart_requested.connect(func(): fade_to(start_offline.bind(last_players)))
+	race.restart_requested.connect(func(): fade_to(_restart))
 	race.menu_requested.connect(func(): fade_to(_on_race_menu))
+	race.cup_next_requested.connect(func(pts: Dictionary): fade_to(_next_cup_round.bind(pts)))
 	race.lobby_requested.connect(func(): Net.return_to_lobby())
 	return race
 
@@ -254,6 +273,68 @@ func _start_demo() -> void:
 
 
 func start_offline(players: int) -> void:
+	cup = {}
+	var roster := _offline_roster(players)
+	menu.visible = false
+	_new_race().start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff), roster)
+
+
+## A championship: every track once with the same six drivers, points
+## after each race; the grid of the next race is the standings reversed.
+func start_cup(players: int) -> void:
+	var roster := _offline_roster(players)
+	var pts := {}
+	for r in roster:
+		pts[int(r.driver)] = 0
+	cup = {"players": players, "diff": int(Game.settings.diff), "round": 0, "roster": roster, "points": pts}
+	_start_cup_round()
+
+
+func _start_cup_round() -> void:
+	menu.visible = false
+	var r := _new_race()
+	r.cup = cup
+	r.start(Race.Mode.OFFLINE, int(cup.round), int(cup.diff), cup.roster)
+	if _test_mode == "cup":
+		r.fast = int(Game.cmd_args.get("fast", "8"))
+		for k in r.locals:
+			k.autopilot = true
+
+
+## "Restart" from the pause menu or the results: the same race again, in a
+## championship the same round; after its last race a new championship.
+func _restart() -> void:
+	if cup.is_empty():
+		start_offline(last_players)
+	elif race != null and race.results_shown and int(cup.round) >= Game.TRACKS.size() - 1:
+		start_cup(last_players)
+	else:
+		_start_cup_round()
+
+
+func _next_cup_round(race_points: Dictionary) -> void:
+	for d in race_points:
+		cup.points[d] = int(cup.points.get(d, 0)) + int(race_points[d])
+	cup.round = int(cup.round) + 1
+	if int(cup.round) >= Game.TRACKS.size():
+		_on_race_menu()
+		return
+	# fewest points at the front of the grid, the leader at the back
+	var order: Array = cup.roster.duplicate()
+	var pos := {}
+	for i in order.size():
+		pos[int(order[i].driver)] = i
+	order.sort_custom(func(a, b):
+		var pa := int(cup.points[int(a.driver)])
+		var pb := int(cup.points[int(b.driver)])
+		return pa < pb if pa != pb else pos[int(a.driver)] < pos[int(b.driver)])
+	cup.roster = order
+	_start_cup_round()
+
+
+## Six drivers: the local players at the back of the grid, the others
+## (computer drivers) shuffled in front.
+func _offline_roster(players: int) -> Array:
 	last_players = players
 	var humans: Array = []
 	var d1 := int(Game.settings.driver)
@@ -272,9 +353,7 @@ func start_offline(players: int) -> void:
 		if not used.has(i):
 			ai.append({"driver": i, "human": false, "peer": 0, "name": ""})
 	ai.shuffle()
-	var roster := ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
-	menu.visible = false
-	_new_race().start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff), roster)
+	return ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
 
 
 func _on_net_race(track: int, diff: int, roster: Array) -> void:
@@ -316,6 +395,7 @@ func _on_session_ended(reason: String) -> void:
 
 
 func _on_race_menu() -> void:
+	cup = {}
 	if Net.active:
 		Net.leave()
 	show_menu("home")
@@ -400,7 +480,25 @@ func _process(delta: float) -> void:
 			_test_mode = ""
 			get_tree().quit(1)
 		return
-	if _test_mode == "autotest" and race != null:
+	if _test_mode == "cup" and race != null:
+		if race.results_shown and _shot_path != "" and int(Game.cmd_args.get("shot-round", "0")) == int(cup.round) + 1:
+			_shot_delay = minf(_shot_delay, _test_t + 3.0)
+		elif race.results_shown:
+			if _done_at < 0.0:
+				_done_at = _test_t
+			elif _test_t - _done_at > 1.0:
+				_done_at = -1.0
+				var pts: Dictionary = race._cup_race_points()
+				print("CUP round %d %s: %s" % [int(cup.round) + 1, race.track.def.id, str(pts)])
+				if race._cup_last():
+					for row in race._cup_table(pts):
+						print("  %s %d" % [race.display_name(row[0]), int(row[1])])
+					_finish_test(true, "championship finished, %d races" % Game.TRACKS.size())
+				else:
+					_next_cup_round(pts)
+		elif _test_t > float(Game.cmd_args.get("timeout", "900")):
+			_finish_test(false, "timeout in round %d" % (int(cup.round) + 1))
+	elif _test_mode == "autotest" and race != null:
 		if race.results_shown:
 			_finish_test(true, "results shown")
 		elif _test_t > float(Game.cmd_args.get("timeout", "240")):

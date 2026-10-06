@@ -20,6 +20,7 @@ Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). 
 ## Režimy
 
 - **Závod**: ty proti pěti počítačovým soupeřům, 3 kola.
+- **Mistrovství**: všech šest tratí za sebou se stejnými soupeři. Za 1.–6. místo dostaneš 10, 8, 6, 4, 2 a 1 bod. Po každém závodě uvidíš průběžné pořadí, kdo vede, startuje příště ze zadu. Na konci stojí tři nejlepší z celého mistrovství na stupních vítězů a hra si pamatuje tvůj nejlepší pohár pro každou obtížnost. Jde hrát sám i ve dvou na jednom počítači.
 - **2 hráči na jednom počítači**: obrazovka se rozdělí na horní a dolní půlku.
 - **Hra po Wi-Fi (crossplay)**: až 6 hráčů na stejné Wi-Fi, telefony i počítače dohromady. Volná místa doplní počítač.
 

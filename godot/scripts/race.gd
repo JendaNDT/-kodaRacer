@@ -8,6 +8,7 @@ extends Control
 signal restart_requested
 signal menu_requested
 signal lobby_requested
+signal cup_next_requested(points: Dictionary)
 
 enum Mode { DEMO, OFFLINE, HOST, CLIENT }
 
@@ -62,6 +63,8 @@ var touch_ctl: Control
 var pause_panel: Control
 var results_panel: Control
 var results_body: VBoxContainer
+var cup := {}                   # set by Main for a championship round: {round, points, ...}
+var cup_body: VBoxContainer
 
 
 static func get_track(i: int) -> Track:
@@ -70,14 +73,16 @@ static func get_track(i: int) -> Track:
 	return _tracks[i]
 
 
-## Worlds are cached per track and quality level (scenery density depends on it).
+## Worlds are cached per track and quality level (scenery density depends
+## on it), so "race again" starts at once. Building another one drops every
+## cached world that is not on screen: with six tracks they would fill a
+## phone's memory.
 static func get_world(i: int) -> Dictionary:
 	var key := "%d_%d" % [i, Gfx.level()]
 	if not _worlds.has(key):
-		# drop worlds built for another quality level that are not on screen
 		for k in _worlds.keys():
 			var root: Node3D = _worlds[k].root
-			if not String(k).ends_with("_%d" % Gfx.level()) and root.get_parent() == null:
+			if root.get_parent() == null:
 				root.queue_free()
 				_worlds.erase(k)
 		_worlds[key] = WorldBuilder.build(get_track(i))
@@ -167,6 +172,8 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		_reset_obs(k)
 	_make_views()
 	Game.set_local_players(maxi(1, locals.size()))
+	if not cup.is_empty():
+		get_tree().create_timer(0.5).timeout.connect(_cup_banner)
 	Sfx.music(mode != Mode.DEMO, false)
 
 
@@ -1262,7 +1269,7 @@ func display_name(k: Kart) -> String:
 
 ## A panel over the race: centred with a dark shade, or at the bottom with
 ## the view left clear (results under the podium).
-func _panel(title_text: String, bottom := false) -> Array:
+func _panel(title_text: String, bottom := false, width := 0.0) -> Array:
 	var shade := ColorRect.new()
 	shade.color = Color(0.03, 0.04, 0.07, 0.0 if bottom else 0.55)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1284,7 +1291,7 @@ func _panel(title_text: String, bottom := false) -> Array:
 		shade.add_child(center)
 	var pc := PanelContainer.new()
 	pc.add_theme_stylebox_override("panel", UI.panel_style(16))
-	pc.custom_minimum_size = Vector2(560 if bottom else 520, 0)
+	pc.custom_minimum_size = Vector2(width if width > 0.0 else (560.0 if bottom else 520.0), 0)
 	center.add_child(pc)
 	var v := UI.vbox(8 if bottom else 14)
 	pc.add_child(v)
@@ -1383,6 +1390,9 @@ func _show_results() -> void:
 	Game.touch.active = false
 	if touch_ctl != null:
 		touch_ctl.visible = false
+	if not cup.is_empty():
+		_show_cup_results()
+		return
 	var title := "Výsledky"
 	var sub := ""
 	if locals.size() == 1:
@@ -1464,10 +1474,10 @@ func _start_podium() -> void:
 func _refresh_podium() -> void:
 	if podium_t < 0.0:
 		return
-	var rows := standings()
+	var rows := _podium_order()
 	var slots: Array = ts.podium.slots
 	for i in mini(3, rows.size()):
-		var k: Kart = rows[i].k
+		var k: Kart = rows[i]
 		if i < podium.size() and (podium[i] as KartShow).driver == k.driver:
 			continue
 		if i < podium.size():
@@ -1482,6 +1492,135 @@ func _refresh_podium() -> void:
 			podium[i] = show
 		else:
 			podium.append(show)
+
+
+## Who stands on the podium: the race's first three, after the last race
+## of a championship its overall first three.
+func _podium_order() -> Array:
+	var out: Array = []
+	if _cup_last():
+		for row in _cup_table(_cup_race_points()):
+			out.append(row[0])
+	else:
+		for row in standings():
+			out.append(row.k)
+	return out
+
+
+# ---------------------------------------------------------------- championship
+func _cup_last() -> bool:
+	return not cup.is_empty() and int(cup.round) >= Game.TRACKS.size() - 1
+
+
+## "Závod 2/6" slides in at the start of every championship race.
+func _cup_banner() -> void:
+	for p in panes:
+		if p.hud != null:
+			p.hud.show_banner("ZÁVOD %d/%d" % [int(cup.round) + 1, Game.TRACKS.size()], UI.GOLD,
+				"Mistrovství · " + String(track.def.name))
+
+
+## Points for this race from the current standings (unfinished karts by
+## their estimated time).
+func _cup_race_points() -> Dictionary:
+	var pts := {}
+	var rows := standings()
+	for i in rows.size():
+		pts[int(rows[i].k.driver)] = int(Game.CUP_POINTS[i]) if i < Game.CUP_POINTS.size() else 0
+	return pts
+
+
+## [kart, total, gained] sorted by total; a tie goes to the better result
+## in this race.
+func _cup_table(pts: Dictionary) -> Array:
+	var rows := standings()
+	var place := {}
+	for i in rows.size():
+		place[rows[i].k] = i
+	var out: Array = []
+	for k in karts:
+		var g := int(pts.get(k.driver, 0))
+		out.append([k, int(cup.points.get(k.driver, 0)) + g, g])
+	out.sort_custom(func(a, b): return a[1] > b[1] if a[1] != b[1] else place[a[0]] < place[b[0]])
+	return out
+
+
+func _cup_place(k: Kart) -> int:
+	var t := _cup_table(_cup_race_points())
+	for i in t.size():
+		if t[i][0] == k:
+			return i + 1
+	return t.size()
+
+
+func _show_cup_results() -> void:
+	var last := _cup_last()
+	var title := ""
+	if last:
+		if locals.size() == 1:
+			var cp := _cup_place(locals[0])
+			title = "Vítěz mistrovství!" if cp == 1 else "%d. místo v mistrovství" % cp
+		else:
+			title = "Konec mistrovství"
+	else:
+		title = "%d. místo" % _place_of(locals[0]) if locals.size() == 1 else "Výsledky"
+	var nxt := "" if last else String(Game.TRACKS[int(cup.round) + 1].name)
+	var sub := "Mistrovství · závod %d z %d · %s" % [int(cup.round) + 1, Game.TRACKS.size(), track.def.name]
+	if locals.size() == 2:
+		var parts: Array = []
+		for k in locals:
+			parts.append("Hráč %d: %d. místo" % [k.local_slot + 1, _cup_place(k) if last else _place_of(k)])
+		sub += " · " + " · ".join(parts)
+	var p := _panel(title, not podium.is_empty(), 860.0)
+	results_panel = p[0]
+	var inner: VBoxContainer = p[1]
+	var tl: Label = p[2]
+	if locals.size() == 1:
+		tl.add_theme_color_override("font_color", UI.place_color(_cup_place(locals[0]) if last else _place_of(locals[0])))
+	inner.add_child(UI.label(sub, 18, UI.MUTED))
+	var cols := UI.hbox(26)
+	inner.add_child(cols)
+	var left := UI.vbox(2)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_child(UI.label("Tento závod", 15, UI.MUTED, UI.bold_font))
+	results_body = UI.vbox(2)
+	left.add_child(results_body)
+	cols.add_child(left)
+	var right := UI.vbox(2)
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_child(UI.label("Celkové pořadí" if last else "Mistrovství po %d. závodě" % (int(cup.round) + 1), 15,
+		UI.GOLD if last else UI.MUTED, UI.bold_font))
+	cup_body = UI.vbox(2)
+	right.add_child(cup_body)
+	cols.add_child(right)
+	_fill_results()
+	var row := UI.hbox(10)
+	inner.add_child(row)
+	var first: Button
+	if last:
+		first = UI.button("Nové mistrovství", func():
+			_save_cup()
+			restart_requested.emit(), true)
+		row.add_child(first)
+		row.add_child(UI.button("Hlavní menu", func():
+			_save_cup()
+			menu_requested.emit()))
+	else:
+		first = UI.button("Další závod: " + nxt, func(): cup_next_requested.emit(_cup_race_points()), true)
+		row.add_child(first)
+		row.add_child(UI.button("Ukončit mistrovství", func(): menu_requested.emit()))
+	for c in row.get_children():
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	first.grab_focus.call_deferred()
+
+
+## The best championship place of the local players goes into the records.
+func _save_cup() -> void:
+	var best := 99
+	for k in locals:
+		best = mini(best, _cup_place(k))
+	if best < 99:
+		Game.save_cup(int(cup.diff), best)
 
 
 func _podium_camera(p: Dictionary) -> void:
@@ -1519,8 +1658,43 @@ func _fill_results() -> void:
 		nl.clip_text = true
 		h.add_child(nl)
 		h.add_child(UI.label("jede…" if r.est else Game.fmt_time(r.t), 19, UI.MUTED if r.est else col))
+		if not cup.is_empty():
+			var gain := UI.label("+%d" % (int(Game.CUP_POINTS[i]) if i < Game.CUP_POINTS.size() else 0), 19, UI.GO, UI.bold_font)
+			gain.custom_minimum_size = Vector2(40, 0)
+			gain.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			h.add_child(gain)
 		results_body.add_child(h)
 		var line := ColorRect.new()
 		line.color = UI.LINE
 		line.custom_minimum_size = Vector2(0, 1)
 		results_body.add_child(line)
+	if cup_body != null and not cup.is_empty():
+		for c in cup_body.get_children():
+			c.queue_free()
+		var table := _cup_table(_cup_race_points())
+		for i in table.size():
+			var k: Kart = table[i][0]
+			var me := k.local_slot >= 0
+			var col := UI.GOLD if me else UI.PAPER
+			var h := UI.hbox(10)
+			var pl := UI.label("%d." % (i + 1), 19, UI.place_color(i + 1) if i < 3 else UI.MUTED, UI.bold_font)
+			pl.custom_minimum_size = Vector2(34, 0)
+			h.add_child(pl)
+			var dot := ColorRect.new()
+			dot.color = k.ch.color
+			dot.custom_minimum_size = Vector2(12, 12)
+			dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(dot)
+			var nl := UI.label(display_name(k), 19, col, UI.bold_font if me else null)
+			nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			nl.clip_text = true
+			h.add_child(nl)
+			var tot := UI.label("%d b." % int(table[i][1]), 19, col, UI.bold_font)
+			tot.custom_minimum_size = Vector2(60, 0)
+			tot.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			h.add_child(tot)
+			cup_body.add_child(h)
+			var line := ColorRect.new()
+			line.color = UI.LINE
+			line.custom_minimum_size = Vector2(0, 1)
+			cup_body.add_child(line)

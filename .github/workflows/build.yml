@@ -66,6 +66,12 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" race-test.log; then exit 1; fi
           grep -q "TEST PASS" race-test.log
 
+      - name: Test – championship over all tracks
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --cuptest --fast=8 --timeout=900 2>&1 | tee cup-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" cup-test.log; then exit 1; fi
+          grep -q "TEST PASS: championship finished" cup-test.log
+
       - name: Test – Wi-Fi game (host and client on one machine)
         run: |
           ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=260 > host.log 2>&1 &

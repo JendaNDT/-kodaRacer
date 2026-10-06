@@ -6,7 +6,7 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.8.0 na telefonu a PC: projet tři nové tratě (Podzimní les, Noční město, Sopečný ostrov) a podívat se na FPS na Střední, hlavně v lese (nejvíc stromů) a v nočním městě. Dál můžeme vybírat z backlogu, třeba mistrovství ze všech tratí s body nebo hru přes internet.**
+**Vyzkoušet verzi 1.9.0: projet celé mistrovství (6 závodů) a podívat se na FPS na Střední, hlavně v lese. Dál můžeme vybírat z backlogu, třeba mistrovství i přes Wi-Fi, časovku proti vlastnímu rekordu nebo hru přes internet.**
 Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední zůstávají.
 
 ## ✅ Hotovo
@@ -18,7 +18,7 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka
 - Dotykové ovládání pro Android (volant, drift, předmět, brzda, automatický plyn), tlačítko Zpět = pauza
 - Ikona aplikace a úvodní obrazovka
-- GitHub Actions: import projektu, test celého závodu, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
+- GitHub Actions: import projektu, test celého závodu, test celého mistrovství, test Wi-Fi hry (hostitel + klient), export **APK** a **EXE**, zveřejnění v Releases jako „testovací build“
 - **Fáze 0 grafiky:** kvalita grafiky Nízká/Střední/Vysoká v menu i v pauze, počítadlo FPS, kontrola verze u Wi-Fi hry, měření výkonu `--bench`, hudba se generuje na pozadí
 - **Fáze 1 grafiky:** stíny od slunce (Střední a Vysoká), záře plamenů, jiskřiček, hvězdy, rakety, krabic a slunce, filmové barvy AgX se sytostí, SSAO na Vysoké, vlastní nálada tratí (údolí odpoledne, kaňon při západu slunce, laguna zatažená se sněžením), sluneční disk a plující mraky
 - **Fáze 2 grafiky:** stopy smyku, rychlostní čáry, 3. úroveň driftu (fialové jiskry, nejdelší turbo), plamen turba se zábleskem, výbuch rakety s tlakovou vlnou, hvězdičky nad hlavou po zásahu, lesk a střepy krabic, konfety v cíli, vlající vlajky, prach / písek / sníh od kol podle trati
@@ -28,6 +28,7 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - **Fáze 5 grafiky (verze 1.6.0):** výběr jezdce s motokárou na otáčejícím se podstavci (menu, 2 hráči i Wi-Fi lobby) a 3D obrázky na tlačítkách jezdců, stupně vítězů u startovní rovinky (první tři motokáry, mávající jezdci, konfety, houpající se kamera, tabulka dole) i na rozdělené obrazovce a po Wi-Fi, losování předmětu jako hrací automat, „+1“ / „−1“ při změně pořadí, pás „KOLO 2/3“ / „POSLEDNÍ KOLO“ s časem kola, zatmívačka mezi menu a závodem
 - **Fáze 6 grafiky (verze 1.7.0):** kopce a sjezdy na všech tratích (údolí ±8 m, kaňon ±11 m, laguna až 7 m), klopené zatáčky, kopec se žlutočernou rampou a skokem přes 20 m, trik ve vzduchu tlačítkem driftu (otočka, nápis „Trik!“, turbo po dopadu), do kopce pomaleji, z kopce rychleji, dopad s pérováním a zvukem, motokára se naklání podle svahu, terén kolem trati navazuje na silnici, všechno okolí stojí na zemi, předměty jezdí po kopcích, kamera sleduje výšku a nezajede do kopce, výška a skoky jdou i přes Wi-Fi
 - **Tři nové tratě (verze 1.8.0), celkem jich je šest:** Podzimní les (barevné stromy a jedle, padající listí, dřevěná rozhledna s vlajkou, rybník), Noční město (domy s rozsvícenými okny, lampy se světlem na silnici, hvězdy a měsíc, televizní věž, neonová brána přes trať, panorama města na obzoru), Sopečný ostrov (palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero). Každá má vlastní kopce a skok.
+- **Mistrovství (verze 1.9.0):** všech šest tratí za sebou se stejnými soupeři, body 10/8/6/4/2/1, po každém závodě dvě tabulky (tento závod s přičtenými body a celkové pořadí), vedoucí startuje příště ze zadu, na startu každého závodu pás „ZÁVOD 2/6“, na konci tři nejlepší z celého mistrovství na stupních vítězů a uložený nejlepší pohár pro každou obtížnost. Funguje pro jednoho i dva hráče. Restart v pauze zopakuje jen aktuální závod. Hra teď drží v paměti jen trať, která je na obrazovce (šest tratí by telefon zahltilo).
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -39,7 +40,7 @@ Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední 
 - Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
 - Predikce vlastní motokáry u síťového klienta (teď se ovládání projeví se zpožděním odezvy Wi-Fi)
 - Vlastní podpisový klíč a verze pro Google Play
-- Mistrovství (Grand Prix ze všech tratí s body), časovka proti vlastnímu rekordu
+- Mistrovství i ve hře po Wi-Fi (teď jen sám nebo dva na jednom počítači), časovka proti vlastnímu rekordu
 
 ## 🐛 Známé bugy
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
