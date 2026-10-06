@@ -40,6 +40,7 @@ const BANK_K := 7.0                 # bank per unit of curvature
 const BANK_MAX := 0.21              # about 12 degrees
 const RAMP_LEN := 8.0
 const RAMP_H := 1.3
+const CREST_MAX := 0.008            # sharpest crest (1/m): even at 50 m/s under 0.7 g
 
 # --- land around the track: a height grid every FCELL metres. Near the road
 # it continues the road surface sideways, further out it blends into gentle
@@ -290,6 +291,7 @@ func _profile() -> void:
 			y[i] = (o[(i - 1 + n) % n] + 2.0 * o[i] + o[(i + 1) % n]) * 0.25
 	for i in n:
 		y[i] *= 1.0 - _flat(i)
+	_round_crests()
 	for i in n:
 		slope[i] = (y[(i + 1) % n] - y[(i - 1 + n) % n]) / (2.0 * step)
 	# banked corners: the outside of a bend is higher
@@ -309,6 +311,25 @@ func _profile() -> void:
 		var o := bank.duplicate()
 		for i in n:
 			bank[i] = (o[(i - 1 + n) % n] + 2.0 * o[i] + o[(i + 1) % n]) * 0.25
+
+
+## Sharp tops of hills are smoothed a little more, only around them, until
+## no crest is sharper than CREST_MAX. The start straight stays level.
+func _round_crests() -> void:
+	for _p in 60:
+		var o := y.duplicate()
+		var sharp := false
+		for i in n:
+			var c := -(o[(i + 1) % n] - 2.0 * o[i] + o[(i - 1 + n) % n]) / (step * step)
+			if c <= CREST_MAX:
+				continue
+			sharp = true
+			for k in range(-3, 4):
+				var j := (i + k + n) % n
+				if _flat(j) < 1.0:
+					y[j] = (o[(j - 1 + n) % n] + 2.0 * o[j] + o[(j + 1) % n]) * 0.25
+		if not sharp:
+			return
 
 
 ## Where the ramp goes: the straightest stretch away from the start and the

@@ -27,6 +27,8 @@ var _bench_prims := 0
 var cup := {}
 var trial := false      # the last race started was a time trial
 var _trial_runs := 0
+var _jump_track := 0
+var _jump_bad := 0
 
 
 func _ready() -> void:
@@ -46,6 +48,10 @@ func _ready() -> void:
 	menu.quality_changed.connect(_start_demo)
 	_make_fps_label()
 	_make_fader()
+	var ring_layer := CanvasLayer.new()
+	ring_layer.layer = 55
+	add_child(ring_layer)
+	ring_layer.add_child(FocusRing.new())
 	Net.race_started.connect(_on_net_race)
 	Net.back_to_lobby.connect(_on_back_to_lobby)
 	Net.session_ended.connect(_on_session_ended)
@@ -61,6 +67,8 @@ func _ready() -> void:
 		Game.settings.quality = clampi(int(a.quality), 0, 2)   # not saved
 	if a.has("fps"):
 		Game.settings.show_fps = true
+	if a.has("cursor"):
+		FocusRing.shown = true   # screenshots: the gamepad cursor, moved --cursor=N steps on
 	if a.has("timescale"):
 		Engine.time_scale = float(a.timescale)   # slow motion for effect screenshots
 	if a.has("trackinfo"):
@@ -131,6 +139,14 @@ func _ready() -> void:
 				pts -= 4
 			cup.round = int(a["cup-start"])
 			_start_cup_round()
+		return
+	if a.has("jumptest"):
+		# one lap on every track, all six karts on autopilot with endless turbo
+		# or star: they may only take off from the ramp
+		_test_mode = "jump"
+		Kart.log_takeoffs = true
+		_jump_track = 0
+		_start_jump_race()
 		return
 	if a.has("autotest"):
 		_test_mode = "autotest"
@@ -473,6 +489,12 @@ func _process(delta: float) -> void:
 		race.toggle_pause()   # screenshots of the pause menu
 	if Game.cmd_args.has("fx") and race != null and _test_t < float(Game.cmd_args.get("fx-at", "6")) and _test_t + delta >= float(Game.cmd_args.get("fx-at", "6")):
 		_show_fx(String(Game.cmd_args.fx))
+	if Game.cmd_args.has("cursor") and _test_t < 1.5 and _test_t + delta >= 1.5:
+		for i in int(Game.cmd_args.cursor):
+			var ev := InputEventAction.new()
+			ev.action = "ui_focus_next"
+			ev.pressed = true
+			Input.parse_input_event(ev)
 	_test_t += delta
 	if Game.cmd_args.has("showcase") and race != null:
 		Showcase.hold(race)
@@ -562,6 +584,8 @@ func _process(delta: float) -> void:
 					_next_cup_round(pts)
 		elif _test_t > float(Game.cmd_args.get("timeout", "900")):
 			_finish_test(false, "timeout in round %d" % (int(cup.round) + 1))
+	elif _test_mode == "jump" and race != null:
+		_jump_tick()
 	elif _test_mode == "autotest" and race != null:
 		if race.results_shown:
 			_finish_test(true, "results shown")
@@ -640,6 +664,53 @@ func _show_fx(what: String) -> void:
 				for sx in [-1.0, 1.0]:
 					race.skids.add(k.position + ahead * (4.0 + i * 0.75) + side * (w0 + sx),
 						k.position + ahead * (4.75 + i * 0.75) + side * (w1 + sx), 1.0)
+
+
+func _start_jump_race() -> void:
+	Game.settings.track = _jump_track
+	start_offline(1)
+	race.fast = int(Game.cmd_args.get("fast", "8"))
+	for k in race.karts:
+		k.autopilot = true
+	Kart.takeoffs.clear()
+	_test_t = 0.0
+
+
+## --jumptest: turbo for half the karts, the star for the others, until each
+## has driven a whole lap; then every take-off must have been on the ramp.
+func _jump_tick() -> void:
+	var done := true
+	for i in race.karts.size():
+		var k: Kart = race.karts[i]
+		if i % 2 == 0:
+			k.boost = maxf(k.boost, 0.5)
+			k.boost_mul = 1.25
+		else:
+			k.star = maxf(k.star, 0.5)
+		if k.lap < 2:
+			done = false
+	if not done and _test_t < float(Game.cmd_args.get("timeout", "120")):
+		return
+	var tr := race.track
+	var ramp_s := float(tr.ramp.get("i", 0)) * tr.step
+	var on_ramp := 0
+	for t in Kart.takeoffs:
+		var d := fposmod(float(t[1]) - ramp_s + tr.length * 0.5, tr.length) - tr.length * 0.5
+		if not tr.ramp.is_empty() and d >= -2.0 and d <= float(tr.ramp.len) + 3.0:
+			on_ramp += 1
+		else:
+			_jump_bad += 1
+			print("JUMP OFF RAMP %s at %.0f m (%.0f m from the ramp) speed %.1f" % [t[0], t[1], d, t[2]])
+	print("JUMPS %s: %d from the ramp, %d elsewhere%s" % [tr.def.id, on_ramp, Kart.takeoffs.size() - on_ramp,
+		"" if done else " (timeout before every kart finished a lap)"])
+	if not done:
+		_jump_bad += 1
+	_jump_track += 1
+	if _jump_track < Game.TRACKS.size():
+		_start_jump_race()
+	else:
+		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
+			else "%d problems" % _jump_bad)
 
 
 func _finish_test(ok: bool, why: String) -> void:
