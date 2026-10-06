@@ -1,4 +1,4 @@
-# Plán vylepšení hry – 8 bodů
+# Plán vylepšení hry – 7 bodů
 
 Navazuje na verzi 1.10.0 (všech šest fází grafiky, šest tratí, mistrovství i po Wi-Fi, časovka).
 Body jsou rozdělené do **šesti etap**. Každá etapa je samostatná verze: projde testy, má screenshoty
@@ -6,7 +6,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 
 | Etapa | Body | Verze | Velikost | Co přinese |
 | --- | --- | --- | --- | --- |
-| A | 1, 3, 4 | 1.11.0 | malá | čisté menu, rychlejší les, žádné náhodné poskoky |
+| A | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
 | B | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
 | C | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
@@ -17,7 +17,7 @@ Odemykání (F) je schválně na konci: může pak odemykat i věci z etap C–E
 
 ---
 
-## Etapa A – Doladění (body 1, 3, 4)
+## Etapa A – Doladění (body 1 a 4)
 
 ### 1. Zvýraznění tlačítek v menu
 **Problém:** vybrané tlačítko i tlačítko pod kurzorem ovladače mají stejný zlatý rámeček, takže u přepínačů (režim,
@@ -33,21 +33,6 @@ jezdec, trať, obtížnost) svítí dvě věci najednou.
 **Hotovo, když:** na screenshotech menu, nastavení závodu a lobby svítí v každé skupině jen jedna volba a kurzor je
 poznat zvlášť.
 
-### 3. Výkon v Podzimním lese
-**Problém:** les je v cloudu nejpomalejší trať (Střední 5,6 FPS, údolí 6,3). Kreslí se všech ~1 500 pneumatik, všechny
-stromy i ty daleko a stíny i od vzdálených stromů.
-
-**Řešení (platí pro všechny tratě, nejvíc pomůže lesu):**
-- **Pneumatiky a stromy po kouscích:** místo jedné velké skupiny se rozdělí na úseky podél trati. Úseky za kamerou
-  a daleko se nekreslí.
-- **Vzdálenost kreslení:** stromy dál než ~220 m (Střední) se nekreslí, mlha je stejně schová.
-- **Stíny jen zblízka:** stromy vrhají stín jen do vzdálenosti stínů. Vzdálené stromy dostanou levnou kopii bez stínu.
-- **Trojúhelníky:** jednodušší koruny pro vzdálené stromy (stejný trik jako u motokár).
-
-**Kde:** `world_builder.gd` (stromy, pneumatiky), `gfx.gd` (vzdálenosti podle kvality).
-**Hotovo, když:** les na Střední je v cloudu aspoň tak rychlý jako údolí (≥ 6,3 FPS) a na screenshotech vypadá stejně
-hustě. Měří se `--bench --track=3` před a po.
-
 ### 4. Náhodné poskoky na hrbolech
 **Problém:** s turbem nebo hvězdou motokára na ostrém hřebeni občas krátce vzlétne i mimo rampu.
 
@@ -60,8 +45,7 @@ hustě. Měří se `--bench --track=3` před a po.
 **Hotovo, když:** test se záznamem vzletů (jako při fázi 6) ukáže vzlety jen na rampách na všech šesti tratích,
 i s turbem a hvězdou.
 
-**Testy etapy A:** všechny dosavadní (závody na 6 tratích, 2 hráči, mistrovství, časovka, Wi-Fi), měření výkonu,
-screenshoty menu.
+**Testy etapy A:** všechny dosavadní (závody na 6 tratích, 2 hráči, mistrovství, časovka, Wi-Fi), screenshoty menu.
 
 ---
 
@@ -209,13 +193,13 @@ a zrcadlové trati, všechny testy projdou.
 ## Společné pro každou etapu
 - Před nahráním projdou všechny testy (6 tratí, 2 hráči, mistrovství, časovka, Wi-Fi, hledání her, kontrola verze)
   a nové testy etapy.
-- Měření výkonu na všech kvalitách. Žádná etapa nesmí hru zpomalit o víc než pár procent (kromě etapy A, která ji má
-  zrychlit).
+- Měření výkonu na všech kvalitách. Žádná etapa nesmí hru zpomalit o víc než pár procent.
 - Screenshoty novinek, aktualizace `README.md` a `PROJECT_STATUS.md`, nová verze, push na větev, zelená kontrola na
   GitHubu, pak `main`.
 - Po každé etapě je dobré hru zkusit na telefonu. Hlavně po etapě B (Wi-Fi mezi dvěma zařízeními), protože tu se
   v cloudu dá jen simulovat.
 
 ## Odhad
+Výkon Podzimního lesa (původně bod 3) z plánu vypadl, les zůstává tak, jak je.
 Etapy A, C, D a F jsou střední až menší práce. B a hlavně E jsou nejnáročnější. Doporučené tempo je jedna etapa
 najednou, v pořadí A → B → C → D → E → F. Pořadí se dá kdykoli změnit, třeba nové předměty (C) dřív než Wi-Fi (B).

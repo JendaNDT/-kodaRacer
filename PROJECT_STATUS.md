@@ -6,7 +6,7 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Etapa A z `PLAN_VYLEPSENI.md`: čisté zvýraznění v menu, rychlejší Podzimní les, žádné náhodné poskoky na hrbolech (verze 1.11.0).** Celý plán má šest etap (A–F) pro osm vylepšení: menu, ovládání po Wi-Fi bez zpoždění, výkon lesa, poskoky, nové předměty, odemykání, chytřejší soupeři a zkratky.
+**Etapa A z `PLAN_VYLEPSENI.md`: čisté zvýraznění v menu a žádné náhodné poskoky na hrbolech (verze 1.11.0).** Celý plán má šest etap (A–F) pro sedm vylepšení: menu, ovládání po Wi-Fi bez zpoždění, poskoky, nové předměty, odemykání, chytřejší soupeři a zkratky. Zrychlení Podzimního lesa Jenda z plánu vyřadil.
 Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za sebou a mistrovství po Wi-Fi mezi dvěma zařízeními.
 
 ## ✅ Hotovo
