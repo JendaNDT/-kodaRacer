@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 06. 10. 2026 (verze 1.11.0)*
+*Naposled aktualizováno: 06. 10. 2026 (verze 1.12.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.11.0 na telefonu a na PC s ovladačem (menu a skoky), pak etapa B z `PLAN_VYLEPSENI.md`: ovládání po Wi-Fi bez zpoždění (verze 1.12.0).** Etapa A je hotová. Zbývají etapy B–F: ovládání po Wi-Fi bez zpoždění, nové předměty, chytřejší soupeři, zkratky a odemykání.
+**Vyzkoušet verzi 1.12.0 po Wi-Fi mezi dvěma zařízeními (hlavně jak rychle reaguje zatáčení u hráče, který se připojil), pak etapa C z `PLAN_VYLEPSENI.md`: čtyři nové předměty (verze 1.13.0).** Etapy A a B jsou hotové. Zbývají C–F: nové předměty, chytřejší soupeři, zkratky a odemykání.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -30,6 +30,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Mistrovství (verze 1.9.0):** všech šest tratí za sebou se stejnými soupeři, body 10/8/6/4/2/1, po každém závodě dvě tabulky (tento závod s přičtenými body a celkové pořadí), vedoucí startuje příště ze zadu, na startu každého závodu pás „ZÁVOD 2/6“, na konci tři nejlepší z celého mistrovství na stupních vítězů a uložený nejlepší pohár pro každou obtížnost. Funguje pro jednoho i dva hráče. Restart v pauze zopakuje jen aktuální závod. Hra teď drží v paměti jen trať, která je na obrazovce (šest tratí by telefon zahltilo).
 - **Mistrovství po Wi-Fi a časovka (verze 1.10.0):** v lobby přepínač Jeden závod / Mistrovství. Body počítá hostitel a posílá je všem, další závod spouští hostitel, až dojedou všichni hráči. Kdo mezi závody odejde, za toho jede dál počítač. Časovka: sám na trati, bez otazníků, se třemi turby, proti průhlednému duchovi nejlepší jízdy (uložený zvlášť pro každou trať a obtížnost). Po každém kole rozdíl proti duchovi, ve výsledcích časy kol s rozdíly, nejlepší čas časovky u tratí v menu.
 - **Etapa A (verze 1.11.0):** v menu svítí zlatě jen vybraná volba, kurzor ovladače a klávesnice je zvlášť (bílý pulzující rámeček, myší a dotykem se neukazuje), začíná na vybrané volbě a po výběru zůstává na místě. Motokára vzlétne jen z rampy, na hřebenech se jen zhoupne v pérování, nejostřejší hřebeny jsou zaoblené. Nový test vzletů `--jumptest` (i v GitHub Actions).
+- **Etapa B (verze 1.12.0):** po Wi-Fi reaguje vlastní motokára hned: zařízení ji počítá samo a hostitel ji jen dorovnává. Test se zpožděním 120 ms každým směrem (`--fake-lag`) ukazuje odchylku od hostitele v průměru 26 cm, v 95 % případů do 62 cm. GitHub Actions teď síťový závod testují s tímto zpožděním.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -39,7 +40,6 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 ### Backlog (později)
 - Hra přes internet (ne jen stejná Wi-Fi): server nebo relay
 - Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
-- Predikce vlastní motokáry u síťového klienta (teď se ovládání projeví se zpožděním odezvy Wi-Fi)
 - Vlastní podpisový klíč a verze pro Google Play
 
 ## 🐛 Známé bugy
@@ -75,6 +75,8 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Vzlet jen ze schodu, ne z hřebene:** motokára vyletí, jen když silnice pod ní najednou spadne o 25 cm a víc (konec rampy, její boky). Dřív stačilo, aby silnice klesala rychleji než gravitace, a to se s turbem stávalo i na hřebenech a hlavně těsně po dopadu z rampy. Kopec teď pocítíš jen v pérování.
 - **Kurzor menu se kreslí zvlášť (`focus_ring.gd`), ne stylem tlačítka:** styl tlačítka by se musel měnit každý snímek kvůli blikání, a to by Godot přepočítával celé menu. Samostatná vrstva navíc pozná, jestli hraješ myší, dotykem, nebo ovladačem.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
+- **Předpověď jen pro vlastní motokáru (od verze 1.12.0):** klient si svou motokáru počítá sám stejným kódem jako hostitel, hostitel ale zůstává pánem všeho. Ve zprávě posílá číslo posledního použitého ovládání, klient od toho místa přepočítá novější ovládání a rozdíl plynule dorovná. Ostatní motokáry se dál jen plynule posouvají podle hostitele. Předměty, zásahy, srážky s ostatními, kola a cíl předpověď neřeší, rozhodne je hostitel a projeví se se zpožděním Wi-Fi.
+- **Síťový test jezdí jako skutečný hráč:** od verze 1.12.0 v testu řídí motokáru klienta počítačový řidič na straně klienta a jeho ovládání jde přes síť. Dřív ji řídil hostitel sám, takže se předávání ovládání netestovalo.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
 - **Testovací podpisový klíč v repozitáři** (`build/debug.keystore`), aby šlo APK aktualizovat bez odinstalace. Pro Google Play bude potřeba vlastní tajný klíč.
 - **Vlastní postavy a předměty**, žádné postavy ani názvy z Nintenda.

@@ -44,6 +44,14 @@ var fast := 1
 var paused := false
 var tick := 0
 var item_seq := 0
+# Wi-Fi client: its own kart is simulated here at once from its controls
+# (prediction); each snapshot from the host replaces that kart's state, the
+# controls the host has not used yet are simulated again on top of it
+var in_frame := 0               # number of the last control message sent
+var hist := {}                  # frame -> [controls, x, y, z] predicted after it
+var replaying := false
+var pred_err := PackedFloat32Array()   # prediction vs host at the same frame (m)
+var pred_corr := PackedFloat32Array()  # how far each snapshot moved the kart (m)
 var render_scale := 1.0
 var demo_focus: Kart
 var demo_switch := 0.0
@@ -418,12 +426,15 @@ func _human_input(k: Kart) -> Dictionary:
 	if ni == null:
 		return {"steer": 0.0, "gas": false, "brake": false, "drift": false, "item": false}
 	var btn: int = ni.buttons
+	k.ack = int(ni.get("frame", 0))
 	var item: bool = int(ni.seq) != int(k.ai.last_seq)
 	k.ai.last_seq = int(ni.seq)
 	return {"steer": float(ni.steer), "gas": btn & 1 != 0, "brake": btn & 2 != 0, "drift": btn & 4 != 0, "item": item}
 
 
 func on_lap(k: Kart, dir: int) -> void:
+	if mode == Mode.CLIENT:
+		return   # laps and the finish come from the host
 	k.lap += dir
 	if dir < 0 or k.lap <= k.max_lap:
 		return
@@ -444,6 +455,8 @@ func on_lap(k: Kart, dir: int) -> void:
 
 
 func on_bump(k: Kart, loss: float) -> void:
+	if replaying:
+		return
 	sound_at("bump", k.x, k.z, k.local_slot >= 0, clampf(loss * 1.5, 0.3, 1.0))
 	if k.local_slot >= 0:
 		shake(k.local_slot, 0.25 * loss)
@@ -906,9 +919,13 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 			boxes[i].scale = 0.05
 		boxes[i].active = act
 	var o := 14
+	var me: Kart = locals[0] if not locals.is_empty() else null
+	var was := [me.x, me.y, me.z, me.heading] if me != null and me.predicted else []
 	for k in karts:
 		k.unpack(d, o)
 		o += Kart.SNAP_FIELDS
+	if not was.is_empty():
+		_reconcile(me, was)
 	while bananas.size() < nb:
 		var node := _banana_node()
 		fx.add_child(node)
@@ -965,11 +982,72 @@ func _compute_order_client() -> void:
 func _client_tick() -> void:
 	if locals.is_empty():
 		return
-	var inp := Game.read_input(0)
+	var me: Kart = locals[0]
+	# the tests drive the client's kart with the computer driver, through the network as a player would
+	var inp: Dictionary = _ai_input(me, Game.SIM_DT * 2.0) if me.autopilot and not me.finished else Game.read_input(0)
 	if inp.item:
 		item_seq += 1
+	in_frame += 1
 	var btn := (1 if inp.gas else 0) | (2 if inp.brake else 0) | (4 if inp.drift else 0)
-	Net.send_input(float(inp.steer), btn, item_seq)
+	Net.send_input(float(inp.steer), btn, item_seq, in_frame)
+	var on := state == "race" and not me.finished and me.human
+	if on and not me.predicted:
+		# from the smoothed picture of the countdown to our own simulation
+		me.corr = Vector3(me.vis_x - me.x, me.vis_y - me.y, me.vis_z - me.z)
+		me.corr_h = Game.wrap_angle(me.vis_h - me.heading)
+		hist.clear()
+	elif me.predicted and not on:
+		# back to following the host: carry on from what is on the screen
+		me.vis_x = me.x + me.corr.x; me.vis_y = me.y + me.corr.y; me.vis_z = me.z + me.corr.z
+		me.vis_h = me.heading + me.corr_h
+	me.predicted = on
+	if not on:
+		return
+	var c := {"steer": float(inp.steer), "gas": bool(inp.gas), "brake": bool(inp.brake), "drift": bool(inp.drift), "item": false}
+	me.begin_tick()
+	for i in 2:
+		me.update(Game.SIM_DT, c)
+	hist[in_frame] = [c, me.x, me.y, me.z]
+	hist.erase(in_frame - 300)
+
+
+## A snapshot replaced the predicted kart's state with the host's, which has
+## our controls up to frame `ack`: simulate the newer ones again, then ease
+## the picture from where the kart was shown to the new place.
+func _reconcile(me: Kart, was: Array) -> void:
+	var a := me.ack
+	if hist.has(a):
+		var h: Array = hist[a]
+		pred_err.append(Vector3(me.x - float(h[1]), me.y - float(h[2]), me.z - float(h[3])).length())
+	replaying = true
+	for f in range(a + 1, in_frame + 1):
+		if not hist.has(f):
+			continue
+		var h: Array = hist[f]
+		for i in 2:
+			me.update(Game.SIM_DT, h[0])
+		h[1] = me.x; h[2] = me.y; h[3] = me.z
+	replaying = false
+	var dx := me.x - float(was[0])
+	var dy := me.y - float(was[1])
+	var dz := me.z - float(was[2])
+	pred_corr.append(Vector3(dx, dy, dz).length())
+	me.correct(dx, dy, dz, Game.wrap_angle(me.heading - float(was[3])))
+
+
+## Test summary: how far the prediction was from the host (m).
+func prediction_report() -> Dictionary:
+	var out := {}
+	for pair in [["err", pred_err], ["corr", pred_corr]]:
+		var arr: PackedFloat32Array = pair[1].duplicate()
+		arr.sort()
+		var n := arr.size()
+		var sum := 0.0
+		for v in arr:
+			sum += v
+		out[pair[0]] = {"n": n, "avg": sum / maxf(n, 1), "p95": arr[int(n * 0.95)] if n > 0 else 0.0,
+			"max": arr[n - 1] if n > 0 else 0.0}
+	return out
 
 
 func on_peer_left(peer_id: int) -> void:
@@ -988,7 +1066,7 @@ func _process(delta: float) -> void:
 	var alpha := Engine.get_physics_interpolation_fraction()
 	var smooth := mode == Mode.CLIENT
 	for k in karts:
-		k.render(dt, alpha, smooth, time if not smooth else Time.get_ticks_msec() / 1000.0)
+		k.render(dt, alpha, smooth and not k.predicted, time if not smooth else Time.get_ticks_msec() / 1000.0)
 	skids.tick(dt)
 	_update_box_visuals(dt)
 	Atmosphere.animate(atm)

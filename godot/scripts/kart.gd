@@ -5,7 +5,9 @@ extends Node3D
 ## it follows hills and banked corners, flies off the ramp (never off a
 ## crest) and can do a trick in the air for a turbo on landing.
 
-const SNAP_FIELDS := 26
+const SNAP_FIELDS := 34
+const CORR_RATE := 9.0       # how fast a predicted kart eases into the host's position (1/s)
+const CORR_SNAP := 4.0       # a bigger difference (m) is not eased, the kart moves there at once
 const TRICK_TIME := 0.42    # one barrel roll
 const SLOPE_PULL := 16.0    # how much hills slow you down (or help) per unit of slope
 const STICK := 2.0          # how fast the kart drops off a step, in units of gravity
@@ -23,6 +25,10 @@ var local_slot := -1        # 0/1 = player on this device, -1 = AI or remote
 var peer := 0               # network peer that drives it (0 = AI)
 var player_name := ""
 var autopilot := false
+var ack := 0                # host: number of the last control message of its player used
+var predicted := false      # Wi-Fi client: this kart is simulated here from its own controls
+var corr := Vector3.ZERO    # predicted kart: what is left to ease away after a correction
+var corr_h := 0.0
 var ai := {}
 
 # --- simulation state
@@ -633,7 +639,7 @@ func update(dt: float, inp: Dictionary) -> void:
 	constrain()
 	_vertical(dt)
 
-	if roulette > 0.0:
+	if roulette > 0.0 and race.mode != Race.Mode.CLIENT:   # the host draws the items
 		roulette -= dt
 		if roulette <= 0.0:
 			race.give_item(self)
@@ -722,6 +728,11 @@ func pack(out: PackedFloat32Array, o: int) -> void:
 	out[o + 21] = last_lap; out[o + 22] = wrong_t
 	out[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0)
 	out[o + 24] = y; out[o + 25] = trick
+	# the rest lets a Wi-Fi client carry on simulating its own kart from here
+	out[o + 26] = vy; out[o + 27] = drift_charge; out[o + 28] = boost_mul; out[o + 29] = air_t
+	out[o + 30] = invuln; out[o + 31] = bump_cd
+	out[o + 32] = (1 if drift_prev else 0) + (2 if tricked else 0)
+	out[o + 33] = ack
 
 
 func unpack(d: PackedFloat32Array, o: int) -> void:
@@ -744,6 +755,13 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	braking = fl & 2 != 0
 	air = fl & 4 != 0
 	y = d[o + 24]; trick = d[o + 25]
+	vy = d[o + 26]; drift_charge = d[o + 27]; boost_mul = d[o + 28]; air_t = d[o + 29]
+	invuln = d[o + 30]; bump_cd = d[o + 31]
+	var f2 := int(d[o + 32])
+	drift_prev = f2 & 1 != 0
+	tricked = f2 & 2 != 0
+	ack = int(d[o + 33])
+	last_s = s
 	var pj := race.track.project(x, z, idx)
 	idx = pj[0]
 	lat = pj[1]
@@ -756,6 +774,17 @@ func begin_tick() -> void:
 	prev_z = z
 	prev_h = heading
 	prev_y = y
+
+
+## Predicted kart: the host's state replaced ours. Shown where it was a
+## moment ago, the difference eased away (or jumped at once when big).
+func correct(dx: float, dy: float, dz: float, dh: float) -> void:
+	prev_x += dx; prev_y += dy; prev_z += dz; prev_h += dh
+	corr -= Vector3(dx, dy, dz)
+	corr_h -= dh
+	if corr.length() > CORR_SNAP:
+		corr = Vector3.ZERO
+		corr_h = 0.0
 
 
 ## alpha: physics interpolation fraction; smooth > 0 eases toward network state instead.
@@ -778,6 +807,12 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 		pz = lerpf(prev_z, z, alpha)
 		py = lerpf(prev_y, y, alpha)
 		ph = prev_h + Game.wrap_angle(heading - prev_h) * alpha
+		if predicted:
+			# a correction from the host is eased in over a fraction of a second
+			var k := exp(-CORR_RATE * delta)
+			corr *= k
+			corr_h *= k
+			px += corr.x; py += corr.y; pz += corr.z; ph += corr_h
 	var mx := maxf(1.0, max_speed())
 	var sr := clampf(absf(speed) / mx, 0.0, 1.5)
 	yaw = ph - slip

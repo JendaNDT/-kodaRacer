@@ -432,8 +432,10 @@ func _on_net_race(track: int, diff: int, roster: Array, cupd: Dictionary) -> voi
 	nr.start(Race.Mode.HOST if Net.is_host else Race.Mode.CLIENT, track, diff, r)
 	fade_in()   # no fade out first: the host's countdown must not wait
 	if _test_mode != "":
+		# each side's own kart drives itself; the client's goes through the
+		# network as a player's would (controls to the host, prediction)
 		for k in race.karts:
-			if k.human:
+			if k.human and k.local_slot >= 0:
 				k.autopilot = true
 		race.fast = 1
 
@@ -613,10 +615,15 @@ func _process(delta: float) -> void:
 	elif _test_mode == "net_client":
 		if race != null and race.mode == Race.Mode.CLIENT and race.results_shown and (race.cup.is_empty() or race._cup_last()):
 			var me: Kart = race.locals[0]
+			# the prediction of the own kart: p95 within about a metre of the host
+			var rep := race.prediction_report()
+			print("PREDICTION lag=%d ms: error avg %.2f p95 %.2f max %.2f m (%d), correction avg %.2f p95 %.2f max %.2f m" % [
+				int(Net.fake_lag), rep.err.avg, rep.err.p95, rep.err.max, rep.err.n, rep.corr.avg, rep.corr.p95, rep.corr.max])
+			var pred_ok: bool = rep.err.n > 100 and rep.err.p95 <= float(Game.cmd_args.get("max-err", "1.0"))
 			if race.cup.is_empty():
-				_finish_test(me.finished, "client finished place %d" % race._place_of(me))
+				_finish_test(me.finished and pred_ok, "client finished place %d, prediction %s" % [race._place_of(me), "ok" if pred_ok else "too far"])
 			else:
-				_finish_test(me.finished, "client championship place %d" % race._cup_place(me))
+				_finish_test(me.finished and pred_ok, "client championship place %d, prediction %s" % [race._cup_place(me), "ok" if pred_ok else "too far"])
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
 
