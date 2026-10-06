@@ -10,7 +10,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 | B ✅ | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
 | C ✅ | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D ✅ | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
-| E | 8 | 1.15.0 | velká | zkratka na každé trati |
+| E ✅ | 8 | 1.15.0 | velká | zkratka na každé trati |
 | F | 6 | 1.16.0 | střední | poháry, odemykání barev, tajný jezdec, zrcadlové tratě |
 
 Odemykání (F) je schválně na konci: může pak odemykat i věci z etap C–E.
@@ -163,7 +163,19 @@ dnes (měřeno časy kol v testech) a mistrovství i Wi-Fi projdou.
 
 ---
 
-## Etapa E – Zkratky (bod 8)
+## Etapa E – Zkratky (bod 8)  ✅ hotovo (verze 1.15.0)
+
+> **Výsledek:** každá trať má jednu zkratku. Místo pro ni najde nástroj `--trackinfo --findcuts`: úsek silnice
+> 180 m až skoro půl kola, ne přes start a cíl, rampu ani otazníky, cesta 45–72 % délky úseku, aspoň 3 m od cizích
+> bariér, bez zatáček ostřejších než poloměr 15 m. Výsledek je uložený v `Game.TRACKS` (`cut`), hra ho jen postaví.
+> Zpomalení na každé zkratce změřil `--cutcal` tak, aby bez turba prohrála asi o 6 %. Motokára na zkratce má
+> vlastní stav (`on_cut`), její místo v kole se přepočítá na přeskočený úsek, takže pořadí i kola sedí. U silnice
+> leží zkratka na povrchu silnice, takže najetí ani sjetí nevyhodí motokáru do vzduchu. Počítač zkratku vezme jen
+> s turbem nebo hvězdou (Lehká 25 %, Střední 60 %, Těžká 90 %) a turbo pustí, až je na ní srovnaný.
+> **Test `--cuttest` (úsek se zkratkou, Turbo Tonda):** bez turba 3–6 % pomaleji než silnice, s turbem
+> o 4–19 % rychleji, s hvězdou o 19–47 % rychleji. Závod se zkratkou každé kolo počítá kola správně na všech tratích,
+> po Wi-Fi klient zkratku vidí.
+
 
 **Nápad:** na každé trati jedna zkratka. Mezera v bariéře, za ní prašná cesta přes trávu, písek nebo sníh a dál zpátky
 na trať. Je kratší, ale terén zpomaluje. **S turbem, hvězdou nebo po driftu se vyplatí**, bez nich spíš ne. Riziko proti

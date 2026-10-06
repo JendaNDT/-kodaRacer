@@ -78,6 +78,13 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" trial-test.log; then exit 1; fi
           grep -q "TEST PASS: time trial with ghost" trial-test.log
 
+      - name: Test – shortcuts (worth it only with a turbo or the star, laps counted right)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --cuttest --fast=8 2>&1 | tee cut-test.log
+          grep "^CUT" cut-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" cut-test.log; then exit 1; fi
+          grep -q "TEST PASS: shortcuts work on every track" cut-test.log
+
       - name: Test – computer drivers on every track (Hard, no item boxes)
         run: |
           ~/godot-bin/godot --headless --path godot -- --aitest --diff=2 --no-items --fast=8 2>&1 | tee ai-test.log
@@ -97,14 +104,14 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" jump-test.log; then exit 1; fi
           grep -q "TEST PASS: take-offs only from the ramp" jump-test.log
 
-      - name: Test – Wi-Fi game with 120 ms delay each way, every item handed out in turn
+      - name: Test – Wi-Fi game with 120 ms delay each way, every item in turn, everybody on the shortcut
         run: |
-          ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --timeout=260 > host.log 2>&1 &
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --cut-always --timeout=260 > host.log 2>&1 &
           sleep 3
-          ~/godot-bin/godot --headless --path godot -- --nettest=client --fake-lag=120 --fake-jitter=20 --timeout=260 > client.log 2>&1 || true
+          ~/godot-bin/godot --headless --path godot -- --nettest=client --cut-always --fake-lag=120 --fake-jitter=20 --timeout=260 > client.log 2>&1 || true
           wait || true
           grep -h "TEST\|PREDICTION\|CLIENT SAW" host.log client.log
-          for w in "modrá raketa" olej štít blesk; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
+          for w in "modrá raketa" olej štít blesk zkratka; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
           if grep -hE "SCRIPT ERROR|Parse Error" host.log client.log; then exit 1; fi
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log

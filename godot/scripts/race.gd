@@ -416,7 +416,7 @@ func _step(dt: float) -> void:
 	_compute_ranks()
 	for k in karts:
 		if k.human and not k.finished and state == "race":
-			var fwd := cos(Game.wrap_angle(k.heading - track.heading(k.idx)))
+			var fwd := cos(Game.wrap_angle(k.heading - k.way_heading()))
 			if fwd < -0.2 and absf(k.speed) > 3.0:
 				k.wrong_t += dt
 			else:
@@ -554,6 +554,9 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 		var jr := (k.idx + 8) % n
 		out.steer = clampf(Game.wrap_angle(atan2(tr.x[jr] - k.x, tr.z[jr] - k.z) - k.heading) * 2.0, -1.0, 1.0)
 		return out
+	if not tr.cut.is_empty() and _ai_cut(k, out):
+		_ai_items_and_tricks(k, out, 0.0, false, dt)
+		return out
 	var line := tr.racing_line()
 	var lc := tr.line_curv()
 	var look := 4 + int(absf(k.speed) * 0.22)
@@ -628,7 +631,22 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 		ai.stuck = 0.0
 		ai.rev = 0.9
 		ai.revs = int(ai.get("revs", 0)) + 1
-	# ---- items: each at the right moment (the impatient ones at once)
+	_ai_items_and_tricks(k, out, dif, straight, dt)
+	if k.human and Game.cmd_args.has("fxtest"):
+		# screenshots only: the autopilot drifts through corners
+		var want_drift: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
+		if want_drift and not k.drift_active:
+			out.steer = signf(float(out.steer)) * maxf(absf(float(out.steer)), 0.3)
+		out.drift = want_drift or (k.drift_active and absf(float(out.steer)) > 0.04)
+	return out
+
+
+## Items at the right moment (the impatient ones at once) and tricks in the air.
+func _ai_items_and_tricks(k: Kart, out: Dictionary, dif: float, straight: bool, dt: float) -> void:
+	var ai: Dictionary = k.ai
+	var per: Dictionary = Game.PERSONA[k.driver]
+	if int(ai.get("cut_go", 0)) == 1 and k.item == Game.Item.TURBO and not k.on_cut:
+		return                           # the turbo is kept for the shortcut
 	if k.item != 0 and k.roulette <= 0.0:
 		ai.item_t -= dt
 		if ai.item_t <= 0.0:
@@ -641,13 +659,70 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 	# most flights get a trick (turbo on landing); better drivers try more often
 	if k.air and k.air_t > 0.12 and not k.tricked:
 		out.drift = fposmod(float(k.driver * 7 + k.lap * 3), 10.0) < 10.0 * float(ai.skill) - 2.0
-	if k.human and Game.cmd_args.has("fxtest"):
-		# screenshots only: the autopilot drifts through corners
-		var want_drift: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
-		if want_drift and not k.drift_active:
-			out.steer = signf(float(out.steer)) * maxf(absf(float(out.steer)), 0.3)
-		out.drift = want_drift or (k.drift_active and absf(float(out.steer)) > 0.04)
-	return out
+
+
+## The shortcut: whether to take it is decided once on the way to it (only
+## with a turbo or the star, more often on the harder levels); then the
+## path is followed and a held turbo is fired on it. False when the usual
+## driving applies.
+func _ai_cut(k: Kart, out: Dictionary) -> bool:
+	var ai: Dictionary = k.ai
+	var tr := track
+	var c: Dictionary = tr.cut
+	var m: int = c.m
+	var ci := k.cut_i
+	if not k.on_cut:
+		var to_a := (int(c.a) - k.idx + tr.n) % tr.n
+		var past := (k.idx - int(c.a) + tr.n) % tr.n     # the path leaves the road gradually after sample a
+		if past > 40 and to_a > 45:
+			ai.cut_go = 0
+			return false
+		if int(ai.get("cut_go", 0)) == 0:
+			var equipped := k.boost > 0.6 or k.star > 1.5 or k.item == Game.Item.TURBO
+			var p: float = [0.25, 0.6, 0.9][diff_idx] if equipped else 0.0
+			var force := int(ai.get("cut_force", 0))
+			if Game.cmd_args.has("cut-always"):
+				force = 1
+			ai.cut_go = force if force != 0 else (1 if randf() < p else -1)
+		if int(ai.cut_go) != 1:
+			return false
+		if past > 40 and to_a > 6:
+			# over to the side the path leaves from
+			var jr := (k.idx + 4 + int(absf(k.speed) * 0.22)) % tr.n
+			var lane := float(c.sa) * Game.HW * 0.6
+			_ai_aim(k, out, Vector2(tr.x[jr] + tr.nx[jr] * lane, tr.z[jr] + tr.nz[jr] * lane), INF)
+			return true
+		ci = int(tr.cut_project(k.x, k.z, -1)[0])
+	# along the path: aim ahead on it, slow enough for its bends
+	var j := mini(ci + 3 + int(absf(k.speed) * 0.15), m - 1)
+	var target := Vector2(float(c.x[j]), float(c.z[j]))
+	if j == m - 1:
+		var b := (int(c.b) + 6) % tr.n
+		target = Vector2(tr.x[b], tr.z[b])
+	var turn := float(Game.BASE.turn) * float(k.ch.handling) * float(c.grip) * 0.7
+	var slow_for := INF
+	var bendy := 0.0
+	for s in range(2, 40, 3):
+		var i0 := mini(ci + s, m - 3)
+		var cv := absf(Game.wrap_angle(atan2(float(c.tx[i0 + 2]), float(c.tz[i0 + 2])) - atan2(float(c.tx[i0]), float(c.tz[i0])))) / 4.0
+		bendy = maxf(bendy, cv)
+		if cv > 1e-4 and s < 24:
+			var vc := turn / cv
+			slow_for = minf(slow_for, sqrt(vc * vc + 2.0 * 25.0 * maxf(0.0, s * 2.0 - 4.0)))
+	# a held turbo: once well on the path, lined up, with a straight-ish stretch ahead
+	if k.on_cut and k.item == Game.Item.TURBO and k.roulette <= 0.0 and k.boost <= 0.2 and ci > 12 and ci < m - 30 \
+			and bendy < 0.012 and absf(Game.wrap_angle(k.heading - tr.cut_heading(ci))) < 0.15 and absf(k.lat) < 2.0:
+		out.item = true
+	_ai_aim(k, out, target, slow_for)
+	return true
+
+
+## Steers at a point and keeps under a speed.
+func _ai_aim(k: Kart, out: Dictionary, target: Vector2, top: float) -> void:
+	var dif := Game.wrap_angle(atan2(target.x - k.x, target.y - k.z) - k.heading)
+	out.steer = clampf(-dif * 2.4, -1.0, 1.0)
+	out.gas = (absf(dif) < 1.3 or k.speed < 12.0) and k.speed < top
+	out.brake = k.speed > top + 4.0
 
 
 ## Moves the wanted lane aside for a banana or puddle on it ahead.
@@ -933,7 +1008,7 @@ func _drop_banana(k: Kart) -> void:
 	var pz := k.z - cos(k.heading) * 2.9
 	var pj := track.project(px, pz, k.idx)
 	var la: float = pj[1]
-	if absf(la) > Game.BAR - 1.5:
+	if absf(la) > Game.BAR - 1.5 and track.cut_at(px, pz).is_empty():
 		var d := absf(la) - (Game.BAR - 1.5)
 		var sg := signf(la)
 		px -= track.nx[pj[0]] * sg * d
@@ -1008,7 +1083,7 @@ func _drop_oil(k: Kart) -> void:
 	var pz := k.z - cos(k.heading) * 4.2
 	var pj := track.project(px, pz, k.idx)
 	var la: float = pj[1]
-	if absf(la) > Game.HW:
+	if absf(la) > Game.HW and track.cut_at(px, pz).is_empty():
 		var d := absf(la) - Game.HW
 		var sg := signf(la)
 		px -= track.nx[pj[0]] * sg * d
@@ -1030,6 +1105,12 @@ func _place_oil(o: Dictionary, pj: Array) -> void:
 	o.y = track.road_y(pj[0], pj[1], pj[2], false)
 	var up := track.normal(pj[0], pj[1], pj[2], false)
 	var fwd := Vector3(track.tx[pj[0]], 0.0, track.tz[pj[0]])
+	var pc := track.cut_at(o.x, o.z)
+	if not pc.is_empty():
+		# on the shortcut
+		o.y = track.cut_y(pc[0], pc[2])
+		up = track.cut_normal(pc[0])
+		fwd = Vector3(float(track.cut.tx[pc[0]]), 0.0, float(track.cut.tz[pc[0]]))
 	fwd = (fwd - up * fwd.dot(up)).normalized()
 	var node: Node3D = o.node
 	node.transform = Transform3D(Basis(up.cross(fwd), up, fwd), Vector3(o.x, float(o.y) + 0.04, o.z))
@@ -1171,8 +1252,9 @@ func _update_items(dt: float) -> void:
 		m.z += cos(m.h) * m.v * dt
 		var pj := tr.project(m.x, m.z, m.idx)
 		m.idx = pj[0]
-		m.y = tr.road_y(pj[0], pj[1], pj[2]) + 0.9   # skims along the road, over hills and the ramp
-		var boom: bool = m.life <= 0.0 or absf(float(pj[1])) > Game.BAR - 0.6
+		var over_cut := tr.cut_at(m.x, m.z, 1.0)
+		m.y = (tr.cut_y(over_cut[0], over_cut[2]) if not over_cut.is_empty() else tr.road_y(pj[0], pj[1], pj[2])) + 0.9   # skims along the road, over hills and the ramp
+		var boom: bool = m.life <= 0.0 or (absf(float(pj[1])) > Game.BAR - 0.6 and over_cut.is_empty())
 		if not boom:
 			for k in karts:
 				if k == m.owner and m.age < 0.6:
@@ -1385,6 +1467,8 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 			net_seen["štít"] = true
 		if k.shrink > 0.0:
 			net_seen["blesk"] = true
+		if k.on_cut:
+			net_seen["zkratka"] = true
 	while blues.size() < nbl:
 		var node := _missile_node(true)
 		fx.add_child(node)

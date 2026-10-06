@@ -51,6 +51,17 @@ Když jezdce řídí počítač, má každý svou povahu: **Turbo Tonda** jede v
 | Noční město | noc, měsíc a hvězdy | domy s rozsvícenými okny, lampy se světlem na silnici, televizní věž, neonová brána přes trať |
 | Sopečný ostrov | tropické poledne | palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero |
 
+**Zkratky:** každá trať má jednu zkratku přes vnitřek tratě. Před odbočkou stojí žlutá cedule ZKRATKA se šipkou a na minimapě je zkratka žlutě čárkovaná. Je zhruba o polovinu kratší než silnice, kterou přeskakuje, ale povrch zpomaluje: bez turba je o pár procent pomalejší. **S turbem nebo hvězdou se vyplatí.** Turbo je nejlepší pustit, až je motokára na zkratce srovnaná.
+
+| Trať | Zkratka |
+| --- | --- |
+| Zelené údolí | hliněná cesta |
+| Pouštní kaňon | písečná cesta |
+| Ledová laguna | led přes okraj zamrzlého jezera, klouže |
+| Podzimní les | lesní cesta |
+| Noční město | štěrková cesta mezi domy, nejpomalejší povrch |
+| Sopečný ostrov | písečná pláž obloukem kolem lávového jezera, ušetří nejméně |
+
 Každá trať má kopce, sjezdy, klopené zatáčky a jeden skok: žlutočernou rampu za vrcholem kopce. Vzlétnout jde jen z rampy. Na hřebeni kopce zůstane motokára i s turbem nebo hvězdou na zemi a jen se zhoupne v pérování.
 
 Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách. Po závodě stojí první tři motokáry na stupních vítězů u startovní rovinky, létají konfety a pod nimi je výsledková tabulka.

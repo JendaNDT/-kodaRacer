@@ -68,6 +68,10 @@ var finished := false
 var finish_time := 0.0
 var offroad := false
 var lat := 0.0
+var on_cut := false         # on the track's shortcut (lat/along then belong to the path, idx to the lap)
+var cut_i := 0              # nearest sample of the shortcut
+var cut_along := 0.0
+var cut_uses := 0           # times it took the shortcut this race (tests)
 var idx := 0
 var s := 0.0
 var last_s := 0.0
@@ -506,7 +510,7 @@ func reset(px: float, pz: float, h: float) -> void:
 	spin = 0.0; spin_total = 1.0; hop = 0.0; hop_max = 0.3; hop_h = 0.45; invuln = 0.0
 	item = 0; item_n = 0; roulette = 0.0; roll_tick = 0.0
 	lap = 0; max_lap = 0; lap_start = 0.0; lap_times = []; last_lap = 0.0
-	finished = false; finish_time = 0.0; offroad = false; lat = 0.0; rank = 6
+	finished = false; finish_time = 0.0; offroad = false; lat = 0.0; rank = 6; on_cut = false; cut_i = 0
 	drift_prev = false; drift_active = false; drift_dir = 0.0; drift_charge = 0.0; drift_level = 0; braking = false
 	bump_cd = 0.0; wrong_t = 0.0; autopilot = false
 	var pj := race.track.project(x, z, -1)
@@ -583,6 +587,8 @@ func update(dt: float, inp: Dictionary) -> void:
 	var base: Dictionary = Game.BASE
 	var mx := max_speed()
 	var handling: float = ch.handling
+	if on_cut:
+		handling *= float(race.track.cut.grip)   # ice and sand: the kart slides
 	boost = maxf(0.0, boost - dt)
 	star = maxf(0.0, star - dt)
 	shield = maxf(0.0, shield - dt)
@@ -599,10 +605,10 @@ func update(dt: float, inp: Dictionary) -> void:
 		steer = 0.0
 	else:
 		steer = Game.approach(steer, float(inp.steer), 7.0 * dt)
-		var slow := offroad and boost <= 0.0 and star <= 0.0 and not air
+		var slow := (offroad or on_cut) and boost <= 0.0 and star <= 0.0 and not air
 		var cap := mx
 		if slow:
-			cap *= 0.5
+			cap *= 0.5 if offroad else float(race.track.cut.slow)   # grass, or the shortcut's dirt / sand / ice
 		if star > 0.0:
 			cap *= 1.18
 		if air:
@@ -662,7 +668,7 @@ func update(dt: float, inp: Dictionary) -> void:
 			race.use_item(self)
 	slip = Game.approach(slip, drift_dir * 0.4 if drift_active else 0.0, 3.0 * dt)
 
-	if not air:
+	if not air and not on_cut:
 		# uphill slows you down, downhill helps (only up to the usual top speed)
 		var tr := race.track
 		var fx := sin(heading)
@@ -683,7 +689,7 @@ func update(dt: float, inp: Dictionary) -> void:
 ## Height: stick to the road while it does not drop away faster than
 ## gravity would pull the kart down, otherwise fly until it lands again.
 func _vertical(dt: float) -> void:
-	var gy := race.track.road_y(idx, lat, along)
+	var gy := ground_y()
 	if air:
 		air_t += dt
 		vy -= Game.GRAVITY * dt
@@ -718,6 +724,8 @@ func _vertical(dt: float) -> void:
 
 func constrain() -> void:
 	var tr := race.track
+	if not tr.cut.is_empty() and _constrain_cut(tr):
+		return
 	var pj := tr.project(x, z, idx)
 	idx = pj[0]
 	along = pj[2]
@@ -741,7 +749,11 @@ func constrain() -> void:
 		la = sg * lim
 	lat = la
 	offroad = absf(la) > Game.HW + Game.KERB * 0.6
-	var ns := tr.arc_pos(idx, pj[2])
+	_count_lap(tr, tr.arc_pos(idx, pj[2]))
+
+
+## Laps: the place on the lap wrapping past the line counts one (or back one).
+func _count_lap(tr: Track, ns: float) -> void:
 	var ds := ns - last_s
 	if ds < -tr.length * 0.5:
 		race.on_lap(self, 1)
@@ -749,6 +761,73 @@ func constrain() -> void:
 		race.on_lap(self, -1)
 	last_s = ns
 	s = ns
+
+
+## On the shortcut (or getting onto it): stays between its edges, leaves it
+## onto the road at either end. False when the kart is on the road.
+func _constrain_cut(tr: Track) -> bool:
+	var m: int = tr.cut.m
+	if not on_cut:
+		# the path can only be entered where it leaves or joins the road
+		if tr._arc(idx, int(tr.cut.a)) > 70.0 and tr._arc(idx, int(tr.cut.b)) > 70.0:
+			return false
+		var pc0 := tr.cut_at(x, z)
+		if pc0.is_empty():
+			return false
+		var pj0 := tr.project(x, z, idx)
+		if absf(float(pj0[1])) <= Game.HW + Game.KERB:
+			return false                 # still on the road
+		on_cut = true
+		cut_i = pc0[0]
+		cut_uses += 1
+	var pc := tr.cut_project(x, z, cut_i)
+	cut_i = pc[0]
+	cut_along = pc[2]
+	var la: float = pc[1]
+	var near_end := cut_i < 30 or cut_i > m - 31
+	if near_end:
+		var pj := tr.project(x, z, int(tr.cut.a) + 12 if cut_i < m / 2 else int(tr.cut.b) - 12)
+		var past := (cut_i == 0 and cut_along < 0.0) or (cut_i == m - 1 and cut_along > 0.0)
+		if absf(float(pj[1])) < Game.HW or past:
+			on_cut = false               # back on the road
+			idx = pj[0]
+			return false
+	var lim := Track.CUT_W - Game.KART_R
+	if absf(la) > lim:
+		var sg := signf(la)
+		var push := absf(la) - lim
+		var cnx: float = -float(tr.cut.tz[cut_i])
+		var cnz: float = float(tr.cut.tx[cut_i])
+		x -= cnx * sg * push
+		z -= cnz * sg * push
+		var into := (sin(heading) * cnx + cos(heading) * cnz) * sg
+		if into * speed > 0.0:
+			var tang := tr.cut_heading(cut_i)
+			var facing := tang if cos(Game.wrap_angle(heading - tang)) >= 0.0 else tang + PI
+			heading += Game.wrap_angle(facing - heading) * 0.5
+			var loss := absf(into)
+			speed *= 1.0 - 0.55 * loss
+			if bump_cd <= 0.0 and loss > 0.2 and absf(speed) > 4.0:
+				bump_cd = 0.4
+				race.on_bump(self, loss)
+		la = sg * lim
+	lat = la
+	offroad = false
+	var arc := tr.cut_arc(cut_i, cut_along)
+	idx = int(arc / tr.step) % tr.n
+	along = arc - idx * tr.step
+	_count_lap(tr, arc)
+	return true
+
+
+## Heading of the way the kart is on (the road or the shortcut).
+func way_heading() -> float:
+	return race.track.cut_heading(cut_i) if on_cut else race.track.heading(idx)
+
+
+## Height of the ground under the kart (road or shortcut).
+func ground_y() -> float:
+	return race.track.cut_ground(x, z, cut_i, cut_along) if on_cut else race.track.road_y(idx, lat, along)
 
 
 # ================================================================== network
@@ -761,7 +840,7 @@ func pack(out: PackedFloat32Array, o: int) -> void:
 	out[o + 14] = lap; out[o + 15] = s; out[o + 16] = rank; out[o + 17] = 1.0 if finished else 0.0
 	out[o + 18] = finish_time; out[o + 19] = item * 10 + item_n; out[o + 20] = roulette
 	out[o + 21] = last_lap; out[o + 22] = wrong_t
-	out[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0)
+	out[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0) + (8 if on_cut else 0)
 	out[o + 24] = y; out[o + 25] = trick
 	# the rest lets a Wi-Fi client carry on simulating its own kart from here
 	out[o + 26] = vy; out[o + 27] = drift_charge; out[o + 28] = boost_mul; out[o + 29] = air_t
@@ -790,6 +869,8 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	offroad = fl & 1 != 0
 	braking = fl & 2 != 0
 	air = fl & 4 != 0
+	var was_cut := on_cut
+	on_cut = fl & 8 != 0
 	y = d[o + 24]; trick = d[o + 25]
 	vy = d[o + 26]; drift_charge = d[o + 27]; boost_mul = d[o + 28]; air_t = d[o + 29]
 	invuln = d[o + 30]; bump_cd = d[o + 31]
@@ -799,7 +880,18 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	ack = int(d[o + 33])
 	shield = d[o + 34]; shrink = d[o + 35]
 	last_s = s
-	var pj := race.track.project(x, z, idx)
+	var tr := race.track
+	if on_cut and not tr.cut.is_empty():
+		var pc := tr.cut_project(x, z, cut_i if was_cut else -1)
+		cut_i = pc[0]
+		lat = pc[1]
+		cut_along = pc[2]
+		var arc := tr.cut_arc(cut_i, cut_along)
+		idx = int(arc / tr.step) % tr.n
+		along = arc - idx * tr.step
+		return
+	on_cut = false
+	var pj := tr.project(x, z, idx)
 	idx = pj[0]
 	lat = pj[1]
 	along = pj[2]
@@ -900,7 +992,7 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 	var moving := absf(speed) > 8.0
 	var on_road_slide := not offroad and not air and absf(speed) > 6.0 and (drift_active or spin > 0.0)
 	for i in 2:
-		wheel_dust[i].emitting = offroad and moving and hop_y() < 0.2 and not air
+		wheel_dust[i].emitting = (offroad or on_cut) and moving and hop_y() < 0.2 and not air
 		wheel_smoke[i].emitting = on_road_slide
 	_render_skids()
 	stars.visible = spin > 0.0
@@ -920,7 +1012,7 @@ func _orient(pos: Vector3, delta: float) -> void:
 		var fwd := Vector3(f.x, clampf(vy / maxf(absf(speed), 12.0), -0.6, 0.6) * 0.7, f.z).normalized()
 		want = fwd.cross(right).normalized()
 	else:
-		want = tr.normal(idx, lat, along)
+		want = tr.cut_normal(cut_i) if on_cut else tr.normal(idx, lat, along)
 	vis_up = vis_up.lerp(want, 1.0 - exp(-(5.0 if air else 14.0) * delta)).normalized()
 	var zf := (f - vis_up * f.dot(vis_up)).normalized()
 	var b := Basis(vis_up.cross(zf), vis_up, zf)
@@ -928,7 +1020,7 @@ func _orient(pos: Vector3, delta: float) -> void:
 	vis_scale = Game.approach(vis_scale, Game.SHRINK_SCALE if shrink > 0.0 else 1.0, 2.5 * delta)
 	transform = Transform3D(b.scaled_local(Vector3.ONE * vis_scale), pos)
 	# the soft shadow spot stays on the ground while flying
-	blob.position.y = 0.1 - (maxf(0.0, pos.y - tr.road_y(idx, lat, along)) if air else 0.0)
+	blob.position.y = 0.1 - (maxf(0.0, pos.y - ground_y()) if air else 0.0)
 
 
 func _render_flames(delta: float) -> void:
@@ -967,7 +1059,7 @@ func _render_flames(delta: float) -> void:
 
 ## Tyre marks from both rear wheels while drifting, braking hard or spinning.
 func _render_skids() -> void:
-	var skid := (drift_active or braking or spin > 0.0) and not offroad and not air and absf(speed) > 6.0 and hop_y() < 0.15
+	var skid := (drift_active or braking or spin > 0.0) and not offroad and not on_cut and not air and absf(speed) > 6.0 and hop_y() < 0.15
 	var strength := 0.75 if braking and not drift_active else 1.0
 	var rw: Dictionary = model.rear
 	for i in 2:
