@@ -78,6 +78,13 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" trial-test.log; then exit 1; fi
           grep -q "TEST PASS: time trial with ghost" trial-test.log
 
+      - name: Test – computer drivers on every track (Hard, no item boxes)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --aitest --diff=2 --no-items --fast=8 2>&1 | tee ai-test.log
+          grep "^AI" ai-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" ai-test.log; then exit 1; fi
+          grep -q "TEST PASS: the computer drivers finish" ai-test.log
+
       - name: Test – new items (blue missile, oil, lightning, shield)
         run: |
           ~/godot-bin/godot --headless --path godot -- --itemtest --fast=8 2>&1 | tee item-test.log

@@ -29,6 +29,9 @@ var trial := false      # the last race started was a time trial
 var _trial_runs := 0
 var _jump_track := 0
 var _items_phase := 0
+var _ai_track := 0
+var _ai_sum := {}
+var _ai_drifts := 0
 var _items_bad := 0
 var _jump_bad := 0
 
@@ -98,6 +101,45 @@ func _ready() -> void:
 					var dd := absi(q - j)
 					if mini(dd, tr.n - dd) * tr.step > 120.0:
 						gap = minf(gap, Vector2(tr.x[j] - tr.x[q], tr.z[j] - tr.z[q]).length())
+			# the racing line: how long it takes to make, its sharpest bend, how wide it swings
+			var t0 := Time.get_ticks_usec()
+			tr.line_now()
+			var lc := tr.line_curv()
+			var line_ms := (Time.get_ticks_usec() - t0) / 1000.0
+			var lbend := 0.0
+			var swing := 0.0
+			for q in tr.n:
+				lbend = maxf(lbend, absf(lc[q]))
+				swing = maxf(swing, absf(tr.racing_line()[q]))
+			# bends long and sharp enough for a drift turbo: turning >= 90° at a radius under 44 m
+			var long_bends := 0
+			var q0 := 0
+			while q0 < tr.n:
+				var ang := 0.0
+				var q := q0
+				var sgn := signf(lc[q0])
+				while q < q0 + tr.n and signf(lc[q % tr.n]) == sgn and absf(lc[q % tr.n]) > 1.0 / 44.0:
+					ang += absf(lc[q % tr.n]) * tr.step
+					q += 1
+				if ang >= PI * 0.5:
+					long_bends += 1
+				q0 = maxi(q, q0 + 1)
+			# whole bends of the centre line (one direction, tighter than r=150 m) by how far they turn
+			var turns: Array = []
+			q0 = 0
+			while q0 < tr.n:
+				var ang2 := 0.0
+				var q2 := q0
+				var sg2 := signf(tr.curv[q0])
+				while q2 < q0 + tr.n and signf(tr.curv[q2 % tr.n]) == sg2 and absf(tr.curv[q2 % tr.n]) > 1.0 / 150.0:
+					ang2 += absf(tr.curv[q2 % tr.n]) * tr.step
+					q2 += 1
+				if ang2 > 0.5:
+					turns.append("%d°/%dm" % [int(rad_to_deg(ang2)), int((q2 - q0) * tr.step)])
+				q0 = maxi(q2, q0 + 1)
+			print("BENDS %s: %d long bends for a drift turbo; bends: %s" % [tr.def.id, long_bends, ", ".join(turns)])
+			print("LINE %s: sharpest bend r=%.0f m (centre line r=%.0f m), swings %.1f m from the centre, made in %.0f ms" % [
+				tr.def.id, 1.0 / maxf(lbend, 1e-6), 1.0 / maxf(bend, 1e-6), swing, line_ms])
 			# a crest throws a kart at speed v into the air when v*v*crest > gravity
 			print("TRACK %s len=%d y=%.1f..%.1f slope=%.3f bank=%.3f lift_at=%.0f m/s gap=%.0f m bend_r=%.0f m ramp at %.0f m lake=%s" % [
 				tr.def.id, tr.length, lo, hi, sl, bk, sqrt(Game.GRAVITY / maxf(crest, 1e-6)), gap, 1.0 / maxf(bend, 1e-6),
@@ -141,6 +183,15 @@ func _ready() -> void:
 				pts -= 4
 			cup.round = int(a["cup-start"])
 			_start_cup_round()
+		return
+	if a.has("aitest"):
+		# the computer drivers alone on every track (the player's kart too):
+		# lap times, turbos from drifts, how often they got stuck
+		_test_mode = "ai"
+		menu.visible = false
+		Game.settings.diff = clampi(int(a.get("diff", "2")), 0, 2)   # not saved
+		_ai_track = int(a.get("track", "0"))
+		_start_ai_race()
 		return
 	if a.has("itemtest"):
 		# every new item in a set-up situation, then a whole race where the
@@ -598,6 +649,8 @@ func _process(delta: float) -> void:
 					_next_cup_round(pts)
 		elif _test_t > float(Game.cmd_args.get("timeout", "900")):
 			_finish_test(false, "timeout in round %d" % (int(cup.round) + 1))
+	elif _test_mode == "ai" and race != null:
+		_ai_tick()
 	elif _test_mode == "items" and race != null:
 		_items_tick()
 	elif _test_mode == "jump" and race != null:
@@ -703,6 +756,64 @@ func _show_fx(what: String) -> void:
 				for sx in [-1.0, 1.0]:
 					race.skids.add(k.position + ahead * (4.0 + i * 0.75) + side * (w0 + sx),
 						k.position + ahead * (4.75 + i * 0.75) + side * (w1 + sx), 1.0)
+
+
+func _start_ai_race() -> void:
+	Game.settings.track = _ai_track
+	start_offline(1)
+	if Game.cmd_args.has("no-items"):
+		# lap times without the luck of the item boxes
+		for b in race.boxes:
+			b.active = false
+			b.respawn = INF
+			b.node.visible = false
+	race.fast = int(Game.cmd_args.get("fast", "8"))
+	for k in race.locals:
+		k.autopilot = true
+	_test_t = 0.0
+
+
+func _ai_tick() -> void:
+	var done := true
+	for k in race.karts:
+		if not k.finished:
+			done = false
+	if not done and _test_t < float(Game.cmd_args.get("timeout", "200")):
+		return
+	var laps: Array = []
+	var best := INF
+	var drifts := 0
+	var revs := 0
+	var unfinished := 0
+	for k in race.karts:
+		for t in k.lap_times:
+			laps.append(t)
+			best = minf(best, t)
+		drifts += k.drift_boosts
+		revs += int(k.ai.get("revs", 0))
+		if not k.finished:
+			unfinished += 1
+	var sum := 0.0
+	for t in laps:
+		sum += t
+	var avg := sum / maxf(1, laps.size())
+	print("AI %s %s: average lap %.2f s, best %.2f s, drift turbos %d, stuck %d, not finished %d" % [
+		race.track.def.id, Game.DIFFS[int(Game.settings.diff)].name, avg, best, drifts, revs, unfinished])
+	_ai_sum[race.track.def.id] = avg
+	_ai_drifts += drifts
+	if unfinished > 0 or revs > 2:
+		_items_bad += 1
+	_ai_track += 1
+	if _ai_track < Game.TRACKS.size() and not Game.cmd_args.has("track"):
+		_start_ai_race()
+		return
+	var total := 0.0
+	for v in _ai_sum.values():
+		total += v
+	print("AI ALL TRACKS: average lap %.2f s, drift turbos %d" % [total / _ai_sum.size(), _ai_drifts])
+	var ok := _items_bad == 0 and (_ai_drifts > 0 or int(Game.settings.diff) == 0)
+	_finish_test(ok, "the computer drivers finish on every track without getting stuck, and drift" if ok
+		else "%d tracks with trouble, %d drift turbos" % [_items_bad, _ai_drifts])
 
 
 func _items_tick() -> void:

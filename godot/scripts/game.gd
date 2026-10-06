@@ -27,10 +27,28 @@ var CHARS := [
 		"speed": 1.00, "accel": 1.02, "handling": 1.10, "weight": 0.97},
 ]
 
+## How each driver races when the computer drives (fits the tag in the menu):
+## corner: speed through bends (late braking > 1), straight: top speed on
+## straights, drift: how often and how well they drift, aggr: barges into
+## rivals beside them, start: extra chance of a rocket start, patience: how
+## long items are kept for the right moment (0 = at once), wander: how far
+## they stray from the racing line.
+var PERSONA := [
+	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.0, "start": 0.0, "patience": 1.0, "wander": 0.10},   # Turbo Tonda: balanced
+	{"corner": 1.00, "straight": 1.00, "drift": 0.95, "aggr": 0.9, "start": 0.05, "patience": 0.0, "wander": 0.16},   # Zuzka Zběsilá: wild
+	{"corner": 1.05, "straight": 1.025, "drift": 0.85, "aggr": 0.2, "start": 0.0, "patience": 1.0, "wander": 0.10},   # Pepa Plyn: brakes late
+	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.1, "start": 0.4, "patience": 1.0, "wander": 0.10},    # Máňa Motor: great starts
+	{"corner": 0.97, "straight": 1.00, "drift": 0.85, "aggr": 0.0, "start": 0.0, "patience": 2.0, "wander": 0.03},    # Karel Kolo: careful
+	{"corner": 1.03, "straight": 1.00, "drift": 1.3, "aggr": 0.1, "start": 0.0, "patience": 1.0, "wander": 0.08},     # Bára Brzda: queen of corners
+]
+
 var DIFFS := [
-	{"name": "Lehká", "cc": "50 ccm", "speed": 0.82, "ai": 0.86},
-	{"name": "Střední", "cc": "100 ccm", "speed": 1.00, "ai": 0.93},
-	{"name": "Těžká", "cc": "150 ccm", "speed": 1.15, "ai": 0.985},
+	# ai: how close to full speed the computer drives, drift: how often it drifts
+	# through a long bend, band: how strongly it catches up / waits (rubber band),
+	# start: chance of a rocket start
+	{"name": "Lehká", "cc": "50 ccm", "speed": 0.82, "ai": 0.835, "drift": 0.12, "band": 1.0, "start": 0.2},
+	{"name": "Střední", "cc": "100 ccm", "speed": 1.00, "ai": 0.915, "drift": 0.55, "band": 0.55, "start": 0.35},
+	{"name": "Těžká", "cc": "150 ccm", "speed": 1.15, "ai": 0.99, "drift": 0.92, "band": 0.15, "start": 0.6},
 ]
 
 var TRACKS := [

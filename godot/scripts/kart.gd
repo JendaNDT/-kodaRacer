@@ -15,6 +15,9 @@ const STEP_DROP := 0.25     # a drop in one tick this big is a step to fly off (
 ## Drift spark / turbo colours for drift levels 1–3 (blue, orange, purple).
 const DRIFT_COLS := [Color(0.35, 0.78, 1.0), Color(1.0, 0.64, 0.18), Color(0.78, 0.36, 1.0)]
 const DRIFT_BOOST := [0.0, 0.7, 1.3, 1.75]
+## Drift charge for the blue, orange and purple sparks (turbo levels 1–3). Since
+## 1.14.0 at 60 % of the old 1.0 / 2.2 / 3.5, so a long bend is enough for a turbo.
+const DRIFT_LEVELS := [0.6, 1.3, 2.1]
 const FLAME_COL := Color(1.0, 0.63, 0.19)
 
 var race: Race
@@ -25,6 +28,7 @@ var local_slot := -1        # 0/1 = player on this device, -1 = AI or remote
 var peer := 0               # network peer that drives it (0 = AI)
 var player_name := ""
 var autopilot := false
+var drift_boosts := 0       # turbos from drifts in this race (tests)
 var ack := 0                # host: number of the last control message of its player used
 var predicted := false      # Wi-Fi client: this kart is simulated here from its own controls
 var corr := Vector3.ZERO    # predicted kart: what is left to ease away after a correction
@@ -566,6 +570,7 @@ func hit(dur: float, big: bool) -> bool:
 
 func end_drift() -> void:
 	if drift_level > 0:
+		drift_boosts += 1
 		boost = maxf(boost, float(DRIFT_BOOST[mini(drift_level, 3)]))
 		boost_mul = 1.25
 	drift_active = false
@@ -644,7 +649,7 @@ func update(dt: float, inp: Dictionary) -> void:
 				var tight := clampf((steer * drift_dir + 1.0) * 0.5, 0.0, 1.0)
 				heading -= drift_dir * float(base.turn) * handling * (0.5 + 0.62 * tight) * dt
 				drift_charge += dt * (0.55 + 0.9 * tight) * (0.4 if offroad else 1.0)
-				var lvl := 3 if drift_charge > 3.5 else (2 if drift_charge > 2.2 else (1 if drift_charge > 1.0 else 0))
+				var lvl := 3 if drift_charge > DRIFT_LEVELS[2] else (2 if drift_charge > DRIFT_LEVELS[1] else (1 if drift_charge > DRIFT_LEVELS[0] else 0))
 				if lvl > drift_level:
 					drift_level = lvl
 		if not drift_active:

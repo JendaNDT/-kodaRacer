@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 06. 10. 2026 (verze 1.13.0)*
+*Naposled aktualizováno: 06. 10. 2026 (verze 1.14.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.13.0 (nové předměty, i po Wi-Fi), pak etapa D z `PLAN_VYLEPSENI.md`: chytřejší soupeři s vlastní povahou (verze 1.14.0).** Etapy A, B a C jsou hotové. Zbývají D–F: chytřejší soupeři, zkratky a odemykání.
+**Vyzkoušet verzi 1.14.0 (chytřejší soupeři, kratší drift na turbo), pak etapa E z `PLAN_VYLEPSENI.md`: zkratka na každé trati (verze 1.15.0).** Etapy A–D jsou hotové. Zbývají E (zkratky) a F (odemykání).
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -32,6 +32,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Etapa A (verze 1.11.0):** v menu svítí zlatě jen vybraná volba, kurzor ovladače a klávesnice je zvlášť (bílý pulzující rámeček, myší a dotykem se neukazuje), začíná na vybrané volbě a po výběru zůstává na místě. Motokára vzlétne jen z rampy, na hřebenech se jen zhoupne v pérování, nejostřejší hřebeny jsou zaoblené. Nový test vzletů `--jumptest` (i v GitHub Actions).
 - **Etapa B (verze 1.12.0):** po Wi-Fi reaguje vlastní motokára hned: zařízení ji počítá samo a hostitel ji jen dorovnává. Test se zpožděním 120 ms každým směrem (`--fake-lag`) ukazuje odchylku od hostitele v průměru 26 cm, v 95 % případů do 62 cm. GitHub Actions teď síťový závod testují s tímto zpožděním.
 - **Etapa C (verze 1.13.0):** čtyři nové předměty: modrá raketa (letí k vedoucímu), olej (louže na 20 s), blesk (ostatní se na 6 s zmenší a dají se přejet) a štít (bublina pohltí jeden zásah). Nové ikony v hracím automatu, zvuky a efekty, nová tabulka šancí podle pořadí, počítačoví soupeři je používají a vyhýbají se louži. Fungují i po Wi-Fi. Test `--itemtest`.
+- **Etapa D (verze 1.14.0):** chytřejší soupeři: ideální stopa každé trati, rychlost podle zatáček před sebou, předjíždění, drift v dlouhých zatáčkách s turbem, povahy jezdců (Zuzka vráží, Pepa pozdě brzdí, Máňa startuje, Karel šetří předměty, Bára driftuje), taktika s předměty a jemnější dohánění na Těžké. Na Těžké jsou soupeři bez otazníků o 4,8 % rychlejší. První turbo z driftu teď stačí po kratším driftu (pro všechny). Test `--aitest`.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -77,6 +78,10 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Kurzor menu se kreslí zvlášť (`focus_ring.gd`), ne stylem tlačítka:** styl tlačítka by se musel měnit každý snímek kvůli blikání, a to by Godot přepočítával celé menu. Samostatná vrstva navíc pozná, jestli hraješ myší, dotykem, nebo ovladačem.
 - **Nové předměty jsou stav, ne událost (od verze 1.13.0):** štít a zmenšení jsou časovače v motokáře, louže a modré rakety seznamy jako banány. Klient po Wi-Fi tak efekty (záblesk blesku, prasknutí bubliny, zvuky) pozná sám ze změny stavu a nic se nemusí posílat zvlášť. Výbuch nese druh (raketa, nebo modrá raketa).
 - **Blesk netrefí hvězdu a štít:** hvězda ochrání úplně, štít se místo zmenšení spotřebuje. Zmenšená motokára se při srážce s normální roztočí („přejetí“).
+- **Kratší drift na turbo (od verze 1.14.0, rozhodl Jenda):** v driftu se motokára točí nejméně rychlostí 0,5 × zatáčení, takže první turbo dřív chtělo asi 110° zatočení. Na Těžké se to do dlouhých oblouků nevešlo ani počítači, ani hráči. Hranice nabití jsou teď 0,6 / 1,3 / 2,1 (`Kart.DRIFT_LEVELS`).
+- **Ideální stopa na pozadí:** počítá se ve vlákně (`Track.prepare_line`) hned, když se trať poprvé načte (v menu), protože na telefonu může trvat i vteřinu. Do té doby jedou soupeři po středu silnice.
+- **Povahy soupeřů jsou data (`Game.PERSONA`)**, ne zvláštní kód: rychlost v zatáčkách a na rovinkách, chuť driftovat, vrážení, starty, trpělivost s předměty a jak moc se drží stopy. Pozor: při přidání jezdce (etapa F) je potřeba přidat i jeho povahu.
+- **Měření soupeřů:** `--aitest --diff=2 --no-items` projede všechny tratě jen s počítačem a vypíše průměrné kolo, turba z driftu a zaseknutí. Bez otazníků, protože předměty dělají v časech velkou náhodu.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Předpověď jen pro vlastní motokáru (od verze 1.12.0):** klient si svou motokáru počítá sám stejným kódem jako hostitel, hostitel ale zůstává pánem všeho. Ve zprávě posílá číslo posledního použitého ovládání, klient od toho místa přepočítá novější ovládání a rozdíl plynule dorovná. Ostatní motokáry se dál jen plynule posouvají podle hostitele. Předměty, zásahy, srážky s ostatními, kola a cíl předpověď neřeší, rozhodne je hostitel a projeví se se zpožděním Wi-Fi.
 - **Síťový test jezdí jako skutečný hráč:** od verze 1.12.0 v testu řídí motokáru klienta počítačový řidič na straně klienta a jeho ovládání jde přes síť. Dřív ji řídil hostitel sám, takže se předávání ovládání netestovalo.

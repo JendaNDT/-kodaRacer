@@ -38,6 +38,8 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | 5 | Karel Kolo | traktůrek s komínem | Tahoun |
 | 6 | Bára Brzda | nízká futuristická střela | Zatáčky |
 
+Když jezdce řídí počítač, má každý svou povahu: **Turbo Tonda** jede vyrovnaně, **Zuzka Zběsilá** vráží do soupeřů a předměty použije hned, **Pepa Plyn** brzdí pozdě a na rovinkách je nejrychlejší, **Máňa Motor** má skoro vždy raketový start, **Karel Kolo** jezdí opatrně a předměty si šetří, **Bára Brzda** nejlíp driftuje. Počítač jezdí po ideální stopě (do zatáčky zvenku, vrchol u vnitřní strany, ven zase vně), v dlouhých zatáčkách driftuje pro turbo a předměty používá s rozmyslem: banán a olej si nechá jako ochranu, raketu pošle, až je soupeř blízko. Na Těžké skoro nedohání ani nečeká, výhra tam něco znamená.
+
 ## Tratě
 
 | Trať | Nálada | Poznávací znamení |
@@ -73,7 +75,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 ### Tipy
 
-- **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
+- **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší. Modré jiskry (první turbo) naskočí zhruba po 0,7 s driftu, takže se drift vyplatí v každé delší zatáčce. Nejvíc času dá, když do zatáčky vjedeš od vnějšího okraje.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
 - **Trik**: když letíš z rampy, zmáčkni ve vzduchu drift. Motokára se otočí a po dopadu dostaneš turbo.
 - **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš. Vepředu padají hlavně banány, olej a turbo, uprostřed štít, vzadu rakety, hvězda a modrá raketa. Předmět se losuje jako na hracím automatu: obrázky se protáčejí, zpomalí a vyhraný zacvakne.

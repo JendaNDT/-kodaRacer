@@ -9,7 +9,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 | A ✅ | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
 | B ✅ | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
 | C ✅ | 5 | 1.13.0 | střední | čtyři nové předměty |
-| D | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
+| D ✅ | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
 | E | 8 | 1.15.0 | velká | zkratka na každé trati |
 | F | 6 | 1.16.0 | střední | poháry, odemykání barev, tajný jezdec, zrcadlové tratě |
 
@@ -125,7 +125,20 @@ ostatní, louže zmizí).
 
 ---
 
-## Etapa D – Chytřejší soupeři (bod 7)
+## Etapa D – Chytřejší soupeři (bod 7)  ✅ hotovo (verze 1.14.0)
+
+> **Výsledek:** ideální stopa se pro každou trať spočítá na pozadí (tuhý drát položený do silnice: v zatáčkách má
+> větší poloměr než střed silnice, např. les 30 m místo 27 m). Soupeři po ní jedou, rychlost volí podle zatáček před
+> sebou a brzdí včas, předjíždějí z té strany, kde je víc místa, a uhýbají banánům i louži. Povahy jsou v
+> `Game.PERSONA`. **Změna pravidel pro všechny (Jendovo rozhodnutí):** turbo z driftu dřív potřebovalo asi 110°
+> zatočení v driftu, což se na Těžké do dlouhých oblouků nevešlo ani hráči. Hranice jsou teď na 60 %
+> (0,6 / 1,3 / 2,1 místo 1,0 / 2,2 / 3,5). Soupeři si před dlouhou zatáčkou najedou k vnějšímu okraji a driftují do
+> vnitřního. Sopečný ostrov nemá žádnou dost dlouhou zatáčku, tam nedriftují.
+> **Naměřeno (`--aitest`, průměrné kolo všech šesti tratí):** Těžká bez otazníků 34,63 s → 33,0 s (o 4,8 % rychleji,
+> nejlepší kola o 2 s), s otazníky 36,1 s → 35,5 s (soupeři se teď předměty víc trefují). Střední s otazníky
+> 44,0 s → 42,7 s, Lehká 56,2 s → 56,0 s (schválně skoro beze změny). Dohánění na Těžké na 15 %, na Střední na 55 %.
+> Nikdo se nezasekl, všichni dojeli.
+
 
 **Dnes:** počítač jede po náhodném pruhu, přibrzdí před zatáčkou, nedriftuje, předměty používá jednoduše.
 
