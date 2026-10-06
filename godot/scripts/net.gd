@@ -30,18 +30,25 @@ var diff := 1
 var cup_mode := false  # the lobby is set to a championship over all tracks
 var cup := {}          # host: the championship being driven {round, points, roster, diff}
 var in_race := false
-var inputs := {}       # peer id -> {"steer", "buttons", "seq"}
+var inputs := {}       # peer id -> {"steer", "buttons", "seq" (item presses), "frame" (number of the message)}
 var hosts := {}        # ip -> {"name", "count", "racing", "t"}
 var _pending := {}
 var _udp: PacketPeerUDP
 var _listen: PacketPeerUDP
 var _bcast_t := 0.0
+# --fake-lag=120 (tests): every race message to and from this player waits
+# that many ms (+ up to --fake-jitter ms), as on a slow Wi-Fi
+var fake_lag := 0.0
+var fake_jitter := 0.0
+var _late: Array = []      # [release ms, Callable] in release order
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if Game.cmd_args.has("fake-version"):
 		version = String(Game.cmd_args["fake-version"])   # tests only
+	fake_lag = float(Game.cmd_args.get("fake-lag", "0"))
+	fake_jitter = float(Game.cmd_args.get("fake-jitter", "0"))
 	var mp := _mp()
 	mp.peer_authenticating.connect(_on_authenticating)
 	mp.peer_authentication_failed.connect(_on_auth_failed)
@@ -109,6 +116,7 @@ func leave() -> void:
 	cup = {}
 	players = {}
 	inputs = {}
+	_late.clear()
 	if _udp != null:
 		_udp.close()
 		_udp = null
@@ -144,7 +152,23 @@ func local_ips() -> Array:
 	return out
 
 
+## Runs cb now, or later with --fake-lag (keeping the order of the messages).
+func _delay(cb: Callable) -> void:
+	if fake_lag <= 0.0 and fake_jitter <= 0.0:
+		cb.call()
+		return
+	var at := Time.get_ticks_msec() + fake_lag + randf() * fake_jitter
+	if not _late.is_empty():
+		at = maxf(at, float(_late[_late.size() - 1][0]))
+	_late.append([at, cb])
+
+
 func _process(delta: float) -> void:
+	var now_ms := float(Time.get_ticks_msec())
+	while not _late.is_empty() and float(_late[0][0]) <= now_ms:
+		var cb: Callable = _late.pop_front()[1]
+		if active:
+			cb.call()
 	if is_host and active and _udp != null:
 		_bcast_t -= delta
 		if _bcast_t <= 0.0:
@@ -445,16 +469,20 @@ func send_snapshot(d: PackedFloat32Array) -> void:
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _snap(d: PackedFloat32Array) -> void:
-	snapshot_received.emit(d)
+	_delay(func(): snapshot_received.emit(d))
 
 
-func send_input(steer: float, buttons: int, seq: int) -> void:
+## Client, every physics frame: its controls, the number of item presses
+## (seq) and the number of this message (frame). The host sends back which
+## frame it used last, so the client knows what to simulate again.
+func send_input(steer: float, buttons: int, seq: int, frame: int) -> void:
 	if active and not is_host:
-		_net_input.rpc_id(1, steer, buttons, seq)
+		_delay(func(): _net_input.rpc_id(1, steer, buttons, seq, frame))
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
-func _net_input(steer: float, buttons: int, seq: int) -> void:
+func _net_input(steer: float, buttons: int, seq: int, frame: int) -> void:
 	if not is_host:
 		return
-	inputs[multiplayer.get_remote_sender_id()] = {"steer": clampf(steer, -1.0, 1.0), "buttons": buttons, "seq": seq}
+	inputs[multiplayer.get_remote_sender_id()] = {"steer": clampf(steer, -1.0, 1.0), "buttons": buttons, "seq": seq,
+		"frame": frame}

@@ -7,7 +7,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 | Etapa | Body | Verze | Velikost | Co přinese |
 | --- | --- | --- | --- | --- |
 | A ✅ | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
-| B | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
+| B ✅ | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
 | C | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
 | E | 8 | 1.15.0 | velká | zkratka na každé trati |
@@ -57,7 +57,16 @@ i s turbem a hvězdou.
 
 ---
 
-## Etapa B – Ovládání po Wi-Fi bez zpoždění (bod 2)
+## Etapa B – Ovládání po Wi-Fi bez zpoždění (bod 2)  ✅ hotovo (verze 1.12.0)
+
+> **Výsledek:** klient počítá svou motokáru sám, hned ve stejném snímku, kdy zmáčkneš ovládání. Každá zpráva od
+> hostitele nese číslo posledního ovládání, které hostitel použil (`ack`). Klient vezme stav od hostitele, znovu
+> přepočítá novější ovládání a rozdíl dorovná během zlomku sekundy (víc než 4 m = přesun hned). Zpráva o motokáře má
+> 8 čísel navíc (svislá rychlost, nabití driftu, síla turba, doba ve vzduchu, ochrana po zásahu…), aby přepočet
+> seděl. `--fake-lag=120 --fake-jitter=20` zpozdí každou zprávu tam i zpátky o 120–140 ms (ping kolem 250 ms).
+> Naměřeno s tímto zpožděním: předpověď je od hostitele v průměru 0,26 m, v 95 % případů do 0,62 m (závod
+> i mistrovství po Wi-Fi). Bez zpoždění 0,11 m a 0,60 m.
+
 
 **Problém:** hostitel počítá celý závod. Druhý hráč pošle ovládání, hostitel ho použije a stav pošle zpátky. Hráč
 tak vidí svoji motokáru se zpožděním Wi-Fi (obvykle 30–100 ms), zatáčení působí „gumově“.

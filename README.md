@@ -105,6 +105,8 @@ V hlavním menu i v pauze jsou tři tlačítka:
 3. Ostatní dají **Hra po Wi-Fi** a hru buď uvidí v seznamu, nebo zadají adresu ručně.
 4. Hostitel vybere trať a obtížnost a spustí závod.
 
+Svou motokáru máš pod kontrolou okamžitě, i když je Wi-Fi pomalejší: tvoje zařízení ji počítá samo a hostitel ji jen průběžně neznatelně dorovnává. Srážky, předměty, zásahy, pořadí a cíl dál rozhoduje hostitel, takže po zásahu raketou nebo po banánu se motokára může kousek přesunout.
+
 Všichni musí mít **stejnou verzi hry** (je napsaná dole v hlavním menu). Hra s jinou verzí se v seznamu ukáže jako „jiná verze hry“ a připojení se odmítne s vysvětlením.
 
 Na Windows se při prvním založení hry objeví dotaz brány firewall. Povol přístup pro **soukromé sítě**, jinak se ostatní nepřipojí. Hra používá porty UDP 24680 a 24681.
