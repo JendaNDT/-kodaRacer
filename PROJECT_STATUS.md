@@ -1,13 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 06. 10. 2026*
+*Naposled aktualizováno: 06. 10. 2026 (verze 1.11.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Etapa A z `PLAN_VYLEPSENI.md`: čisté zvýraznění v menu a žádné náhodné poskoky na hrbolech (verze 1.11.0).** Celý plán má šest etap (A–F) pro sedm vylepšení: menu, ovládání po Wi-Fi bez zpoždění, poskoky, nové předměty, odemykání, chytřejší soupeři a zkratky. Zrychlení Podzimního lesa Jenda z plánu vyřadil.
-Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za sebou a mistrovství po Wi-Fi mezi dvěma zařízeními.
+**Vyzkoušet verzi 1.11.0 na telefonu a na PC s ovladačem (menu a skoky), pak etapa B z `PLAN_VYLEPSENI.md`: ovládání po Wi-Fi bez zpoždění (verze 1.12.0).** Etapa A je hotová. Zbývají etapy B–F: ovládání po Wi-Fi bez zpoždění, nové předměty, chytřejší soupeři, zkratky a odemykání.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -30,6 +29,7 @@ Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za seb
 - **Tři nové tratě (verze 1.8.0), celkem jich je šest:** Podzimní les (barevné stromy a jedle, padající listí, dřevěná rozhledna s vlajkou, rybník), Noční město (domy s rozsvícenými okny, lampy se světlem na silnici, hvězdy a měsíc, televizní věž, neonová brána přes trať, panorama města na obzoru), Sopečný ostrov (palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero). Každá má vlastní kopce a skok.
 - **Mistrovství (verze 1.9.0):** všech šest tratí za sebou se stejnými soupeři, body 10/8/6/4/2/1, po každém závodě dvě tabulky (tento závod s přičtenými body a celkové pořadí), vedoucí startuje příště ze zadu, na startu každého závodu pás „ZÁVOD 2/6“, na konci tři nejlepší z celého mistrovství na stupních vítězů a uložený nejlepší pohár pro každou obtížnost. Funguje pro jednoho i dva hráče. Restart v pauze zopakuje jen aktuální závod. Hra teď drží v paměti jen trať, která je na obrazovce (šest tratí by telefon zahltilo).
 - **Mistrovství po Wi-Fi a časovka (verze 1.10.0):** v lobby přepínač Jeden závod / Mistrovství. Body počítá hostitel a posílá je všem, další závod spouští hostitel, až dojedou všichni hráči. Kdo mezi závody odejde, za toho jede dál počítač. Časovka: sám na trati, bez otazníků, se třemi turby, proti průhlednému duchovi nejlepší jízdy (uložený zvlášť pro každou trať a obtížnost). Po každém kole rozdíl proti duchovi, ve výsledcích časy kol s rozdíly, nejlepší čas časovky u tratí v menu.
+- **Etapa A (verze 1.11.0):** v menu svítí zlatě jen vybraná volba, kurzor ovladače a klávesnice je zvlášť (bílý pulzující rámeček, myší a dotykem se neukazuje), začíná na vybrané volbě a po výběru zůstává na místě. Motokára vzlétne jen z rampy, na hřebenech se jen zhoupne v pérování, nejostřejší hřebeny jsou zaoblené. Nový test vzletů `--jumptest` (i v GitHub Actions).
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -46,7 +46,6 @@ Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za seb
 - Zatím žádné známé. Na skutečném telefonu a na Windows zatím netestováno, stejně jako Wi-Fi mezi dvěma reálnými zařízeními (otestováno jen hostitel + klient na jednom počítači).
 - Na softwarovém vykreslování v cloudu je verze 1.5.0 proti 1.1.0 na Nízké asi o 14 %, na Střední o ~35 % a na Vysoké o ~58 % pomalejší (Nízká 27,8 → 24,0, Střední 10,4 → 6,7, Vysoká 10,0 → 4,2 FPS). Většinu dělají stíny, záře a SSAO z fáze 1. Verze 1.6.0 je stejně rychlá jako 1.5.0 (měřeno vedle sebe). Verze 1.7.0 je kvůli terénu na Střední asi o 11 % a na Vysoké o 12 % pomalejší, na Nízké stejná. Telefon ukazoval s verzí 1.6.0 na Střední 120 FPS.
 - Kdo do rampy vjede skoro stojící (pod 3 m/s), nevyletí, jen se na konci rampy sveze dolů. A kdo jede pozpátku, na rampu „vyskočí“ zezadu. V závodě se to skoro nestane.
-- Na ostrém hřebeni při turbu nebo s hvězdou může motokára krátce poskočit i mimo rampu.
 - Podzimní les je v cloudu nejnáročnější trať (Střední 5,6 FPS proti 6,3 v údolí): je nejdelší, má nejvíc stromů a pneumatik. Noční město a ostrov jsou na tom jako údolí.
 - Když se něco nového (jezero, tribuna) poprvé objeví na obrazovce, může hra jednou krátce zaškobrtnout, protože se teprve překládá jeho shader. Pak už ne.
 - Hledání her v síti používá UDP broadcast, který některé routery nebo telefony blokují. Pak je potřeba zadat adresu ručně.
@@ -73,6 +72,8 @@ Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za seb
 - **Duch v časovce je záznam, ne simulace:** desetkrát za sekundu se uloží poloha, výška a natočení motokáry. Duch se mezi záznamy jen dopočítá a natočí podle povrchu, takže sedí na trati přesně tak, jak se jelo. Soubor má pro tři kola jen pár desítek kilobajtů (`user://ghost_<trať>_<obtížnost>.dat`).
 - **Mistrovství po Wi-Fi vede hostitel:** body počítá jen on (u klientů by se odhad pořadí nedojetých motokár mohl lišit) a posílá je ostatním. Test `--nettest=host --cup --cup-start=4` projede poslední dva závody mistrovství po síti. V GitHub Actions neběží, protože síťové závody jedou ve skutečném čase a test by trval přes 5 minut.
 - **Stíny motokár ze zjednodušeného modelu:** detailní model stín nevrhá, místo něj ho vrhá neviditelná jednodušší kopie (stín se kreslí pro každé pásmo stínů zvlášť).
+- **Vzlet jen ze schodu, ne z hřebene:** motokára vyletí, jen když silnice pod ní najednou spadne o 25 cm a víc (konec rampy, její boky). Dřív stačilo, aby silnice klesala rychleji než gravitace, a to se s turbem stávalo i na hřebenech a hlavně těsně po dopadu z rampy. Kopec teď pocítíš jen v pérování.
+- **Kurzor menu se kreslí zvlášť (`focus_ring.gd`), ne stylem tlačítka:** styl tlačítka by se musel měnit každý snímek kvůli blikání, a to by Godot přepočítával celé menu. Samostatná vrstva navíc pozná, jestli hraješ myší, dotykem, nebo ovladačem.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.
 - **Testovací podpisový klíč v repozitáři** (`build/debug.keystore`), aby šlo APK aktualizovat bez odinstalace. Pro Google Play bude potřeba vlastní tajný klíč.
@@ -99,6 +100,7 @@ Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za seb
 - `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
 - `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky
+- `godot/scripts/focus_ring.gd` – kurzor v menu pro klávesnici a ovladač
 - `godot/scripts/gfx.gd` – úrovně kvality grafiky (co která zapíná)
 - `godot/scripts/effects.gd` – jednorázové efekty: výbuch, střepy krabic, konfety, hvězdičky po zásahu
 - `godot/scripts/skid_marks.gd`, `speed_lines.gd` – stopy smyku a rychlostní čáry

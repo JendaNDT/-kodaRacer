@@ -42,24 +42,26 @@ static func init() -> void:
 	theme.default_font_size = 20
 	theme.set_color("font_color", "Label", PAPER)
 
+	# selected (a pressed toggle) = gold fill with dark text; the keyboard /
+	# gamepad cursor is drawn apart by FocusRing, so the theme has no focus look
 	var normal := box(INK2, 10, 2, Color(0, 0, 0, 0))
 	var hover := box(INK3, 10, 2, LINE)
-	var pressed := box(INK3, 10, 2, GOLD)
-	var focus := box(Color(0, 0, 0, 0), 10, 3, GOLD)
+	var pressed := box(GOLD, 10, 2, GOLD)
+	var hover_pressed := box(GOLD.lightened(0.12), 10, 2, GOLD.lightened(0.12))
 	var disabled := box(Color(INK2, 0.5), 10, 2, Color(0, 0, 0, 0))
-	for s in [normal, hover, pressed, disabled]:
+	for s in [normal, hover, pressed, hover_pressed, disabled]:
 		s.content_margin_left = 14; s.content_margin_right = 14
 		s.content_margin_top = 8; s.content_margin_bottom = 8
 	theme.set_stylebox("normal", "Button", normal)
 	theme.set_stylebox("hover", "Button", hover)
 	theme.set_stylebox("pressed", "Button", pressed)
-	theme.set_stylebox("hover_pressed", "Button", pressed)
-	theme.set_stylebox("focus", "Button", focus)
+	theme.set_stylebox("hover_pressed", "Button", hover_pressed)
+	theme.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	theme.set_stylebox("disabled", "Button", disabled)
 	theme.set_color("font_color", "Button", PAPER)
 	theme.set_color("font_hover_color", "Button", PAPER)
-	theme.set_color("font_pressed_color", "Button", GOLD)
-	theme.set_color("font_hover_pressed_color", "Button", GOLD)
+	theme.set_color("font_pressed_color", "Button", INK)
+	theme.set_color("font_hover_pressed_color", "Button", INK)
 	theme.set_color("font_focus_color", "Button", PAPER)
 	theme.set_color("font_disabled_color", "Button", MUTED)
 	theme.set_font("font", "Button", bold_font)
@@ -129,12 +131,13 @@ static func button(text: String, cb: Callable, primary := false) -> Button:
 		b.add_theme_stylebox_override("normal", n)
 		b.add_theme_stylebox_override("hover", h)
 		b.add_theme_stylebox_override("pressed", p)
-		b.add_theme_stylebox_override("focus", box(Color(0, 0, 0, 0), 12, 3, GOLD))
+		b.add_theme_stylebox_override("hover_pressed", p)
 		b.add_theme_font_override("font", display_font)
 		b.add_theme_font_size_override("font_size", 26)
 		b.add_theme_color_override("font_color", Color.WHITE)
 		b.add_theme_color_override("font_hover_color", Color.WHITE)
 		b.add_theme_color_override("font_pressed_color", Color.WHITE)
+		b.add_theme_color_override("font_hover_pressed_color", Color.WHITE)
 		b.add_theme_color_override("font_focus_color", Color.WHITE)
 	else:
 		b.add_theme_font_size_override("font_size", 20)
@@ -142,6 +145,13 @@ static func button(text: String, cb: Callable, primary := false) -> Button:
 	if cb.is_valid():
 		b.pressed.connect(cb)
 	return b
+
+
+## Text colour on a choice tile: dark on the gold fill of the selected one.
+static func on_tile(selected: bool, color: Color) -> Color:
+	if not selected:
+		return color
+	return INK if color == PAPER else Color(INK, 0.72)
 
 
 static func vbox(sep := 10) -> VBoxContainer:

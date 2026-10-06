@@ -6,7 +6,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 
 | Etapa | Body | Verze | Velikost | Co přinese |
 | --- | --- | --- | --- | --- |
-| A | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
+| A ✅ | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
 | B | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
 | C | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
@@ -17,7 +17,15 @@ Odemykání (F) je schválně na konci: může pak odemykat i věci z etap C–E
 
 ---
 
-## Etapa A – Doladění (body 1 a 4)
+## Etapa A – Doladění (body 1 a 4)  ✅ hotovo (verze 1.11.0)
+
+> **Výsledek:** vybraná volba má zlatou výplň a tmavý text. Kurzor je tenký bílý pulzující rámeček kousek vně
+> tlačítka (`focus_ring.gd`), objeví se jen po šipkách nebo ovladači. Na začátku obrazovky stojí na vybrané volbě,
+> po výběru zůstává na místě (i posunutí stránky). Kliknutí na už vybranou volbu ji nezruší. Vzlétnout jde jen při
+> propadu silnice o 25 cm a víc najednou (rampa a její boky), na hřebeni se motokára jen zhoupne v pérování.
+> Nejostřejší hřebeny jsou zaoblené (nejvíc se to dotklo Pouštního kaňonu). Nový test `--jumptest`: na původní verzi
+> našel 18 vzletů mimo rampu (hlavně odskok po dopadu z rampy), teď žádný.
+
 
 ### 1. Zvýraznění tlačítek v menu
 **Problém:** vybrané tlačítko i tlačítko pod kurzorem ovladače mají stejný zlatý rámeček, takže u přepínačů (režim,

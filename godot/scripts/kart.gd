@@ -2,13 +2,14 @@ class_name Kart
 extends Node3D
 ## One kart: its model (KartModel + DriverRig), effects, suspension and
 ## the arcade driving model (ported from the web prototype), plus height:
-## it follows hills and banked corners, flies off crests and the ramp and
-## can do a trick in the air for a turbo on landing.
+## it follows hills and banked corners, flies off the ramp (never off a
+## crest) and can do a trick in the air for a turbo on landing.
 
 const SNAP_FIELDS := 26
 const TRICK_TIME := 0.42    # one barrel roll
 const SLOPE_PULL := 16.0    # how much hills slow you down (or help) per unit of slope
-const STICK := 2.0          # grip on crests, in units of gravity
+const STICK := 2.0          # how fast the kart drops off a step, in units of gravity
+const STEP_DROP := 0.25     # a drop in one tick this big is a step to fly off (m)
 ## Drift spark / turbo colours for drift levels 1–3 (blue, orange, purple).
 const DRIFT_COLS := [Color(0.35, 0.78, 1.0), Color(1.0, 0.64, 0.18), Color(0.78, 0.36, 1.0)]
 const DRIFT_BOOST := [0.0, 0.7, 1.3, 1.75]
@@ -106,6 +107,8 @@ var pitch := 0.0
 var pitch_v := 0.0
 var accel_f := 0.0
 var prev_speed := 0.0
+var sus_py := 0.0           # height on screen last frame, for the swing over crests
+var sus_vy := 0.0
 var prev_hop := 0.0
 var rumble_t := 0.0
 var prev_x := 0.0
@@ -122,6 +125,9 @@ var was_air := false
 var land_v := 0.0
 
 static var _m := {}
+## --jumptest: every take-off is written down here ([track id, arc metres, speed]).
+static var takeoffs: Array = []
+static var log_takeoffs := false
 
 
 func setup(p_race: Race, p_driver: int) -> void:
@@ -491,7 +497,7 @@ func reset(px: float, pz: float, h: float) -> void:
 	body.rotation = Vector3.ZERO
 	chassis.transform = Transform3D.IDENTITY
 	susp_y = 0.0; susp_v = 0.0; pitch = 0.0; pitch_v = 0.0; accel_f = 0.0
-	prev_speed = 0.0; prev_hop = 0.0; rumble_t = 0.0
+	prev_speed = 0.0; prev_hop = 0.0; rumble_t = 0.0; sus_vy = 0.0; sus_py = y
 	rig.reset()
 	position = Vector3(x, y, z)
 	rotation = Vector3(0, heading, 0)
@@ -652,12 +658,15 @@ func _vertical(dt: float) -> void:
 				boost = maxf(boost, 0.9)
 				boost_mul = 1.25
 		return
-	# tyres grip: only a road that falls away clearly faster than gravity
-	# (the ramp's lip, a sharp crest) lets the kart take off
+	# tyres grip: only a real step in the road (the ramp's lip or its sides,
+	# STEP_DROP or more at once) lets the kart take off; over a crest, however
+	# fast, it stays down and only swings on its springs
 	var free_y := y + vy * dt - STICK * Game.GRAVITY * dt * dt
-	if gy < free_y - 0.04 and absf(speed) > 3.0:
+	if gy < free_y - STEP_DROP and absf(speed) > 3.0:
 		air = true
 		air_t = 0.0
+		if log_takeoffs:
+			takeoffs.append([race.track.def.id, s, speed])
 		tricked = false
 		vy -= Game.GRAVITY * dt
 		y = free_y
@@ -778,7 +787,7 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 	# the trick: a full roll, quick at first and settling at the end
 	var tu := 1.0 - trick / TRICK_TIME if trick > 0.0 else 0.0
 	body.rotation.z = -TAU * (1.0 - pow(1.0 - tu, 2.0)) if trick > 0.0 else 0.0
-	_suspension(delta, sr)
+	_suspension(delta, sr, py)
 	chassis.position.y = susp_y + sin(t * 38.0 + driver) * 0.015 * sr
 	chassis.rotation.x = pitch - (0.03 if boost > 0.0 else 0.0)
 	chassis.rotation.z = (-drift_dir * 0.08 if drift_active else -steer * 0.05 * sr)
@@ -896,11 +905,16 @@ func on_boost(level: int) -> void:
 
 
 ## Springy chassis: dips on landing, nods when speeding up or braking and
-## rattles over grass, sand and snow. Visual only, so it also works from
-## network snapshots.
-func _suspension(delta: float, sr: float) -> void:
+## rattles over grass, sand and snow, floats up a little over a crest and
+## squats in a dip. Visual only, so it also works from network snapshots.
+func _suspension(delta: float, sr: float, py: float) -> void:
 	if delta <= 0.0:
 		return
+	var vy_now := (py - sus_py) / delta
+	if not air and not was_air and absf(vy_now) < 40.0:
+		susp_v -= clampf(vy_now - sus_vy, -3.0, 3.0) * 0.35
+	sus_py = py
+	sus_vy = vy_now
 	if prev_hop > 0.0 and hop <= 0.0:   # just landed
 		susp_v -= 0.9 + 1.1 * clampf(hop_h, 0.0, 2.5)
 	prev_hop = hop

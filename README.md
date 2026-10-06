@@ -49,7 +49,7 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | Noční město | noc, měsíc a hvězdy | domy s rozsvícenými okny, lampy se světlem na silnici, televizní věž, neonová brána přes trať |
 | Sopečný ostrov | tropické poledne | palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero |
 
-Každá trať má kopce, sjezdy, klopené zatáčky a jeden skok: žlutočernou rampu za vrcholem kopce.
+Každá trať má kopce, sjezdy, klopené zatáčky a jeden skok: žlutočernou rampu za vrcholem kopce. Vzlétnout jde jen z rampy. Na hřebeni kopce zůstane motokára i s turbem nebo hvězdou na zemi a jen se zhoupne v pérování.
 
 Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách. Po závodě stojí první tři motokáry na stupních vítězů u startovní rovinky, létají konfety a pod nimi je výsledková tabulka.
 
@@ -64,6 +64,8 @@ Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí div�
 | Předmět | X, E nebo Enter | E nebo Q | Enter |
 
 Další klávesy: **Esc** pauza, **F11** celá obrazovka.
+
+**V menu**: vybraná volba (režim, jezdec, trať, obtížnost) svítí zlatě. Když se po menu pohybuješ šipkami nebo ovladačem, kurzor je bílý blikající rámeček. Myší a dotykem se kurzor neukazuje.
 
 **Herní ovladač**: A plyn, B brzda, RB/RT drift, LB/LT nebo X předmět, Start pauza. U dvou hráčů patří první ovladač hráči 1 a druhý hráči 2. Když je připojený jen jeden, ovládá hráče 2 a hráč 1 jede na klávesnici.
 

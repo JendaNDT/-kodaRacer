@@ -42,15 +42,18 @@ class Bar:
 	extends Control
 	var value := 0.5
 	var color := Color.WHITE
-	func _init(v: float, c: Color) -> void:
+	var back := Color(1, 1, 1, 0.1)
+	func _init(v: float, c: Color, on_gold := false) -> void:
 		value = v
 		color = c
+		if on_gold:
+			back = Color(UI.INK, 0.18)
 		custom_minimum_size = Vector2(40, 5)
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.1))
+		draw_rect(Rect2(Vector2.ZERO, size), back)
 		draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * value, size.y)), color)
 
 
@@ -93,6 +96,7 @@ func _ready() -> void:
 	add_child(panel)
 	scroll = ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true   # the gamepad cursor never leaves the screen
 	panel.add_child(scroll)
 	content = UI.vbox(16)
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -126,6 +130,14 @@ func set_status(t: String) -> void:
 func show_screen(name: String) -> void:
 	if screen == "wifi" and name != "wifi":
 		Net.stop_listening()
+	# the same screen built again (an option picked, the lobby changed): the
+	# cursor and the scroll stay where they were
+	var keep := -1
+	var keep_scroll := 0
+	if name == screen:
+		var f := get_viewport().gui_get_focus_owner()
+		keep = _buttons(content).find(f)
+		keep_scroll = scroll.scroll_vertical
 	screen = name
 	_hosts_box = null
 	_status_l = null
@@ -137,24 +149,35 @@ func show_screen(name: String) -> void:
 		"setup": _setup()
 		"wifi": _wifi()
 		"lobby": _lobby()
-	scroll.scroll_vertical = 0
-	_focus_first.call_deferred()
+	scroll.scroll_vertical = keep_scroll
+	_place_cursor.call_deferred(keep, keep_scroll)
 
 
-func _focus_first() -> void:
-	var b := _find_button(content)
-	if b != null:
-		b.grab_focus()
+## The cursor starts on the selected option of the first choice on the
+## screen (or the first button); after a rebuild it stays on its place.
+func _place_cursor(keep: int, keep_scroll: int) -> void:
+	scroll.scroll_vertical = keep_scroll
+	var all := _buttons(content)
+	var pick: Button = null
+	if keep >= 0 and keep < all.size() and not all[keep].disabled:
+		pick = all[keep]
+	for b in all:
+		if pick == null and b.toggle_mode and b.button_pressed and not b.disabled:
+			pick = b
+	for b in all:
+		if pick == null and not b.disabled:
+			pick = b
+	if pick != null:
+		pick.grab_focus()
 
 
-func _find_button(n: Node) -> Button:
+## Every visible button on the screen, in reading order.
+func _buttons(n: Node, out: Array[Button] = []) -> Array[Button]:
 	for c in n.get_children():
-		if c is Button and c.visible and not c.disabled:
-			return c
-		var r := _find_button(c)
-		if r != null:
-			return r
-	return null
+		if c is Button and c.visible:
+			out.append(c)
+		_buttons(c, out)
+	return out
 
 
 ## Android back button / Escape in the menu.
@@ -196,11 +219,14 @@ func _section(title: String) -> VBoxContainer:
 
 func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContainer:
 	var g := UI.grid(3, 8)
+	var group := ButtonGroup.new()
 	for i in Game.CHARS.size():
 		var ch: Dictionary = Game.CHARS[i]
+		var sel := i == selected
 		var b := Button.new()
 		b.toggle_mode = true
-		b.button_pressed = i == selected
+		b.button_group = group
+		b.button_pressed = sel
 		b.disabled = i in taken
 		b.custom_minimum_size = Vector2(120, 186)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -213,20 +239,20 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 		v.offset_bottom = -9
 		b.add_child(v)
 		v.add_child(_kart_picture(i, 64.0))
-		var nl := UI.label(ch.name, 17, UI.PAPER, UI.bold_font)
+		var nl := UI.label(ch.name, 17, UI.on_tile(sel, UI.PAPER), UI.bold_font)
 		nl.clip_text = true
 		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		v.add_child(nl)
-		var tl := UI.label(ch.tag if not (i in taken) else "obsazeno", 14, UI.MUTED)
+		var tl := UI.label(ch.tag if not (i in taken) else "obsazeno", 14, UI.on_tile(sel, UI.MUTED))
 		tl.clip_text = true
 		v.add_child(tl)
 		for st in [["RYCH", ch.speed], ["ZRYCH", ch.accel], ["OVL", ch.handling]]:
 			var h := UI.hbox(4)
 			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var l := UI.label(st[0], 11, UI.MUTED, UI.bold_font)
+			var l := UI.label(st[0], 11, UI.on_tile(sel, UI.MUTED), UI.bold_font)
 			l.custom_minimum_size = Vector2(40, 0)
 			h.add_child(l)
-			h.add_child(Bar.new(clampf((float(st[1]) - 0.85) / 0.3, 0.08, 1.0), ch.color))
+			h.add_child(Bar.new(clampf((float(st[1]) - 0.85) / 0.3, 0.08, 1.0), ch.color, sel))
 			v.add_child(h)
 		b.pressed.connect(func(): on_pick.call(i))
 		b.pressed.connect(func(): Sfx.play("ui", 0.6))
@@ -251,11 +277,14 @@ func _kart_picture(d: int, height: float) -> Control:
 
 func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false) -> GridContainer:
 	var g := UI.grid(3, 8)
+	var group := ButtonGroup.new()
 	for i in Game.TRACKS.size():
 		var td: Dictionary = Game.TRACKS[i]
+		var sel := i == selected
 		var b := Button.new()
 		b.toggle_mode = true
-		b.button_pressed = i == selected
+		b.button_group = group
+		b.button_pressed = sel
 		b.disabled = not enabled and i != selected
 		b.custom_minimum_size = Vector2(120, 176)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -268,15 +297,17 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false
 		v.offset_bottom = -8
 		b.add_child(v)
 		v.add_child(TrackThumb.new(i, i == selected))
-		var tn := UI.label(td.name, 16, UI.PAPER, UI.bold_font)
+		var tn := UI.label(td.name, 16, UI.on_tile(sel, UI.PAPER), UI.bold_font)
 		tn.clip_text = true
 		tn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		v.add_child(tn)
 		var rec: Dictionary = Game.settings.records.get(Game.record_key(i, int(Game.settings.diff)), {})
-		var info := UI.label("Rekord " + Game.fmt_time(rec.total) if rec.has("total") else td.desc, 13, UI.GOLD if rec.has("total") else UI.MUTED)
+		var info := UI.label("Rekord " + Game.fmt_time(rec.total) if rec.has("total") else td.desc, 13,
+			UI.on_tile(sel, UI.GOLD if rec.has("total") else UI.MUTED))
 		if trial:
 			var tt := Game.trial_best(i, int(Game.settings.diff))
-			info = UI.label("Časovka " + Game.fmt_time(tt) if tt > 0.0 else "Zatím bez času", 13, UI.GO if tt > 0.0 else UI.MUTED)
+			info = UI.label("Časovka " + Game.fmt_time(tt) if tt > 0.0 else "Zatím bez času", 13,
+				UI.on_tile(sel, UI.GO if tt > 0.0 else UI.MUTED))
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.custom_minimum_size = Vector2(60, 0)
 		v.add_child(info)
@@ -289,10 +320,12 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false
 
 func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer:
 	var h := UI.hbox(8)
+	var group := ButtonGroup.new()
 	for i in Game.DIFFS.size():
 		var d: Dictionary = Game.DIFFS[i]
 		var b := Button.new()
 		b.toggle_mode = true
+		b.button_group = group
 		b.button_pressed = i == selected
 		b.disabled = not enabled and i != selected
 		b.text = "%s\n%s" % [d.name, d.cc]
@@ -362,10 +395,12 @@ func _setup() -> void:
 	var opts := [["race", "Jeden závod"], ["cup", "Mistrovství"]]
 	if players == 1:
 		opts.append(["trial", "Časovka"])
+	var group := ButtonGroup.new()
 	for o in opts:
 		var mb := Button.new()
 		mb.text = String(o[1])
 		mb.toggle_mode = true
+		mb.button_group = group
 		mb.button_pressed = setup_mode == String(o[0])
 		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		mb.pressed.connect(func():
@@ -631,10 +666,12 @@ func _lobby() -> void:
 	var ms := _section("Režim")
 	var modes := UI.hbox(8)
 	ms.add_child(modes)
+	var group := ButtonGroup.new()
 	for m in 2:
 		var mb := Button.new()
 		mb.text = ["Jeden závod", "Mistrovství"][m]
 		mb.toggle_mode = true
+		mb.button_group = group
 		mb.button_pressed = Net.cup_mode == (m == 1)
 		mb.disabled = not Net.is_host and Net.cup_mode != (m == 1)
 		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
