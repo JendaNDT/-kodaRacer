@@ -185,7 +185,7 @@ static func lake_material(water: Color, sky: Color, frozen: bool) -> ShaderMater
 
 # ================================================================== build
 static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
-	var ts := {"lights": null, "spin": [], "spots": {}}
+	var ts := {"lights": null, "spin": [], "spots": {}, "podium": {}}
 	var crowd: Array = []          # groups of fans: Array of [Transform3D, Color]
 	var cloth := Cloth.new()
 	var used: Array = []           # track indices taken by stands and landmarks
@@ -199,6 +199,7 @@ static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGene
 			_rock_arch(root, tr, th, rng, used, ts.spots)
 		"laguna":
 			_igloos(root, tr, rng, used, ts.spots)
+	_podium(root, tr, used, ts, cloth)
 	_boards(root, tr, used, ts.spots)
 	ts.spots.lights = [Vector3(tr.x[0], 6.5, tr.z[0]), -Vector3(tr.tx[0], 0.0, tr.tz[0])]
 	if not tr.lake.is_empty():
@@ -445,6 +446,60 @@ static func _crowd(people: Array) -> MultiMeshInstance3D:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visibility_range_end = 150.0
 	return mi
+
+
+# ================================================================== podium
+## Winners' podium beside the start straight. ts.podium holds where the
+## three karts stand (1st, 2nd, 3rd) for the race to fill after the finish.
+static func _podium(root: Node3D, tr: Track, used: Array, ts: Dictionary, cloth: Cloth) -> void:
+	for along in [12.0, 44.0, -40.0, 76.0, -72.0]:
+		var i := (int(round(along / tr.step)) + tr.n) % tr.n
+		if _taken(tr, i, used, 22.0):
+			continue
+		for side in [-1.0, 1.0]:
+			var f := _frame(tr, i, side, Game.BAR + 6.0)
+			var pts := [Vector3(-1, 0, -8), Vector3(-1, 0, 8), Vector3(8, 0, -8), Vector3(8, 0, 8), Vector3(4, 0, 0)]
+			if not _clear(tr, f, pts, Game.BAR + 2.0):
+				continue
+			used.append(i)
+			_build_podium(root, f, ts, cloth)
+			return
+
+
+static func _build_podium(root: Node3D, f: Transform3D, ts: Dictionary, cloth: Cloth) -> void:
+	var kit := MeshKit.new()
+	var front := -f.basis.x          # the podium faces the road
+	var c := f * Vector3(3.5, 0, 0)
+	var pf := Transform3D(Basis.looking_at(front, Vector3.UP, true), c)   # +Z towards the road
+	kit.rbox(pf * _t(Vector3(0, 0.1, 0)), Vector3(15.5, 0.2, 7.5), 0.05, Color("b3202c"), MeshKit.MATTE, 1)
+	var slots: Array = []
+	var trims := [UI.GOLD, UI.SILVER, UI.BRONZE]
+	var steps := [[0.0, 1.7], [-4.6, 1.15], [4.6, 0.7]]
+	for k in 3:
+		var x: float = steps[k][0]
+		var h: float = steps[k][1]
+		kit.rbox(pf * _t(Vector3(x, 0.2 + h * 0.5, 0)), Vector3(4.4, h, 5.4), 0.1, Color("f4f6fa"), MeshKit.GLOSS, 1)
+		kit.rbox(pf * _t(Vector3(x, 0.2 + h - 0.05, 0)), Vector3(4.5, 0.12, 5.5), 0.05, trims[k], MeshKit.GLOSS, 1)
+		var face := pf * _t(Vector3(x, 0.2 + h * 0.5, 2.712))
+		kit.disc(face, minf(0.62, h * 0.4), trims[k], MeshKit.GLOSS, 20)
+		kit.number(face * _t(Vector3(0, 0, 0.01)), k + 1, minf(0.72, h * 0.45), KartModel.INK)
+		slots.append(Transform3D(pf.basis, pf * Vector3(x, 0.2 + h, 0.2)))
+	# poles with bunting behind and beside the podium (the front stays open
+	# so nothing hangs in front of the winners)
+	var corners := [Vector3(-7.4, 0, 3.4), Vector3(-7.4, 0, -3.4), Vector3(7.4, 0, -3.4), Vector3(7.4, 0, 3.4)]
+	for k in 4:
+		var p: Vector3 = pf * (corners[k] as Vector3)
+		var top := 5.0 if k == 1 or k == 2 else 3.6
+		kit.tube(MeshKit.at(Vector3.ZERO), p, p + Vector3(0, top + 0.2, 0), 0.08, Color("e3e8ef"), MeshKit.CHROME, 6)
+		if k < 3:
+			var q: Vector3 = pf * (corners[k + 1] as Vector3)
+			var qt := 5.0 if k + 1 == 1 or k + 1 == 2 else 3.6
+			cloth.bunting(p + Vector3(0, top, 0), q + Vector3(0, qt, 0), 0.5)
+	var mi := MeshInstance3D.new()
+	mi.mesh = kit.commit()
+	root.add_child(mi)
+	ts.podium = {"slots": slots, "center": pf * Vector3(0, 1.6, 0), "front": front}
+	ts.spots.podium = [pf * Vector3(0, 2.0, 0), front]
 
 
 # ================================================================== boards, cones, hay

@@ -1,7 +1,8 @@
 class_name Menu
 extends Control
 ## Main menu docked on the left over the live demo race:
-## home, race setup (1 or 2 players), Wi-Fi game and lobby.
+## home, race setup (1 or 2 players), Wi-Fi game and lobby. The chosen
+## kart turns on a pedestal, the driver buttons show each kart in 3D.
 
 signal start_offline(players: int)
 signal quit_requested
@@ -95,6 +96,7 @@ func _ready() -> void:
 	var m := UI.margin(content, 28, 22, 24, 24)
 	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(m)
+	KartStage.host_thumbs(self)
 	Net.lobby_changed.connect(_on_lobby_changed)
 	Net.hosts_changed.connect(_fill_hosts)
 	Net.joined.connect(_on_joined)
@@ -197,7 +199,7 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 		b.toggle_mode = true
 		b.button_pressed = i == selected
 		b.disabled = i in taken
-		b.custom_minimum_size = Vector2(120, 152)
+		b.custom_minimum_size = Vector2(120, 186)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var v := UI.vbox(3)
 		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -207,7 +209,7 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 		v.offset_right = -10
 		v.offset_bottom = -9
 		b.add_child(v)
-		v.add_child(Swatch.new(ch.color, ch.helmet))
+		v.add_child(_kart_picture(i, 64.0))
 		var nl := UI.label(ch.name, 17, UI.PAPER, UI.bold_font)
 		nl.clip_text = true
 		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -227,6 +229,21 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 		b.pressed.connect(func(): Sfx.play("ui", 0.6))
 		g.add_child(b)
 	return g
+
+
+## The kart's 3D picture (a colour dot where nothing can be rendered).
+func _kart_picture(d: int, height: float) -> Control:
+	var tex := KartStage.thumb(d)
+	if tex == null:
+		var ch: Dictionary = Game.CHARS[d]
+		return Swatch.new(ch.color, ch.helmet)
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.custom_minimum_size = Vector2(height * 1.55, height)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return tr
 
 
 func _track_grid(selected: int, enabled: bool, on_pick: Callable) -> GridContainer:
@@ -334,6 +351,7 @@ func _setup() -> void:
 		var other := "driver2" if p == 0 else "driver"
 		var sec := _section("Jezdec" if players == 1 else "Hráč %d – jezdec" % (p + 1))
 		var taken: Array = [int(Game.settings[other])] if players == 2 else []
+		sec.add_child(KartStage.new(int(Game.settings[key]), 170.0 if players == 2 else 200.0))
 		sec.add_child(_driver_grid(int(Game.settings[key]), taken, _pick_driver.bind(key)))
 	var ts := _section("Trať")
 	ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track))
@@ -426,6 +444,7 @@ func _wifi() -> void:
 	name_edit.text_changed.connect(_name_changed)
 	ns.add_child(name_edit)
 	var dsec := _section("Jezdec")
+	dsec.add_child(KartStage.new(int(Game.settings.driver), 180.0))
 	dsec.add_child(_driver_grid(int(Game.settings.driver), [], _pick_driver.bind("driver")))
 	_wide(UI.button("Založit hru", _host, true))
 	var hs := _section("Hry v síti")
@@ -514,7 +533,7 @@ func _lobby() -> void:
 		var pl: Dictionary = Net.players[pid]
 		var ch: Dictionary = Game.CHARS[int(pl.driver)]
 		var h := UI.hbox(10)
-		h.add_child(Swatch.new(ch.color, ch.helmet))
+		h.add_child(_kart_picture(int(pl.driver), 34.0))
 		var me := int(pid) == Net.my_id()
 		var nl := UI.label("%s%s" % [pl.name, " (hostitel)" if int(pid) == 1 else ""], 19, UI.GOLD if me else UI.PAPER, UI.bold_font)
 		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -527,6 +546,7 @@ func _lobby() -> void:
 		if int(pid) != Net.my_id():
 			taken.append(int(Net.players[pid].driver))
 	var dsec := _section("Tvůj jezdec")
+	dsec.add_child(KartStage.new(int(mine.get("driver", Game.settings.driver)), 180.0))
 	dsec.add_child(_driver_grid(int(mine.get("driver", Game.settings.driver)), taken, _lobby_driver))
 	var ts := _section("Trať")
 	ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track))

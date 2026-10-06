@@ -17,6 +17,8 @@ var _fps_frames := 0
 var _fps_worst := 0.0
 var _bench: PackedFloat32Array = PackedFloat32Array()
 var _bench_last := 0
+var _fade: ColorRect
+var _fading := false
 var _bench_draws := 0
 var _bench_prims := 0
 
@@ -30,11 +32,12 @@ func _ready() -> void:
 	add_child(ui_root)
 	menu = Menu.new()
 	ui_root.add_child(menu)
-	menu.start_offline.connect(start_offline)
+	menu.start_offline.connect(func(n: int): fade_to(start_offline.bind(n)))
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
 	menu.quality_changed.connect(_start_demo)
 	_make_fps_label()
+	_make_fader()
 	Net.race_started.connect(_on_net_race)
 	Net.back_to_lobby.connect(_on_back_to_lobby)
 	Net.session_ended.connect(_on_session_ended)
@@ -100,6 +103,41 @@ func _ready() -> void:
 				k.autopilot = true
 
 
+## Black curtain over everything for switching between menu and race.
+func _make_fader() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 60
+	add_child(layer)
+	_fade = ColorRect.new()
+	_fade.color = Color(0.02, 0.03, 0.05, 0.0)
+	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_fade)
+
+
+## Fades to black, runs cb (e.g. starts the race) and fades back in.
+func fade_to(cb: Callable) -> void:
+	if _fading:
+		return
+	_fading = true
+	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	var tw := create_tween()
+	tw.tween_property(_fade, "color:a", 1.0, 0.22)
+	tw.tween_callback(cb)
+	tw.tween_callback(func(): _fading = false)
+	tw.tween_property(_fade, "color:a", 0.0, 0.35)
+	tw.tween_callback(func(): _fade.mouse_filter = Control.MOUSE_FILTER_IGNORE)
+
+
+## Fade back in from black after an instant switch.
+func fade_in() -> void:
+	if _fading:
+		return
+	_fade.color.a = 1.0
+	var tw := create_tween()
+	tw.tween_property(_fade, "color:a", 0.0, 0.4)
+
+
 ## Small FPS readout at the bottom centre, switched on in the menu or pause.
 func _make_fps_label() -> void:
 	var layer := CanvasLayer.new()
@@ -157,8 +195,8 @@ func _new_race() -> Race:
 	race = Race.new()
 	ui_root.add_child(race)
 	ui_root.move_child(race, 0)
-	race.restart_requested.connect(func(): start_offline(last_players))
-	race.menu_requested.connect(_on_race_menu)
+	race.restart_requested.connect(func(): fade_to(start_offline.bind(last_players)))
+	race.menu_requested.connect(func(): fade_to(_on_race_menu))
 	race.lobby_requested.connect(func(): Net.return_to_lobby())
 	return race
 
@@ -206,6 +244,7 @@ func _on_net_race(track: int, diff: int, roster: Array) -> void:
 	menu.visible = false
 	Net.stop_listening()
 	_new_race().start(Race.Mode.HOST if Net.is_host else Race.Mode.CLIENT, track, diff, r)
+	fade_in()   # no fade out first: the host's countdown must not wait
 	if _test_mode != "":
 		for k in race.karts:
 			if k.human:
@@ -225,6 +264,7 @@ func _on_peer_left(id: int) -> void:
 
 func _on_back_to_lobby() -> void:
 	show_menu("lobby")
+	fade_in()
 
 
 func _on_session_ended(reason: String) -> void:
@@ -328,7 +368,7 @@ func _process(delta: float) -> void:
 					all_in = false
 			if all_in and _done_at < 0.0:
 				_done_at = _test_t
-			if _done_at >= 0.0 and _test_t - _done_at > 5.0:
+			if _done_at >= 0.0 and _test_t - _done_at > float(Game.cmd_args.get("linger", "5")):
 				_finish_test(true, "host results, all players finished")
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
@@ -367,6 +407,13 @@ func _show_fx(what: String) -> void:
 			k.obs.level = int(Game.cmd_args.get("level", "3"))
 		"star":
 			k.star = 4.0
+		"roulette":
+			k.item = 0
+			k.roulette = 1.3
+		"banner":
+			race.panes[0].hud.show_banner("POSLEDNÍ KOLO", UI.GOLD, "Kolo 2: 0:36.42")
+		"pop":
+			race.panes[0].hud._last_rank = k.rank + 1
 		"skids":
 			# an S-shaped pair of marks across the road ahead
 			var side := Vector3(cos(k.heading), 0.0, -sin(k.heading))
@@ -384,5 +431,8 @@ func _finish_test(ok: bool, why: String) -> void:
 		for row in race.standings():
 			print("  %s %s %s" % [race.display_name(row.k), Game.fmt_time(row.t), "(odhad)" if row.est else ""])
 	_test_mode = ""
+	if _shot_path != "":   # a pending screenshot is taken soon and quits
+		_shot_delay = minf(_shot_delay, _test_t + 2.5)
+		return
 	get_tree().quit(0 if ok else 1)
 

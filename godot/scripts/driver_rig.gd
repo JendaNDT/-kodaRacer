@@ -142,8 +142,16 @@ static func _meshes(driver: int) -> Dictionary:
 # ================================================================== animation
 func update(k: Kart, delta: float, t: float) -> void:
 	var sr := clampf(absf(k.speed) / maxf(1.0, k.max_speed()), 0.0, 1.0)
-	cheer = move_toward(cheer, 1.0 if k.finished else 0.0, delta * 2.2)
-	if k.spin > 0.0:
+	pose(k.steer, k.slip, k.drift_dir if k.drift_active else 0.0, k.boost > 0.0, k.finished, k.spin > 0.0, sr, delta, t)
+
+
+## The whole pose from a few numbers, so menus and the podium can animate a
+## driver without a kart: steer -1..1, slip (drift angle), drift -1/0/1,
+## cheering at the finish, spinning after a hit, sr = speed share 0..1.
+func pose(steer: float, slip: float, drift: float, boosting: bool, cheering: bool, spinning: bool, sr: float,
+		delta: float, t: float) -> void:
+	cheer = move_toward(cheer, 1.0 if cheering else 0.0, delta * 2.2)
+	if spinning:
 		dizzy = maxf(dizzy, 1.4)
 	dizzy = maxf(0.0, dizzy - delta)
 	var dz := clampf(dizzy, 0.0, 1.0)
@@ -151,17 +159,17 @@ func update(k: Kart, delta: float, t: float) -> void:
 	var sm := 1.0 - exp(-9.0 * delta)
 
 	# steering wheel follows the steering (and shakes while dizzy)
-	steer_spin.rotation.z = k.steer * 1.15 * (1.0 - cw) + sin(t * 24.0) * 0.35 * dz
+	steer_spin.rotation.z = steer * 1.15 * (1.0 - cw) + sin(t * 24.0) * 0.35 * dz
 
 	# lean into the corner, a bit more while drifting; back at the finish
-	var want_lean := k.steer * 0.17 * sr + (k.drift_dir * 0.1 if k.drift_active else 0.0)
+	var want_lean := steer * 0.17 * sr + drift * 0.1
 	lean = lerpf(lean, want_lean * (1.0 - cw), sm)
 	var bob := sin(t * 9.0) * 0.03 * cw
 	torso.position.y = bob
-	torso.rotation = Vector3(0.1 - (0.07 if k.boost > 0.0 else 0.0) - 0.16 * cw, 0.0, lean)
+	torso.rotation = Vector3(0.1 - (0.07 if boosting else 0.0) - 0.16 * cw, 0.0, lean)
 
 	# head looks where the kart is going
-	var want_look := clampf(k.slip * 0.9 - k.steer * 0.38, -0.8, 0.8)
+	var want_look := clampf(slip * 0.9 - steer * 0.38, -0.8, 0.8)
 	look = lerpf(look, want_look * (1.0 - cw), sm)
 	head.rotation = Vector3(-0.28 * cw + cos(t * 10.0) * 0.22 * dz,
 		look + sin(t * 10.0) * 0.45 * dz + sin(t * 4.0) * 0.25 * cw,

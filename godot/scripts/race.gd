@@ -49,6 +49,10 @@ var demo_switch := 0.0
 var all_done_t := -1.0
 var results_shown := false
 var results_refresh := 0.0
+var podium: Array = []          # KartShow on the 1st, 2nd and 3rd step
+var podium_t := -1.0
+var confetti_t := 0.0
+var split_bar: Control
 var music_fast := false
 
 var view_layer: Control
@@ -234,6 +238,7 @@ func _make_views() -> void:
 		panes.append(p)
 	if count == 2:
 		var bar := ColorRect.new()
+		split_bar = bar
 		bar.color = UI.INK
 		bar.anchor_left = 0.0
 		bar.anchor_right = 1.0
@@ -1004,6 +1009,14 @@ func _process(delta: float) -> void:
 			if results_refresh <= 0.0:
 				results_refresh = 0.5
 				_fill_results()
+				_refresh_podium()
+	if podium_t >= 0.0:
+		podium_t += delta
+		confetti_t -= delta
+		if confetti_t <= 0.0:
+			confetti_t = 1.4
+			var c: Vector3 = ts.podium.center
+			Effects.confetti_burst(fx, c + Vector3(randf_range(-4.0, 4.0), 1.0, randf_range(-1.5, 1.5)))
 
 
 func _update_box_visuals(dt: float) -> void:
@@ -1073,12 +1086,13 @@ func _observe(k: Kart, dt: float) -> void:
 			if mode == Mode.CLIENT and k.lap >= 2:
 				k.lap_times.append(k.last_lap)
 			if k.lap >= 2 and k.lap <= Game.LAPS and hud != null:
+				var lap_time := "Kolo %d: %s" % [k.lap - 1, Game.fmt_time(k.last_lap)]
 				if k.lap == Game.LAPS:
-					hud.show_msg("Poslední kolo!", UI.GOLD)
+					hud.show_banner("POSLEDNÍ KOLO", UI.GOLD, lap_time)
 					Sfx.play("final_lap")
 					Sfx.music(true, true)
 				else:
-					hud.show_msg("Kolo %d: %s" % [k.lap - 1, Game.fmt_time(k.last_lap)], UI.PAPER)
+					hud.show_banner("KOLO %d/%d" % [k.lap, Game.LAPS], UI.PAPER, lap_time)
 					Sfx.play("lap")
 		if k.finished and not bool(o.finished):
 			var place := _place_of(k)
@@ -1116,6 +1130,9 @@ func _count_display() -> void:
 
 
 func _update_camera(p: Dictionary, delta: float) -> void:
+	if podium_t >= 0.0:
+		_podium_camera(p)
+		return
 	var k: Kart = p.kart if p.kart != null else demo_focus
 	if k == null:
 		return
@@ -1214,25 +1231,38 @@ func display_name(k: Kart) -> String:
 	return k.ch.name
 
 
-func _panel(title_text: String) -> Array:
+## A panel over the race: centred with a dark shade, or at the bottom with
+## the view left clear (results under the podium).
+func _panel(title_text: String, bottom := false) -> Array:
 	var shade := ColorRect.new()
-	shade.color = Color(0.03, 0.04, 0.07, 0.55)
+	shade.color = Color(0.03, 0.04, 0.07, 0.0 if bottom else 0.55)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	overlay.add_child(shade)
 	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.add_child(center)
+	if bottom:
+		var col := VBoxContainer.new()
+		col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		col.offset_bottom = -10
+		shade.add_child(col)
+		var gap := Control.new()
+		gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(gap)
+		col.add_child(center)
+	else:
+		center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		shade.add_child(center)
 	var pc := PanelContainer.new()
 	pc.add_theme_stylebox_override("panel", UI.panel_style(16))
-	pc.custom_minimum_size = Vector2(520, 0)
+	pc.custom_minimum_size = Vector2(560 if bottom else 520, 0)
 	center.add_child(pc)
-	var v := UI.vbox(14)
+	var v := UI.vbox(8 if bottom else 14)
 	pc.add_child(v)
 	v.add_child(UI.kerb_strip(8))
-	var inner := UI.vbox(14)
-	v.add_child(UI.margin(inner, 24, 4, 24, 22))
-	var title := UI.label(title_text, 40, UI.PAPER, UI.display_font)
+	var inner := UI.vbox(8 if bottom else 14)
+	v.add_child(UI.margin(inner, 24, 0 if bottom else 4, 24, 16 if bottom else 22))
+	var title := UI.label(title_text, 32 if bottom else 40, UI.PAPER, UI.display_font)
 	inner.add_child(title)
 	return [shade, inner, title]
 
@@ -1317,6 +1347,7 @@ func pause_from_system() -> void:
 
 func _show_results() -> void:
 	results_shown = true
+	_start_podium()
 	if pause_panel != null:
 		pause_panel.queue_free()
 		pause_panel = null
@@ -1340,7 +1371,7 @@ func _show_results() -> void:
 		for k in locals:
 			parts.append("Hráč %d: %d. místo" % [k.local_slot + 1, _place_of(k)])
 		sub = " · ".join(parts)
-	var p := _panel(title)
+	var p := _panel(title, not podium.is_empty())
 	results_panel = p[0]
 	var inner: VBoxContainer = p[1]
 	var tl: Label = p[2]
@@ -1372,6 +1403,66 @@ func _show_results() -> void:
 	for c in row.get_children():
 		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	first.grab_focus.call_deferred()
+
+
+## The first three karts stand on the podium beside the start straight,
+## drivers cheering, confetti flying; the camera circles them on a single
+## full-screen view.
+func _start_podium() -> void:
+	if ts.get("podium", {}).is_empty() or mode == Mode.DEMO:
+		return
+	podium_t = 0.0
+	confetti_t = 0.3
+	_refresh_podium()
+	for i in panes.size():
+		var p: Dictionary = panes[i]
+		if p.hud != null:
+			p.hud.visible = false
+		if p.get("lines") != null:
+			p.lines.visible = false
+		var pane: Control = p.root
+		if i == 0:
+			pane.anchor_top = 0.0
+			pane.anchor_bottom = 1.0
+			pane.offset_top = 0
+			pane.offset_bottom = 0
+		else:
+			pane.visible = false
+	if split_bar != null:
+		split_bar.visible = false
+
+
+func _refresh_podium() -> void:
+	if podium_t < 0.0:
+		return
+	var rows := standings()
+	var slots: Array = ts.podium.slots
+	for i in mini(3, rows.size()):
+		var k: Kart = rows[i].k
+		if i < podium.size() and (podium[i] as KartShow).driver == k.driver:
+			continue
+		if i < podium.size():
+			(podium[i] as KartShow).queue_free()
+		var show := KartShow.new()
+		show.setup(k.driver, false)
+		show.cheering = true
+		show.steer_amp = 0.25
+		show.transform = slots[i]
+		fx.add_child(show)
+		if i < podium.size():
+			podium[i] = show
+		else:
+			podium.append(show)
+
+
+func _podium_camera(p: Dictionary) -> void:
+	var cam: Camera3D = p.cam
+	var c: Vector3 = ts.podium.center
+	var front: Vector3 = ts.podium.front
+	var a := atan2(front.x, front.z) + sin(podium_t * 0.22) * 0.8
+	cam.position = c + Vector3(sin(a), 0.0, cos(a)) * 15.0 + Vector3(0, 4.5, 0)
+	cam.look_at(c + Vector3(0, -5.5, 0), Vector3.UP)   # podium in the upper half, results below
+	cam.fov = 58.0
 
 
 func _fill_results() -> void:

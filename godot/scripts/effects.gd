@@ -282,7 +282,7 @@ static func confetti_shower(kart: Node3D) -> void:
 	kart.add_child(p)
 	p.emitting = true
 	var tree := kart.get_tree()
-	tree.create_timer(4.5).timeout.connect(func(): p.emitting = false)
+	tree.create_timer(4.5).timeout.connect(p.set.bind("emitting", false))   # dropped if the race is gone
 	tree.create_timer(9.0).timeout.connect(p.queue_free)
 
 

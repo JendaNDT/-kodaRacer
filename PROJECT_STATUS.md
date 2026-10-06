@@ -6,7 +6,7 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.5.0 na telefonu a PC (zapnout FPS, projet všechny tři tratě na všech třech kvalitách) a pak fáze 5 z `PLAN_GRAFIKA.md`: menu, výsledky a rozhraní.**
+**Vyzkoušet verzi 1.6.0 na telefonu a PC (zapnout FPS, projet všechny tři tratě na všech třech kvalitách, dojet do cíle a podívat se na stupně vítězů). Pak buď fáze 6 z `PLAN_GRAFIKA.md` (kopce a skoky, největší a volitelná), nebo něco z backlogu.**
 Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam nechat stíny (nejdražší efekt), nebo je dát jen na Vysokou.
 
 ## ✅ Hotovo
@@ -25,11 +25,11 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 - **Fáze 3 grafiky:** 6 různých motokár z generátoru zaoblených tvarů (formule, bublina, sporťák, buggy, traktůrek, střela), živý jezdec (ruce na volantu, hlava do zatáčky, náklon, radost v cíli, motání hlavy po zásahu), helma s pruhy, startovní čísla na bocích, kola s ráfkem a vzorkem, pérování podvozku, zjednodušené modely pro vzdálené motokáry, režim `--showcase` na screenshoty
 - **Spojení fází 1, 2 a 3 do verze 1.4.0** (větev `claude/amazing-faraday-a6w7aw`): plameny, záblesk turba, stopy smyku, prach od kol a hvězdičky po zásahu sedí na výfuky a kola každé motokáry. Do stínu se kreslí zjednodušené motokáry, ruce a volant stín nevrhají. Zářící krabice (fáze 1) a lesk krabic (fáze 2) jsou spojené v jednom shaderu.
 - **Fáze 4 grafiky (verze 1.5.0):** semafor s pěti světly synchronizovaný s odpočtem, tribuny s mávajícími diváky, praporky a vlajky ve větru, reklamní panely vymyšlených sponzorů, balíky slámy a kužely v zatáčkách, stromy a kaktusy ve větru, vlnící se a třpytivé jezero. Dominanty: větrný mlýn a dřevěný most přes trať (údolí), skalní oblouk přes trať (kaňon), iglú, ledové krystaly a zamrzlé jezero (laguna). Hustota diváků podle kvality.
+- **Fáze 5 grafiky (verze 1.6.0):** výběr jezdce s motokárou na otáčejícím se podstavci (menu, 2 hráči i Wi-Fi lobby) a 3D obrázky na tlačítkách jezdců, stupně vítězů u startovní rovinky (první tři motokáry, mávající jezdci, konfety, houpající se kamera, tabulka dole) i na rozdělené obrazovce a po Wi-Fi, losování předmětu jako hrací automat, „+1“ / „−1“ při změně pořadí, pás „KOLO 2/3“ / „POSLEDNÍ KOLO“ s časem kola, zatmívačka mezi menu a závodem
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
 ### Vylepšení grafiky (podrobně v `PLAN_GRAFIKA.md`)
-- Fáze 5: 3D náhled jezdce v menu, stupně vítězů, animovaný HUD
 - Fáze 6 (volitelná): kopce, skoky a klopené zatáčky
 
 ### Backlog (později)
@@ -63,6 +63,7 @@ Až napíšeš, kolik FPS ukazuje telefon na Střední, rozhodneme, jestli tam n
 - **Fáze grafiky 1–3 vznikly paralelně** na samostatných větvích a jsou spojené ve verzi 1.4.0. Od fáze 4 je hlavní větev `main`, další práce staví na ní.
 - **Svět kolem trati v `trackside.gd`**: co se hýbe (diváci, praporky, vlajky, stromy, voda), hýbe grafická karta přes shadery, takže to procesor nezatěžuje. Skript řídí jen semafor a lopatky mlýna. Pozice tribun, mostu a oblouku se hledají automaticky podle tvaru trati (rovinka, dost místa, mimo jiné části trati a jezero).
 - **Pneumatiky bariér, balíky slámy, kužely a diváci nevrhají stín**: stín je u nich skoro neviditelný, ale kreslil by se pro každé pásmo stínů znovu. Díky tomu fáze 4 na výkonu nic nestojí.
+- **Stupně vítězů stojí přímo u trati**, ne v samostatné scéně: nic se nenačítá, po Wi-Fi není potřeba nic posílat navíc (každý si pódium postaví sám podle výsledků) a motokáry na něm jsou stejné modely jako v závodě. Náhled v menu má vlastní malý 3D svět (SubViewport), takže nezávisí na trati v pozadí.
 - **Stíny motokár ze zjednodušeného modelu:** detailní model stín nevrhá, místo něj ho vrhá neviditelná jednodušší kopie (stín se kreslí pro každé pásmo stínů zvlášť).
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Rozdělená obrazovka nahoře/dole** jako v Mario Kartu; každý hráč má vlastní kameru a HUD.

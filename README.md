@@ -25,7 +25,7 @@ Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). 
 
 ## Jezdci a motokáry
 
-Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnosti určuje jezdec.
+Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnosti určuje jezdec. Při výběru se zvolená motokára otáčí na podstavci a jezdec ti zamává.
 
 | Číslo | Jezdec | Motokára | Typ (jako v menu) |
 | --- | --- | --- | --- |
@@ -44,7 +44,7 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | Pouštní kaňon | západ slunce | skalní oblouk přes trať |
 | Ledová laguna | zataženo, sněží | iglú, svítící ledové krystaly, zamrzlé jezero |
 
-Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách.
+Na startu se při odpočtu rozsvěcuje semafor, u startovní rovinky fandí diváci na tribunách. Po závodě stojí první tři motokáry na stupních vítězů u startovní rovinky, létají konfety a pod nimi je výsledková tabulka.
 
 ## Ovládání
 
@@ -66,7 +66,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 - **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
-- **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš.
+- **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš. Předmět se losuje jako na hracím automatu: obrázky se protáčejí, zpomalí a vyhraný zacvakne.
 
 | Předmět | Co dělá |
 | --- | --- |
