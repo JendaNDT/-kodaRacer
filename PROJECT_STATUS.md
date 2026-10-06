@@ -6,8 +6,8 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.10.0: časovku (dvakrát za sebou na stejné trati, podruhé už pojede duch) a mistrovství po Wi-Fi mezi dvěma zařízeními. Dál z backlogu: hra přes internet, rozdělená obrazovka i v síťové hře nebo vlastní podpisový klíč pro Google Play.**
-Ve verzi 1.6.0 ukazoval telefon na Střední 120 FPS, proto stíny na Střední zůstávají.
+**Etapa A z `PLAN_VYLEPSENI.md`: čisté zvýraznění v menu, rychlejší Podzimní les, žádné náhodné poskoky na hrbolech (verze 1.11.0).** Celý plán má šest etap (A–F) pro osm vylepšení: menu, ovládání po Wi-Fi bez zpoždění, výkon lesa, poskoky, nové předměty, odemykání, chytřejší soupeři a zkratky.
+Mezitím je dobré vyzkoušet verzi 1.10.0 na telefonu: časovku dvakrát za sebou a mistrovství po Wi-Fi mezi dvěma zařízeními.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
