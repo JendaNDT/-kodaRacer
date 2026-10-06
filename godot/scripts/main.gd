@@ -18,6 +18,7 @@ var _fps_worst := 0.0
 var _bench: PackedFloat32Array = PackedFloat32Array()
 var _bench_last := 0
 var _fade: ColorRect
+var _fade_tw: Tween
 var _fading := false
 var _bench_draws := 0
 var _bench_prims := 0
@@ -104,6 +105,7 @@ func _ready() -> void:
 
 
 ## Black curtain over everything for switching between menu and race.
+## Hidden when not fading: even see-through it would cost a full-screen blend.
 func _make_fader() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 60
@@ -111,7 +113,8 @@ func _make_fader() -> void:
 	_fade = ColorRect.new()
 	_fade.color = Color(0.02, 0.03, 0.05, 0.0)
 	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade.mouse_filter = Control.MOUSE_FILTER_STOP   # no clicks while it is shown
+	_fade.visible = false
 	layer.add_child(_fade)
 
 
@@ -120,22 +123,30 @@ func fade_to(cb: Callable) -> void:
 	if _fading:
 		return
 	_fading = true
-	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
+	var tw := _fade_tween()
 	tw.tween_property(_fade, "color:a", 1.0, 0.22)
 	tw.tween_callback(cb)
 	tw.tween_callback(func(): _fading = false)
 	tw.tween_property(_fade, "color:a", 0.0, 0.35)
-	tw.tween_callback(func(): _fade.mouse_filter = Control.MOUSE_FILTER_IGNORE)
+	tw.tween_callback(_fade.hide)
 
 
 ## Fade back in from black after an instant switch.
 func fade_in() -> void:
 	if _fading:
 		return
+	var tw := _fade_tween()
 	_fade.color.a = 1.0
-	var tw := create_tween()
 	tw.tween_property(_fade, "color:a", 0.0, 0.4)
+	tw.tween_callback(_fade.hide)
+
+
+func _fade_tween() -> Tween:
+	if _fade_tw != null:
+		_fade_tw.kill()
+	_fade.visible = true
+	_fade_tw = create_tween()
+	return _fade_tw
 
 
 ## Small FPS readout at the bottom centre, switched on in the menu or pause.

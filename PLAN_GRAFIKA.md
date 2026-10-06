@@ -142,7 +142,17 @@ Počet částic se řídí kvalitou z fáze 0.
 
 ---
 
-## Fáze 5 – Menu, výsledky a rozhraní  *(střední)*
+## Fáze 5 – Menu, výsledky a rozhraní  *(střední)* ✅ hotovo (verze 1.6.0)
+
+> **Výsledek (`kart_stage.gd`, `kart_show.gd`, `item_icon.gd`, `hud.gd`):**
+> - *Výběr jezdce:* v menu, u hry pro 2 hráče i ve Wi-Fi lobby se zvolená motokára otáčí na podstavci s obrubníkovým pruhem a jezdec po výběru zamává. Tlačítka jezdců mají malé 3D obrázky motokár (vykreslí se jen jednou).
+> - *Stupně vítězů:* u startovní rovinky každé trati stojí pódium se stupni 1–3 (zlatý, stříbrný a bronzový lem) a praporky vzadu a po stranách. Po závodě se na něj postaví první tři motokáry, jezdci mávají, létají konfety a kamera se pomalu houpe ze strany na stranu. Výsledková tabulka je dole, aby pódium zůstalo vidět. Rozdělená obrazovka se po závodě spojí do jednoho obrazu. Když ještě někdo dojíždí, pódium se průběžně přeskládá.
+> - *Losování předmětu:* válec hracího automatu. Obrázky běží dolů a rozmazávají se, pak zpomalí a vyhraný předmět zacvakne s malým přeskokem.
+> - *HUD:* při předjetí vyskočí vedle pořadí zelené „+1“ (při ztrátě červené „−1“) a číslo poskočí. Nové kolo přijede jako pás s obrubníky („KOLO 2/3“, zlaté „POSLEDNÍ KOLO“) a pod ním čas právě dojetého kola. Mezi menu a závodem je zatmívačka.
+> - *Wi-Fi:* klient vidí stejné stupně vítězů. Při startu síťového závodu a návratu do lobby se obraz jen rozjasní, aby hostitelův odpočet na nikoho nečekal.
+> - **Výkon:** v cloudu stejný jako 1.5.0, měřeno hned vedle sebe (Nízká 23,0 → 22,8, Střední 6,7 → 7,2, Vysoká 4,2 → 4,1 FPS, v rámci šumu). Otáčející se motokára se kreslí jen v menu, obrázky jezdců jen jednou a stupně vítězů jen po závodě. Zatmívačka je mimo přechod úplně skrytá: i průhledná by se kreslila přes celou obrazovku a na Nízké stála asi 8 % výkonu.
+> - **Opravená chyba z fáze 2:** konfety v cíli hlásily chybu, když hráč do 4,5 s po dojetí odešel ze závodu.
+> - **Screenshoty:** `--fx=roulette`, `--fx=banner`, `--fx=pop` (losování, pás kola, „+1“), stupně vítězů ukáže `--race --autopilot --fast=8` po dojetí.
 
 - **Výběr jezdce:** 3D motokára na otočném podstavci místo barevného kolečka, v menu i v lobby.
 - **Stupně vítězů** po závodě: první tři motokáry na pódiu, konfety a kamera kolem dokola, pod tím výsledková tabulka.
@@ -180,7 +190,7 @@ Riziko: zasahuje do fyziky, AI i sítě, proto až nakonec a samostatně.
 | 2 Efekty při jízdě ✅ | střední | pocit rychlosti, zábava |
 | 3 Motokáry a jezdci ✅ | velká | charakter postav |
 | 4 Svět kolem trati ✅ | velká | živé prostředí |
-| 5 Menu a výsledky | střední | dojem z celé hry |
+| 5 Menu a výsledky ✅ | střední | dojem z celé hry |
 | 6 Kopce a skoky | největší | nová hratelnost |
 
 Doporučené tempo: **0 + 1 dohromady**, potom vždy jedna fáze. Po každé fázi společně zkontrolujeme výkon na telefonu.
