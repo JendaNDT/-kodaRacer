@@ -50,6 +50,23 @@ var _line_task := -1                # worker thread making the line
 var _flat_line := PackedFloat32Array()   # the centre line, used until the racing line is ready
 const LINE_W := Game.HW - 2.4       # how close to the edge of the road it may go
 
+# --- the shortcut (Etapa E): a dirt path through the infield from the road
+# at sample cut.a back to it at cut.b, made by _make_cut (empty when the
+# track has no room for one)
+var cut := {}
+var _cgrid := {}
+const CUT_W := 6.0                  # half width of the path
+const CUT_IN := Game.HW * 0.45      # where on the road it starts and ends (from the centre)
+## grip: how well the kart steers there, slow_add: faster (ice) than the
+## usual dirt; the top speed itself depends on how much the path saves
+const CUT_KINDS := {
+	"dirt": {"grip": 1.0, "color": Color("8c6a46")},
+	"sand": {"grip": 0.9, "color": Color("d6b47c")},
+	"ice": {"grip": 0.5, "color": Color("d4ecf7")},
+	"gravel": {"grip": 1.0, "color": Color("6e6873")},
+}
+const CUT_BY_TRACK := {"udoli": "dirt", "kanon": "sand", "laguna": "ice", "les": "dirt", "mesto": "gravel", "ostrov": "sand"}
+
 # --- land around the track: a height grid every FCELL metres. Near the road
 # it continues the road surface sideways, further out it blends into gentle
 # natural rolls that fade to 0 at the edge (where the flat far ground starts).
@@ -125,6 +142,7 @@ func _init(d: Dictionary) -> void:
 		_grid[key].append(i)
 	_find_lake()
 	_profile()
+	_make_cut()
 
 
 static func _catmull(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, u: float) -> Vector2:
@@ -187,7 +205,13 @@ func min_dist(px: float, pz: float) -> float:
 
 
 ## True when any centre sample lies within r of the point (spatial hash).
+## The shortcut counts too, as if it were a road CUT_W wide: barriers open
+## where it crosses them and trees keep clear of it.
 func near(px: float, pz: float, r: float) -> bool:
+	if not cut.is_empty():
+		var rc := r - (Game.BAR - CUT_W - 1.5)
+		if rc > 0.0 and _near_cut(px, pz, rc):
+			return true
 	var r2 := r * r
 	for gx in range(floori((px - r) / CELL), floori((px + r) / CELL) + 1):
 		for gz in range(floori((pz - r) / CELL), floori((pz + r) / CELL) + 1):
@@ -541,8 +565,333 @@ func nearest(px: float, pz: float) -> int:
 ## Road surface height under a point near the track (beside the road the
 ## banked surface carries on to the barriers). hint: a nearby sample or -1.
 func ground(px: float, pz: float, hint := -1) -> float:
+	var pc := cut_at(px, pz, 3.0)
+	if not pc.is_empty():
+		return cut_ground(px, pz, pc[0], pc[2])
 	var pj := project(px, pz, hint if hint >= 0 else nearest(px, pz))
 	return road_y(pj[0], clampf(pj[1], -Game.BAR - 6.0, Game.BAR + 6.0), pj[2])
+
+
+# ================================================================== shortcut
+## Picks the shortcut: a path from the road at sample a, through the infield,
+## back to the road at sample b, much shorter than the road between them and
+## clear of every other part of the track, the lake, the start straight, the
+## ramp and the item boxes. Every track gets one if there is room.
+func _make_cut() -> void:
+	var kind: String = CUT_BY_TRACK.get(def.id, "")
+	if kind == "":
+		return
+	var stored: Dictionary = def.get("cut", {})
+	if not stored.is_empty() and not Game.cmd_args.has("findcuts"):
+		# found once by --findcuts and kept in Game.TRACKS: building it is instant
+		var a := int(stored.a)
+		var b := int(stored.b)
+		_build_cut(_cut_path(a, b, float(stored.sa), float(stored.sb), float(stored.bow), float(stored.get("hand", 0.38))), a, b,
+			float(stored.sa), float(stored.sb), kind)
+		return
+	var cands: Array = []
+	for a in range(0, n, 3):
+		if not _cut_end_ok(a):
+			continue
+		for span in range(int(180.0 / step), int(n * 0.45), 3):
+			if a + span >= n:
+				break                    # never across the start and finish line
+			var b := a + span
+			if not _cut_end_ok(b):
+				continue
+			var dx := x[b] - x[a]
+			var dz := z[b] - z[a]
+			var sa := signf(dx * nx[a] + dz * nz[a])
+			var sb := signf(-dx * nx[b] - dz * nz[b])
+			var e := Vector2(x[a] + nx[a] * sa * CUT_IN, z[a] + nz[a] * sa * CUT_IN)
+			var f := Vector2(x[b] + nx[b] * sb * CUT_IN, z[b] + nz[b] * sb * CUT_IN)
+			var c := e.distance_to(f)
+			var main_len := span * step
+			if c < 50.0 or c > 380.0 or c / main_len > 0.66 or c / main_len < 0.38:
+				continue
+			# the most road saved, but not a path so long the dirt eats it all
+			cands.append([main_len - c * 1.7, a, b, sa, sb])
+	cands.sort_custom(func(p, q): return p[0] > q[0])
+	var dbg := {"cands": cands.size(), "len": 0, "clear": 0}
+	for ci in mini(cands.size(), 2500):
+		var cd: Array = cands[ci]
+		var main_len := float((int(cd[2]) - int(cd[1]) + n) % n) * step
+		# the straight-ish path first, then ones bowed to either side (around a lake or a hill)
+		for variant in _CUT_SHAPES:
+			var bow: float = variant[0]
+			var hand: float = variant[1]
+			var pts := _cut_path(int(cd[1]), int(cd[2]), float(cd[3]), float(cd[4]), bow, hand)
+			var plen := 0.0
+			for k in range(1, pts.size()):
+				plen += pts[k].distance_to(pts[k - 1])
+			if plen / main_len > 0.72 or plen / main_len < 0.45:
+				dbg.len += 1
+				continue
+			if not _cut_smooth(pts) or not _cut_clear(pts, int(cd[1]), int(cd[2]), kind == "ice"):
+				dbg.clear += 1
+				continue
+			_build_cut(pts, int(cd[1]), int(cd[2]), float(cd[3]), float(cd[4]), kind)
+			print("FOUND CUT \"%s\": {\"a\": %d, \"b\": %d, \"sa\": %.0f, \"sb\": %.0f, \"bow\": %.0f, \"hand\": %.2f}" % [def.id, int(cd[1]), int(cd[2]), float(cd[3]), float(cd[4]), bow, hand])
+			return
+	print("NO CUT for %s: %d candidates, %d too short or long, %d too close to the road or the lake" % [def.id, dbg.cands, dbg.len, dbg.clear])
+
+
+## Ends of a shortcut stay off the start straight and away from the ramp and the item boxes.
+func _cut_end_ok(i: int) -> bool:
+	if _flat(i) > 0.0:
+		return false
+	if not ramp.is_empty() and _arc(i, int(ramp.i)) < 50.0:
+		return false
+	for fb in def.boxes:
+		if _arc(i, int(float(fb) * n)) < 24.0:
+			return false
+	return true
+
+
+## A smooth curve leaving the road at a along its direction and joining it at b, every ~2 m.
+## Shapes tried for each candidate: [how far it bows out (m), how long the
+## curve keeps the road's direction at its ends (share of the distance)].
+const _CUT_SHAPES := [[0.0, 0.38], [0.0, 0.25], [0.0, 0.55], [25.0, 0.38], [-25.0, 0.38], [50.0, 0.3], [-50.0, 0.3],
+	[80.0, 0.3], [-80.0, 0.3], [110.0, 0.25], [-110.0, 0.25], [140.0, 0.2], [-140.0, 0.2]]
+
+
+func _cut_path(a: int, b: int, sa: float, sb: float, bow := 0.0, hand := 0.38) -> PackedVector2Array:
+	var p0 := Vector2(x[a] + nx[a] * sa * CUT_IN, z[a] + nz[a] * sa * CUT_IN)
+	var p3 := Vector2(x[b] + nx[b] * sb * CUT_IN, z[b] + nz[b] * sb * CUT_IN)
+	var c := p0.distance_to(p3)
+	var p1 := p0 + Vector2(tx[a], tz[a]) * c * hand
+	var p2 := p3 - Vector2(tx[b], tz[b]) * c * hand
+	var side := (p3 - p0).normalized().orthogonal()
+	var dense := PackedVector2Array()
+	for k in 201:
+		var t := k / 200.0
+		var u := 1.0 - t
+		# bow: pushed this many metres sideways in the middle, the ends stay put
+		dense.append(p0 * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + p3 * t * t * t
+			+ side * bow * 16.0 * t * t * u * u)
+	# even spacing
+	var out := PackedVector2Array([dense[0]])
+	var acc := 0.0
+	for k in range(1, dense.size()):
+		acc += dense[k].distance_to(dense[k - 1])
+		if acc >= 2.0:
+			out.append(dense[k])
+			acc = 0.0
+	if out[out.size() - 1].distance_to(p3) > 0.5:
+		out.append(p3)
+	return out
+
+
+## No loops or hairpins on the path: no bend tighter than a 15 m radius
+## (the path is driven slowly, a turbo is only fired on its straighter parts).
+func _cut_smooth(pts: PackedVector2Array) -> bool:
+	for k in range(2, pts.size()):
+		var h0 := (pts[k - 1] - pts[k - 2]).angle()
+		var h1 := (pts[k] - pts[k - 1]).angle()
+		if absf(wrapf(h1 - h0, -PI, PI)) > pts[k].distance_to(pts[k - 1]) / 15.0:
+			return false
+	return true
+
+
+## The path must keep its distance from every other part of the track (it
+## may touch the road only where it leaves and joins it) and from the lake.
+func _cut_clear(pts: PackedVector2Array, a: int, b: int, over_ice := false) -> bool:
+	var far_r := Game.BAR + CUT_W + 3.0
+	var hug_r := Game.BAR + CUT_W + 0.5
+	var total := 0.0
+	var cum := PackedFloat32Array([0.0])
+	for k in range(1, pts.size()):
+		total += pts[k].distance_to(pts[k - 1])
+		cum.append(total)
+	for k in pts.size():
+		var p := pts[k]
+		var mid := cum[k] > total * 0.3 and cum[k] < total * 0.7   # well away from the road it leaves
+		if not lake.is_empty() and not over_ice and p.distance_to(Vector2(float(lake.x), float(lake.z))) < float(lake.r) + CUT_W + 5.0:
+			return false
+		var cx0 := floori(p.x / CELL)
+		var cz0 := floori(p.y / CELL)
+		for gx in range(cx0 - 2, cx0 + 3):
+			for gz in range(cz0 - 2, cz0 + 3):
+				var cell = _grid.get(Vector2i(gx, gz))
+				if cell == null:
+					continue
+				for j in cell:
+					var d := p.distance_to(Vector2(x[j], z[j]))
+					if mid and d < hug_r:
+						return false
+					if d < far_r and _arc(j, a) > 50.0 and _arc(j, b) > 50.0:
+						return false
+	return true
+
+
+func _build_cut(pts: PackedVector2Array, a: int, b: int, sa: float, sb: float, kind: String) -> void:
+	var m := pts.size()
+	var cx_ := PackedFloat32Array()
+	var cz_ := PackedFloat32Array()
+	var ctx := PackedFloat32Array()
+	var ctz := PackedFloat32Array()
+	var cy := PackedFloat32Array()
+	var cs := PackedFloat32Array()
+	var total := 0.0
+	for k in m:
+		var p := pts[k]
+		cx_.append(p.x)
+		cz_.append(p.y)
+		if k > 0:
+			total += p.distance_to(pts[k - 1])
+		cs.append(total)
+		var d := (pts[mini(k + 1, m - 1)] - pts[maxi(k - 1, 0)]).normalized()
+		ctx.append(d.x)
+		ctz.append(d.y)
+	var ya := road_y(a, sa * CUT_IN, 0.0, false)
+	var yb := road_y(b, sb * CUT_IN, 0.0, false)
+	for k in m:
+		var base := lerpf(ya, yb, smoothstep(0.0, 1.0, cs[k] / total))
+		# where it runs beside the road the path lies on the road's own surface
+		var pj := project(cx_[k], cz_[k], a if cs[k] < total * 0.5 else b)
+		var road := road_y(pj[0], clampf(pj[1], -Game.BAR - 6.0, Game.BAR + 6.0), pj[2], false)
+		var yy := lerpf(base, road, _road_share(absf(float(pj[1]))))
+		if not lake.is_empty() and Vector2(cx_[k] - float(lake.x), cz_[k] - float(lake.z)).length() < float(lake.r) + 4.0:
+			yy = maxf(yy, lake_y + 0.08)   # across the frozen lake: on top of the ice
+		cy.append(yy)
+	var kd: Dictionary = CUT_KINDS[kind]
+	# as slow as it takes for the path to lose about 10 % against the road
+	# without a turbo: with a turbo or the star it wins clearly. Only the part
+	# away from the road slows (beside the road the kart is still on it).
+	var span_m := float((b - a + n) % n) * step
+	var off_m := 0.0
+	for k in range(1, m):
+		var pj := project(cx_[k], cz_[k], a if cs[k] < total * 0.5 else b)
+		if absf(float(pj[1])) > Game.HW + Game.KERB:
+			off_m += cs[k] - cs[k - 1]
+	var slow := clampf(off_m / maxf(1.1 * span_m - (total - off_m), 1.0), 0.3, 0.75)
+	if def.get("cut", {}).has("slow"):
+		slow = float(def.cut.slow)       # measured by --cutcal (entry, bends and all)
+	cut = {"a": a, "b": b, "sa": sa, "sb": sb, "m": m, "x": cx_, "z": cz_, "tx": ctx, "tz": ctz, "y": cy, "s": cs,
+		"len": total, "arc_a": a * step, "arc_span": span_m, "kind": kind,
+		"slow": slow, "grip": float(kd.grip), "color": kd.color}
+	_cgrid = {}
+	for k in m:
+		var key := Vector2i(floori(cx_[k] / CELL), floori(cz_[k] / CELL))
+		if not _cgrid.has(key):
+			_cgrid[key] = []
+		_cgrid[key].append(k)
+
+
+## Nearest shortcut sample to a point (hint: a nearby one, or -1 to look everywhere).
+## Returns [sample, metres to the right of the path, metres ahead of the sample].
+func cut_project(px: float, pz: float, hint: int) -> Array:
+	var m: int = cut.m
+	var cxs: PackedFloat32Array = cut.x
+	var czs: PackedFloat32Array = cut.z
+	var best := 0
+	var bd := INF
+	var lo := 0 if hint < 0 else maxi(0, hint - 14)
+	var hi := m if hint < 0 else mini(m, hint + 15)
+	for k in range(lo, hi):
+		var d := (px - cxs[k]) * (px - cxs[k]) + (pz - czs[k]) * (pz - czs[k])
+		if d < bd:
+			bd = d
+			best = k
+	var ex := px - cxs[best]
+	var ez := pz - czs[best]
+	var ttx: float = cut.tx[best]
+	var ttz: float = cut.tz[best]
+	return [best, ex * -ttz + ez * ttx, ex * ttx + ez * ttz]
+
+
+## The shortcut under a point, as cut_project, or [] when the point is not on it
+## (`extra` metres wider than the path; past its ends never).
+func cut_at(px: float, pz: float, extra := 0.0) -> Array:
+	if cut.is_empty():
+		return []
+	var hint := -1
+	var bd := INF
+	var cx0 := floori(px / CELL)
+	var cz0 := floori(pz / CELL)
+	for gx in range(cx0 - 1, cx0 + 2):
+		for gz in range(cz0 - 1, cz0 + 2):
+			var cell = _cgrid.get(Vector2i(gx, gz))
+			if cell == null:
+				continue
+			for k in cell:
+				var d := Vector2(px - float(cut.x[k]), pz - float(cut.z[k])).length_squared()
+				if d < bd:
+					bd = d
+					hint = k
+	if hint < 0:
+		return []
+	var pc := cut_project(px, pz, hint)
+	var last: int = int(cut.m) - 1
+	if absf(float(pc[1])) > CUT_W + extra or (int(pc[0]) == 0 and float(pc[2]) < 0.0) or (int(pc[0]) == last and float(pc[2]) > 0.0):
+		return []
+	return pc
+
+
+## How much the shortcut takes the road's surface at this distance from the
+## road's centre: fully up to the barriers, none 10 m past them.
+static func _road_share(la: float) -> float:
+	return 1.0 - smoothstep(Game.BAR - 2.0, Game.BAR + 8.0, la)
+
+
+## The ground under a point on the shortcut: beside the road it is the road's
+## own (banked) surface exactly where the kart is, so getting on and off is smooth.
+func cut_ground(px: float, pz: float, k: int, along: float) -> float:
+	var yc := cut_y(k, along)
+	var m: int = cut.m
+	if k > 40 and k < m - 41:
+		return yc
+	var pj := project(px, pz, int(cut.a) + 10 if k < m / 2 else int(cut.b) - 10)
+	var w := _road_share(absf(float(pj[1])))
+	if w <= 0.0:
+		return yc
+	return lerpf(yc, road_y(pj[0], clampf(pj[1], -Game.BAR - 6.0, Game.BAR + 6.0), pj[2], false), w)
+
+
+## Height of the shortcut's surface at sample k, `along` metres ahead.
+func cut_y(k: int, along: float) -> float:
+	var ys: PackedFloat32Array = cut.y
+	var j := clampi(k + (1 if along >= 0.0 else -1), 0, int(cut.m) - 1)
+	return lerpf(ys[k], ys[j], clampf(absf(along) / 2.0, 0.0, 1.0))
+
+
+## Up direction of the shortcut's surface (it only slopes along the way).
+func cut_normal(k: int) -> Vector3:
+	var ys: PackedFloat32Array = cut.y
+	var m: int = cut.m
+	var k0 := maxi(k - 1, 0)
+	var k1 := mini(k + 1, m - 1)
+	var sl := (ys[k1] - ys[k0]) / maxf(float(cut.s[k1]) - float(cut.s[k0]), 0.1)
+	var ttx: float = cut.tx[k]
+	var ttz: float = cut.tz[k]
+	return Vector3(-ttx * sl, 1.0, -ttz * sl).normalized()
+
+
+## Where on the lap a point of the shortcut counts: its share of the path
+## mapped onto the stretch of road it skips (laps and places stay right).
+func cut_arc(k: int, along: float) -> float:
+	var sc := clampf(float(cut.s[k]) + along, 0.0, float(cut.len))
+	return fposmod(float(cut.arc_a) + float(cut.arc_span) * sc / float(cut.len), length)
+
+
+func cut_heading(k: int) -> float:
+	return atan2(float(cut.tx[k]), float(cut.tz[k]))
+
+
+## True when the shortcut's centre line comes within r of the point.
+func _near_cut(px: float, pz: float, r: float) -> bool:
+	var r2 := r * r
+	for gx in range(floori((px - r) / CELL), floori((px + r) / CELL) + 1):
+		for gz in range(floori((pz - r) / CELL), floori((pz + r) / CELL) + 1):
+			var cell = _cgrid.get(Vector2i(gx, gz))
+			if cell == null:
+				continue
+			for k in cell:
+				var dx := px - float(cut.x[k])
+				var dz := pz - float(cut.z[k])
+				if dx * dx + dz * dz < r2:
+					return true
+	return false
 
 
 # ================================================================== land
@@ -669,3 +1018,27 @@ func _build_field() -> void:
 				var dl := Vector2(px - float(lake.x), pz - float(lake.z)).length()
 				h = lerpf(lake_y - 0.05, h, smoothstep(lake_r, lake_r + 16.0, dl))
 			field[o] = h
+	# the land lies level with the shortcut along it and blends back beside it
+	if not cut.is_empty():
+		var wmax := PackedFloat32Array()
+		wmax.resize(cnt)
+		var tgt := PackedFloat32Array()
+		tgt.resize(cnt)
+		var rr := CUT_W + 12.0
+		var rcell := int(ceil(rr / FCELL))
+		for k in int(cut.m):
+			var sx: float = cut.x[k]
+			var sz: float = cut.z[k]
+			var c0 := int((sx - f_x0) / FCELL)
+			var r0 := int((sz - f_z0) / FCELL)
+			for iz in range(maxi(0, r0 - rcell), mini(f_h, r0 + rcell + 2)):
+				for ix in range(maxi(0, c0 - rcell), mini(f_w, c0 + rcell + 2)):
+					var d := Vector2(f_x0 + ix * FCELL - sx, f_z0 + iz * FCELL - sz).length()
+					var w := 1.0 - smoothstep(CUT_W + 1.0, rr, d)
+					var o := iz * f_w + ix
+					if w > wmax[o]:
+						wmax[o] = w
+						tgt[o] = float(cut.y[k]) - 0.15
+		for o in cnt:
+			if wmax[o] > 0.0:
+				field[o] = lerpf(field[o], tgt[o], wmax[o])

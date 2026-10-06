@@ -177,6 +177,9 @@ static func build(tr: Track) -> Dictionary:
 	# but would be drawn again for every shadow cascade
 	root.add_child(_no_cast(_multi(tyre_mesh, _vc_mat(), tyre_xf, tyre_cols)))
 
+	# --- the shortcut through the infield
+	_shortcut(root, tr, th, rng)
+
 	# --- item boxes
 	var boxes: Array = []
 	var bimg := Image.create_empty(32, 32, false, Image.FORMAT_RGBA8)
@@ -234,6 +237,121 @@ static func build(tr: Track) -> Dictionary:
 
 
 # ------------------------------------------------------------------ pieces
+## The shortcut: a dirt (sand, ice, gravel) path with tracks worn into it,
+## low posts along its edges away from the road, a sign before it leaves
+## the road. The gap in the tyre barrier and the clear ground around it
+## come from Track.near counting the path too.
+static func _shortcut(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> void:
+	if tr.cut.is_empty():
+		return
+	var c: Dictionary = tr.cut
+	var m: int = c.m
+	var col: Color = c.color
+	# texture: the colour with specks and two worn wheel tracks
+	var img := Image.create_empty(64, 128, false, Image.FORMAT_RGBA8)
+	img.fill(col)
+	for i in 900:
+		var l := 1.0 if rng.randf() < 0.5 else 0.0
+		img.fill_rect(Rect2i(rng.randi() % 64, rng.randi() % 128, 1 + rng.randi() % 2, 1 + rng.randi() % 3),
+			col.lerp(Color(l, l, l), 0.06 + rng.randf() * 0.1))
+	for lane in [17, 43]:
+		img.fill_rect(Rect2i(lane, 0, 5, 128), col.darkened(0.14))
+	# soft edges blending into the ground
+	for xx in 64:
+		var e := minf(xx, 63 - xx) / 6.0
+		if e < 1.0:
+			for yy in 128:
+				var p := img.get_pixel(xx, yy)
+				img.set_pixel(xx, yy, Color(p.r, p.g, p.b, e))
+	img.generate_mipmaps()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	mat.roughness = 0.35 if c.kind == "ice" else 1.0
+	mat.metallic = 0.15 if c.kind == "ice" else 0.0
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idx := PackedInt32Array()
+	var w := Track.CUT_W + 1.0
+	for k in m:
+		var cx: float = c.x[k]
+		var cz: float = c.z[k]
+		var nx: float = -float(c.tz[k])
+		var nz: float = float(c.tx[k])
+		for side in [-1.0, 1.0]:
+			var px := cx + nx * w * float(side)
+			var pz := cz + nz * w * float(side)
+			verts.append(Vector3(px, tr.cut_ground(px, pz, k, 0.0) + 0.03, pz))
+			norms.append(tr.cut_normal(k))
+			uvs.append(Vector2(0.0 if float(side) < 0.0 else 1.0, float(c.s[k]) / 14.0))
+		if k < m - 1:
+			var a := k * 2
+			idx.append_array(PackedInt32Array([a, a + 2, a + 1, a + 1, a + 2, a + 3]))
+	var path := _mesh_node(verts, norms, uvs, idx, mat)
+	root.add_child(path)
+	# posts along the edges where the path is away from the road
+	var post := BoxMesh.new()
+	post.size = Vector3(0.35, 0.9, 0.35)
+	var post_col: Color = {"dirt": Color("7a5232"), "sand": Color("b98b52"), "ice": Color("e8f6ff"),
+		"gravel": Color("4c4a55")}.get(c.kind, Color("7a5232"))
+	var xfs: Array = []
+	var cols: Array = []
+	var k := 0
+	while k < m:
+		var nx: float = -float(c.tz[k])
+		var nz: float = float(c.tx[k])
+		for side in [-1.0, 1.0]:
+			var px: float = float(c.x[k]) + nx * (Track.CUT_W + 0.6) * float(side)
+			var pz: float = float(c.z[k]) + nz * (Track.CUT_W + 0.6) * float(side)
+			var pj := tr.project(px, pz, int(c.a) if k < m / 2 else int(c.b))
+			if absf(float(pj[1])) > Game.BAR + 1.5:
+				xfs.append(Transform3D(Basis.IDENTITY.rotated(Vector3.UP, rng.randf() * 0.4),
+					Vector3(px, tr.cut_ground(px, pz, k, 0.0) + 0.42, pz)))
+				cols.append(post_col.lerp(Color.WHITE, 0.3) if (k / 2) % 2 == 0 and c.kind != "ice" else post_col)
+		k += 2
+	root.add_child(_multi(post, _vc_mat(), xfs, cols))
+	# a sign before the path leaves the road: "ZKRATKA" with an arrow to its side
+	var a := int(c.a)
+	var sa := float(c.sa)
+	var si := (a - 18 + tr.n) % tr.n
+	var off := sa * (Game.HW + Game.KERB + 2.5)
+	var sp := Vector3(tr.x[si] + tr.nx[si] * off, tr.road_y(si, off, 0.0, false), tr.z[si] + tr.nz[si] * off)
+	var sign := Node3D.new()
+	sign.position = sp
+	sign.rotation.y = tr.heading(si) + PI   # its face towards the drivers coming
+	var board := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(7.5, 2.1, 0.15)
+	board.mesh = bm
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color("ffc43d")
+	board.material_override = bmat
+	board.position.y = 3.2
+	sign.add_child(board)
+	for px in [-2.8, 2.8]:
+		var leg := MeshInstance3D.new()
+		var lm := BoxMesh.new()
+		lm.size = Vector3(0.22, 2.4, 0.22)
+		leg.mesh = lm
+		leg.position = Vector3(px, 1.2, 0.0)
+		sign.add_child(leg)
+	var txt := Label3D.new()
+	# the board faces back along the road; seen from a kart, +sa (right of the road) is on its left
+	txt.text = ("ZKRATKA →" if sa > 0.0 else "← ZKRATKA")
+	txt.font = UI.display_font
+	txt.font_size = 64
+	txt.pixel_size = 0.018
+	txt.modulate = Color("1b1b24")
+	txt.outline_size = 0
+	txt.position = Vector3(0, 3.2, -0.09)
+	txt.rotation.y = PI
+	sign.add_child(txt)
+	root.add_child(sign)
+
+
+
 ## A strip along the track between offsets o0 and o1, `y` above the road
 ## surface (it follows the hills and banked corners).
 static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> ArrayMesh:

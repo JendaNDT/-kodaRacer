@@ -38,9 +38,19 @@ func _draw() -> void:
 		return
 	if size != _for_size or _pts.is_empty():
 		_rebuild()
+	var tr := race.track
+	if not tr.cut.is_empty():
+		# the shortcut, dashed
+		var c: Dictionary = tr.cut
+		var k := 0
+		while k + 3 < int(c.m):
+			var p0 := _map(float(c.x[k]), float(c.z[k]))
+			var p1 := _map(float(c.x[k + 3]), float(c.z[k + 3]))
+			draw_line(p0, p1, Color(0.05, 0.07, 0.1, 0.5), 6.0, true)
+			draw_line(p0, p1, Color(1.0, 0.77, 0.24, 0.95), 3.0, true)
+			k += 6
 	draw_polyline(_pts, Color(0.05, 0.07, 0.1, 0.6), 10.0, true)
 	draw_polyline(_pts, Color(0.93, 0.95, 0.98, 0.92), 4.5, true)
-	var tr := race.track
 	var st := _map(tr.x[0], tr.z[0])
 	draw_rect(Rect2(st - Vector2(3, 3), Vector2(6, 6)), UI.KERB)
 	for k in race.karts:

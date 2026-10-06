@@ -30,6 +30,7 @@ var _trial_runs := 0
 var _jump_track := 0
 var _items_phase := 0
 var _ai_track := 0
+var _cut_phase := 0
 var _ai_sum := {}
 var _ai_drifts := 0
 var _items_bad := 0
@@ -138,6 +139,18 @@ func _ready() -> void:
 					turns.append("%d°/%dm" % [int(rad_to_deg(ang2)), int((q2 - q0) * tr.step)])
 				q0 = maxi(q2, q0 + 1)
 			print("BENDS %s: %d long bends for a drift turbo; bends: %s" % [tr.def.id, long_bends, ", ".join(turns)])
+			# the shortcut: how long, how much road it skips, how close it comes to other parts of the track
+			if tr.cut.is_empty():
+				print("CUT %s: none" % tr.def.id)
+			else:
+				var clear := INF
+				for q in int(tr.cut.m):
+					for jj in tr.n:
+						if tr._arc(jj, int(tr.cut.a)) > 50.0 and tr._arc(jj, int(tr.cut.b)) > 50.0:
+							clear = minf(clear, Vector2(float(tr.cut.x[q]) - tr.x[jj], float(tr.cut.z[q]) - tr.z[jj]).length())
+				print("CUT %s: %s, %.0f m instead of %.0f m of road (%.0f %%), from %.0f m to %.0f m of the lap, other road at least %.0f m away" % [
+					tr.def.id, tr.cut.kind, float(tr.cut.len), float(tr.cut.arc_span), 100.0 * float(tr.cut.len) / float(tr.cut.arc_span),
+					float(tr.cut.arc_a), fposmod(float(tr.cut.arc_a) + float(tr.cut.arc_span), tr.length), clear])
 			print("LINE %s: sharpest bend r=%.0f m (centre line r=%.0f m), swings %.1f m from the centre, made in %.0f ms" % [
 				tr.def.id, 1.0 / maxf(lbend, 1e-6), 1.0 / maxf(bend, 1e-6), swing, line_ms])
 			# a crest throws a kart at speed v into the air when v*v*crest > gravity
@@ -183,6 +196,38 @@ func _ready() -> void:
 				pts -= 4
 			cup.round = int(a["cup-start"])
 			_start_cup_round()
+		return
+	if a.has("cutcal"):
+		# finds each shortcut's slowdown so that it loses about 6 % to the
+		# road without a turbo (to put into Game.TRACKS)
+		menu.visible = false
+		Game.settings.driver = 0         # Turbo Tonda, balanced (not saved)
+		for ti in Game.TRACKS.size():
+			Game.settings.track = ti
+			var lo := 0.3
+			var hi := 0.95
+			var road := _cut_run(ti, "road", 0.0)
+			for it in 7:
+				var mid := (lo + hi) * 0.5
+				var tc := _cut_run(ti, "cut", mid)
+				if tc > road * 1.06:
+					lo = mid
+				else:
+					hi = mid
+			print("CUTCAL \"%s\": slow %.2f" % [Game.TRACKS[ti].id, (lo + hi) * 0.5])
+		get_tree().quit()
+		return
+	if a.has("cuttest"):
+		# every track: the stretch with the shortcut driven by road, by the
+		# shortcut without and with a turbo and with the star, then a race in
+		# which everybody takes the shortcut every lap
+		_test_mode = "cut"
+		menu.visible = false
+		Game.settings.driver = 0         # Turbo Tonda, as when the slowdowns were measured (not saved)
+		_cut_checks()
+		Game.cmd_args["cut-always"] = "1"
+		_ai_track = 0
+		_start_ai_race()
 		return
 	if a.has("aitest"):
 		# the computer drivers alone on every track (the player's kart too):
@@ -563,6 +608,17 @@ func _process(delta: float) -> void:
 	_test_t += delta
 	if Game.cmd_args.has("showcase") and race != null:
 		Showcase.hold(race)
+	# --shot-cut=0.8: once the first player has been on the shortcut that long;
+	# --shot-sign: as the first player comes up to the sign before it
+	if _shot_path != "" and race != null and not race.locals.is_empty() and not race.track.cut.is_empty():
+		var lk: Kart = race.locals[0]
+		if Game.cmd_args.has("shot-cut"):
+			_air_t = _air_t + delta if lk.on_cut else 0.0
+			if _air_t >= float(Game.cmd_args["shot-cut"]):
+				_shot_delay = _test_t
+		var to_cut := (int(race.track.cut.a) - lk.idx + race.track.n) % race.track.n
+		if Game.cmd_args.has("shot-sign") and lk.lap >= 1 and to_cut >= 24 and to_cut <= 30 and _shot_delay > _test_t + 1.0:
+			_shot_delay = _test_t
 	# --shot-air=0.25: take the screenshot once the first player has flown that long
 	if _shot_path != "" and Game.cmd_args.has("shot-air") and race != null and not race.locals.is_empty():
 		_air_t = _air_t + delta if (race.locals[0] as Kart).air else 0.0
@@ -649,6 +705,8 @@ func _process(delta: float) -> void:
 					_next_cup_round(pts)
 		elif _test_t > float(Game.cmd_args.get("timeout", "900")):
 			_finish_test(false, "timeout in round %d" % (int(cup.round) + 1))
+	elif _test_mode == "cut" and race != null:
+		_cut_race_tick()
 	elif _test_mode == "ai" and race != null:
 		_ai_tick()
 	elif _test_mode == "items" and race != null:
@@ -756,6 +814,92 @@ func _show_fx(what: String) -> void:
 				for sx in [-1.0, 1.0]:
 					race.skids.add(k.position + ahead * (4.0 + i * 0.75) + side * (w0 + sx),
 						k.position + ahead * (4.75 + i * 0.75) + side * (w1 + sx), 1.0)
+
+
+## One drive through the stretch with the shortcut on track ti, alone:
+## "road", "cut", "cut+turbo" or "cut+star"; slow > 0 overrides the
+## shortcut's slowdown. Returns the time.
+func _cut_run(ti: int, how: String, slow: float) -> float:
+	Game.settings.track = ti
+	start_offline(1)
+	var r := race
+	r.paused = true
+	r._go()
+	seed(1234)                           # the same luck every time: comparable times
+	var k: Kart = r.locals[0]
+	for o in r.karts:
+		if o != k:
+			o.visible = false
+	r.karts = [k]
+	r.order = [k]
+	for b in r.boxes:
+		b.active = false
+		b.respawn = INF
+	var tr := r.track
+	if tr.cut.is_empty():
+		return INF
+	var keep: float = tr.cut.slow
+	if slow > 0.0:
+		tr.cut.slow = slow
+	var a := int(tr.cut.a)
+	_put(k, a - 50, 0.0)
+	k.speed = k.max_speed() * 0.95
+	k.autopilot = true
+	k.ai.cut_go = 0
+	k.ai.cut_force = -1 if how == "road" else 1
+	k.cut_uses = 0
+	k.item = Game.Item.TURBO if how == "cut+turbo" else 0
+	k.item_n = 1 if how == "cut+turbo" else 0
+	k.star = 0.0
+	var goal := k.progress() + 100.0 + float(tr.cut.arc_span) + 40.0
+	var t := 0.0
+	var starred := false
+	while k.progress() < goal and t < 60.0:
+		if how == "cut+star" and k.on_cut and not starred:
+			k.star = 7.0                 # the star from the moment the path starts
+			starred = true
+		r._step(Game.SIM_DT)
+		t += Game.SIM_DT
+	tr.cut.slow = keep
+	var used := k.cut_uses > 0
+	if (how == "road" and used) or (how != "road" and not used) or k.lap != 1:
+		_check("%s %s" % [tr.def.id, how], false, "(shortcut used %d times, lap %d)" % [k.cut_uses, k.lap])
+	return t
+
+
+func _cut_checks() -> void:
+	for ti in Game.TRACKS.size():
+		var tr := Race.get_track(ti)
+		if tr.cut.is_empty():
+			_check("%s has a shortcut" % tr.def.id, false)
+			continue
+		var times := {}
+		for how in ["road", "cut", "cut+turbo", "cut+star"]:
+			times[how] = _cut_run(ti, how, 0.0)
+		print("CUT %s: road %.2f s, shortcut %.2f s, with a turbo %.2f s, with the star %.2f s" % [
+			tr.def.id, times.road, times.cut, times["cut+turbo"], times["cut+star"]])
+		_check("%s: the shortcut alone does not pay" % tr.def.id, times.cut > times.road * 0.97)
+		_check("%s: with a turbo it does" % tr.def.id, times["cut+turbo"] < times.road)
+		_check("%s: with the star it does" % tr.def.id, times["cut+star"] < times.road)
+
+
+## --cuttest, second part: a race on each track with everybody on the shortcut every lap.
+func _cut_race_tick() -> void:
+	var done := true
+	for k in race.karts:
+		if not k.finished:
+			done = false
+	if not done and _test_t < 200.0:
+		return
+	for k in race.karts:
+		_check("%s %s: 3 laps, the shortcut every lap" % [race.track.def.id, k.ch.name],
+			k.finished and k.lap_times.size() >= Game.LAPS and k.cut_uses >= Game.LAPS,
+			"(laps %d, shortcut %d times)" % [k.lap_times.size(), k.cut_uses])
+	_ai_track += 1
+	if _ai_track < Game.TRACKS.size():
+		_start_ai_race()
+		return
+	_finish_test(_items_bad == 0, "shortcuts work on every track" if _items_bad == 0 else "%d problems" % _items_bad)
 
 
 func _start_ai_race() -> void:
