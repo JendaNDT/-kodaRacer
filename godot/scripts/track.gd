@@ -42,6 +42,14 @@ const RAMP_LEN := 8.0
 const RAMP_H := 1.3
 const CREST_MAX := 0.008            # sharpest crest (1/m): even at 50 m/s under 0.7 g
 
+# --- the racing line for the computer drivers (made on first use): how far
+# right of the centre it runs at each sample, and how sharply it bends there
+var _line := PackedFloat32Array()
+var _line_c := PackedFloat32Array()
+var _line_task := -1                # worker thread making the line
+var _flat_line := PackedFloat32Array()   # the centre line, used until the racing line is ready
+const LINE_W := Game.HW - 2.4       # how close to the edge of the road it may go
+
 # --- land around the track: a height grid every FCELL metres. Near the road
 # it continues the road surface sideways, further out it blends into gentle
 # natural rolls that fade to 0 at the edge (where the flat far ground starts).
@@ -330,6 +338,90 @@ func _round_crests() -> void:
 					y[j] = (o[(j - 1 + n) % n] + 2.0 * o[j] + o[(j + 1) % n]) * 0.25
 		if not sharp:
 			return
+
+
+## Starts making the racing line on a worker thread (a fraction of a second
+## on a computer, longer on a phone), so a race never waits for it.
+func prepare_line() -> void:
+	if _line.is_empty() and _line_task < 0:
+		_line_task = WorkerThreadPool.add_task(_make_line, false, "racing line")
+
+
+func _line_ready() -> bool:
+	if _line_task >= 0 and WorkerThreadPool.is_task_completed(_line_task):
+		WorkerThreadPool.wait_for_task_completion(_line_task)
+		_line_task = -2
+	if _line_task == -2:
+		return true
+	prepare_line()
+	return false
+
+
+## The racing line: lateral offset from the centre at each sample (the
+## centre line itself until the worker has finished).
+func racing_line() -> PackedFloat32Array:
+	if _line_ready():
+		return _line
+	if _flat_line.size() != n:
+		_flat_line.resize(n)
+		_flat_line.fill(0.0)
+	return _flat_line
+
+
+## Signed curvature of the racing line (1/m, same sign as `curv`).
+func line_curv() -> PackedFloat32Array:
+	return _line_c if _line_ready() else curv
+
+
+## Waits for the racing line (tools and tests that need it right away).
+func line_now() -> void:
+	prepare_line()
+	while not _line_ready():
+		OS.delay_msec(5)
+
+
+## Like a stiff wire laid along the road: each point moves to where the bend
+## through its neighbours is smoothest (within the road), first over long
+## stretches, then shorter ones. That gives "wide in, clip the apex, wide out"
+## by itself and keeps the sharpest bend as gentle as the road allows.
+func _make_line() -> void:
+	# worked on in local arrays: the race reads them only once both are done
+	var line := PackedFloat32Array()
+	line.resize(n)
+	line.fill(0.0)
+	for pass_ in [[8, 120], [4, 100], [2, 80]]:
+		var span: int = pass_[0]
+		for it in int(pass_[1]):
+			for i in n:
+				# where the point would make the bend smoothest: (-P[i-2] + 4P[i-1] + 4P[i+1] - P[i+2]) / 6
+				var a := (i - span + n) % n
+				var b := (i + span) % n
+				var a2 := (i - 2 * span + n) % n
+				var b2 := (i + 2 * span) % n
+				var mx := (4.0 * (x[a] + nx[a] * line[a] + x[b] + nx[b] * line[b])
+					- (x[a2] + nx[a2] * line[a2] + x[b2] + nx[b2] * line[b2])) / 6.0
+				var mz := (4.0 * (z[a] + nz[a] * line[a] + z[b] + nz[b] * line[b])
+					- (z[a2] + nz[a2] * line[a2] + z[b2] + nz[b2] * line[b2])) / 6.0
+				var off := (mx - x[i]) * nx[i] + (mz - z[i]) * nz[i]
+				line[i] = clampf(lerpf(line[i], off, 0.5), -LINE_W, LINE_W)
+	# a few gentle smoothing passes so the steering stays calm
+	for _p in 3:
+		var o := line.duplicate()
+		for i in n:
+			line[i] = clampf((o[(i - 1 + n) % n] + 2.0 * o[i] + o[(i + 1) % n]) * 0.25, -LINE_W, LINE_W)
+	var lc := PackedFloat32Array()
+	lc.resize(n)
+	for i in n:
+		var a := (i - 3 + n) % n
+		var b := (i + 3) % n
+		var c := (i - 1 + n) % n
+		var d := (i + 1) % n
+		var ha := atan2(x[c] + nx[c] * line[c] - x[a] - nx[a] * line[a], z[c] + nz[c] * line[c] - z[a] - nz[a] * line[a])
+		var hb := atan2(x[b] + nx[b] * line[b] - x[d] - nx[d] * line[d], z[b] + nz[b] * line[b] - z[d] - nz[d] * line[d])
+		var len := Vector2(x[b] + nx[b] * line[b] - x[a] - nx[a] * line[a], z[b] + nz[b] * line[b] - z[a] - nz[a] * line[a]).length()
+		lc[i] = wrapf(hb - ha, -PI, PI) / maxf(len * 0.67, 0.1)
+	_line_c = lc
+	_line = line
 
 
 ## Where the ramp goes: the straightest stretch away from the start and the

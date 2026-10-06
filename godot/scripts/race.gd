@@ -42,7 +42,10 @@ var _cycle := 0
 const OIL_TIME := 20.0
 const OIL_R := 2.4
 const BLUE_SPEED := 85.0
-const BLUE_BLAST := 7.0         # the blue missile's blast hits everyone this close to the leader
+const BLUE_BLAST := 7.0
+const DRIFT_IN := 0.24          # the computer starts a drift where the bend turns this fast (× turn rate)
+const DRIFT_ANGLE := 1.6        # and only in bends turning at least this far (rad): shorter ones give no turbo
+const AI_YAW := 0.8             # how fast (× turn rate) the computer reckons a kart turns at speed         # the blue missile's blast hits everyone this close to the leader
 var explosions: Array = []
 var explosion_id := 0
 var seen_explosion := 0
@@ -102,6 +105,7 @@ const GHOST_F := 6
 static func get_track(i: int) -> Track:
 	if not _tracks.has(i):
 		_tracks[i] = Track.new(Game.TRACKS[i])
+		(_tracks[i] as Track).prepare_line()   # the computer drivers' racing line, in the background
 	return _tracks[i]
 
 
@@ -183,7 +187,7 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		var gp := _grid_pos(i)
 		k.reset(gp.x, gp.y, gp.z)
 		k.ai = {"lane": (-1.0 if i % 2 == 1 else 1.0) * (0.12 + randf() * 0.33) * Game.HW, "phase": randf() * 10.0,
-			"t": 0.0, "rb": 1.0, "stuck": 0.0, "rev": 0.0, "item_t": 1.0, "last_seq": 0, "gas_at": -1.0,
+			"t": 0.0, "rb": 1.0, "stuck": 0.0, "rev": 0.0, "item_t": 1.0, "last_seq": 0, "gas_at": -1.0, "dev": 0.0, "plan": {},
 			"skill": (0.93 if p_mode == Mode.DEMO else float(diff.ai)) + (randf() - 0.5) * 0.035}
 		karts.append(k)
 	var loc: Array = []
@@ -432,7 +436,7 @@ func _go() -> void:
 			if ga > 0.1 and ga < 1.05:
 				k.boost = 1.1
 				k.boost_mul = 1.3
-		elif randf() < (0.6 if diff_idx == 2 else 0.3):
+		elif randf() < float(diff.get("start", 0.3)) + float(Game.PERSONA[k.driver].start):
 			k.boost = 0.8
 			k.boost_mul = 1.25
 
@@ -539,6 +543,8 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 	var tr := track
 	var n := tr.n
 	var ai: Dictionary = k.ai
+	var per: Dictionary = Game.PERSONA[k.driver]
+	var base: Dictionary = Game.BASE
 	ai.t += dt
 	var out := {"steer": 0.0, "gas": true, "brake": false, "drift": false, "item": false}
 	if ai.rev > 0.0:
@@ -548,37 +554,54 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 		var jr := (k.idx + 8) % n
 		out.steer = clampf(Game.wrap_angle(atan2(tr.x[jr] - k.x, tr.z[jr] - k.z) - k.heading) * 2.0, -1.0, 1.0)
 		return out
-	var lane: float = ai.lane + sin(ai.t * 0.35 + ai.phase) * 0.22 * Game.HW
-	for b in bananas:
-		var bdx: float = b.x - k.x
-		var bdz: float = b.z - k.z
-		if bdx * bdx + bdz * bdz > 35.0 * 35.0:
-			continue
-		var pj := tr.project(b.x, b.z, k.idx)
-		var ahead: float = ((int(pj[0]) - k.idx + n) % n) * tr.step
-		if ahead > 2.0 and ahead < 30.0 and absf(float(pj[1]) - lane) < 3.0:
-			lane = float(pj[1]) + (-5.0 if float(pj[1]) > 0.0 else 5.0)
-	for b in oils:
-		var bdx: float = b.x - k.x
-		var bdz: float = b.z - k.z
-		if bdx * bdx + bdz * bdz > 40.0 * 40.0:
-			continue
-		var pj := tr.project(b.x, b.z, k.idx)
-		var ahead: float = ((int(pj[0]) - k.idx + n) % n) * tr.step
-		if ahead > 2.0 and ahead < 36.0 and absf(float(pj[1]) - lane) < OIL_R + 1.5:
-			lane = float(pj[1]) + (-(OIL_R + 3.5) if float(pj[1]) > 0.0 else OIL_R + 3.5)
-	lane = clampf(lane, -Game.HW * 0.65, Game.HW * 0.65)
+	var line := tr.racing_line()
+	var lc := tr.line_curv()
 	var look := 4 + int(absf(k.speed) * 0.22)
 	var j := (k.idx + look) % n
+	# ---- where to drive: the racing line, a little wander, aside for karts and hazards
+	var want := float(line[j]) + sin(ai.t * 0.3 + ai.phase) * float(per.wander) * Game.HW
+	var my_p := k.progress()
+	for o in karts:
+		if o == k or o.finished:
+			continue
+		var gap: float = o.progress() - my_p
+		if gap > 0.0 and gap < 12.0 and absf(o.lat - want) < 2.8 and o.speed < k.speed + 2.0:
+			# someone slower ahead on our line: pass on the side with more road
+			want = o.lat - 4.0 if o.lat > float(line[j]) else o.lat + 4.0
+		elif absf(gap) < 2.5 and absf(o.lat - k.lat) < 6.0 and float(per.aggr) > 0.0 and o.spin <= 0.0:
+			# a rival right beside us: the rough ones lean on them
+			want = lerpf(want, o.lat, 0.5 * float(per.aggr))
+	var wide := _plan_drift(k, look)
+	if not is_nan(wide):
+		want = wide                     # out to the edge before a bend we will drift through
+	for b in bananas:
+		want = _dodge(k, b.x, b.z, want, 2.0, 35.0)
+	for b in oils:
+		want = _dodge(k, b.x, b.z, want, OIL_R + 1.0, 40.0)
+	want = clampf(want, -Game.HW * 0.85, Game.HW * 0.85)
+	ai.dev = move_toward(float(ai.dev), want - float(line[j]), 7.0 * dt)
+	var lane := clampf(float(line[j]) + float(ai.dev), -Game.HW * 0.85, Game.HW * 0.85)
 	var tx := tr.x[j] + tr.nx[j] * lane
 	var tz := tr.z[j] + tr.nz[j] * lane
 	var dif := Game.wrap_angle(atan2(tx - k.x, tz - k.z) - k.heading)
 	out.steer = clampf(-dif * 2.4, -1.0, 1.0)
-	var max_c := 0.0
-	var off := int(absf(k.speed) * 0.2)
-	for s in range(4, 34, 3):
-		max_c = maxf(max_c, absf(tr.curv[(k.idx + s + off) % n]))
-	var cf := clampf(1.0 - (max_c - 0.012) * 8.0, 0.72, 1.0)
+	# ---- how fast: as fast as the bends of the line ahead allow, braking in time
+	var mx := k.max_speed()
+	var turn := float(base.turn) * float(k.ch.handling)
+	var yaw := turn * (1.0 if k.drift_active else AI_YAW)   # how fast the kart can turn at speed
+	var decel := float(base.brake) * 0.6 * float(per.corner)
+	var allowed: float = ai.get("allowed", INF)
+	ai.tick = int(ai.get("tick", 0)) + 1
+	if int(ai.tick) % 3 == 0 or k.drift_active:   # every third step is plenty
+		allowed = INF
+		for s in range(1, 40, 2):
+			var c := absf(float(lc[(k.idx + s) % n]))
+			if c < 1e-4:
+				continue
+			var vc := yaw / c * float(per.corner)
+			allowed = minf(allowed, sqrt(vc * vc + 2.0 * decel * maxf(0.0, s * tr.step - k.along)))
+		ai.allowed = allowed
+	var straight := allowed > mx * 1.3
 	var rb_t := 1.0
 	if mode != Mode.DEMO and not k.human:
 		var best := -INF
@@ -586,14 +609,17 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 			if h.human and not h.finished:
 				best = maxf(best, h.progress())
 		if best > -INF:
-			var d := k.progress() - best
+			var d := my_p - best
 			rb_t = 1.08 if d < -60.0 else (1.03 if d < -20.0 else (0.94 if d > 140.0 else (0.97 if d > 60.0 else 1.0)))
+			rb_t = 1.0 + (rb_t - 1.0) * float(diff.get("band", 1.0))   # gentler on the harder levels
 	ai.rb = lerpf(ai.rb, rb_t, clampf(dt * 0.6, 0.0, 1.0))
-	var target: float = k.max_speed() * float(ai.skill) * float(ai.rb) * cf
+	var target: float = minf(mx * float(ai.skill) * float(ai.rb) * (float(per.straight) if straight else 1.0), allowed)
 	out.gas = k.speed < target
-	out.brake = k.speed > target + 7.0
+	out.brake = k.speed > target + 3.0
 	if absf(dif) > 1.3:
 		out.gas = k.speed < 12.0
+	# ---- drift through long bends for a turbo on the way out
+	_ai_drift(k, out, dif, lc, turn, mx)
 	if absf(k.speed) < 2.0 and k.spin <= 0.0 and state != "countdown":
 		ai.stuck += dt
 	else:
@@ -601,25 +627,13 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 	if ai.stuck > 1.3:
 		ai.stuck = 0.0
 		ai.rev = 0.9
+		ai.revs = int(ai.get("revs", 0)) + 1
+	# ---- items: each at the right moment (the impatient ones at once)
 	if k.item != 0 and k.roulette <= 0.0:
 		ai.item_t -= dt
 		if ai.item_t <= 0.0:
-			var use := false
-			if k.item == Game.Item.TURBO:
-				use = cf > 0.9 and absf(dif) < 0.2
-			elif k.item == Game.Item.STAR:
-				use = true
-			elif k.item == Game.Item.MISSILE:
-				var ah: Kart = order[k.rank - 2] if k.rank >= 2 else null
-				use = ah != null and ah.progress() - k.progress() < 140.0
-			elif k.item == Game.Item.BANANA or k.item == Game.Item.OIL:
-				var bh: Kart = order[k.rank] if k.rank < order.size() else null
-				use = (bh != null and k.progress() - bh.progress() < 18.0) or randf() < 0.01
-			elif k.item == Game.Item.BLUE or k.item == Game.Item.LIGHTNING:
-				use = true
-			elif k.item == Game.Item.SHIELD:
-				use = k.shield <= 0.0 and (_threatened(k) or randf() < 0.004)
-			if ai.item_t < -9.0:
+			var use := _ai_item(k, dif, straight)
+			if float(per.patience) <= 0.0 or ai.item_t < -9.0 * float(per.patience):
 				use = true
 			if use:
 				out.item = true
@@ -629,11 +643,137 @@ func _ai_input(k: Kart, dt: float) -> Dictionary:
 		out.drift = fposmod(float(k.driver * 7 + k.lap * 3), 10.0) < 10.0 * float(ai.skill) - 2.0
 	if k.human and Game.cmd_args.has("fxtest"):
 		# screenshots only: the autopilot drifts through corners
-		var want: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
-		if want and not k.drift_active:
+		var want_drift: bool = absf(float(out.steer)) > 0.12 and k.speed > k.max_speed() * 0.5
+		if want_drift and not k.drift_active:
 			out.steer = signf(float(out.steer)) * maxf(absf(float(out.steer)), 0.3)
-		out.drift = want or (k.drift_active and absf(float(out.steer)) > 0.04)
+		out.drift = want_drift or (k.drift_active and absf(float(out.steer)) > 0.04)
 	return out
+
+
+## Moves the wanted lane aside for a banana or puddle on it ahead.
+func _dodge(k: Kart, hx: float, hz: float, want: float, r: float, range_m: float) -> float:
+	var dx := hx - k.x
+	var dz := hz - k.z
+	if dx * dx + dz * dz > range_m * range_m:
+		return want
+	var tr := track
+	var pj := tr.project(hx, hz, k.idx)
+	var ahead: float = ((int(pj[0]) - k.idx + tr.n) % tr.n) * tr.step
+	if ahead > 2.0 and ahead < range_m and absf(float(pj[1]) - want) < r + 1.5:
+		return float(pj[1]) + (-(r + 3.0) if float(pj[1]) > 0.0 else r + 3.0)
+	return want
+
+
+## Drifting: a drift pays only when it lasts (about 100° of turning for the
+## first turbo), so it starts at the outside going into a long bend (how
+## often depends on the level and the driver), follows the bend as tightly
+## as needed and is let go as the bend ends or at the inside edge.
+func _ai_drift(k: Kart, out: Dictionary, dif: float, lc: PackedFloat32Array, turn: float, mx: float) -> void:
+	var ai: Dictionary = k.ai
+	var tr := track
+	var n := tr.n
+	if not k.drift_active:
+		var plan: Dictionary = ai.get("plan", {})
+		if plan.is_empty() or not plan.go or k.air or k.offroad or k.spin > 0.0 or k.speed < mx * 0.55:
+			return
+		var sg: float = plan.sg
+		var into := (k.idx - int(plan.i) + n) % n      # samples past the start of the bend
+		if into > n / 2:
+			return                       # not there yet
+		if into > 12:
+			ai.plan = {}                 # missed it
+			return
+		if absf(float(tr.curv[(k.idx + 2) % n])) * k.speed >= turn * DRIFT_IN and k.lat * sg > 2.0:
+			ai.plan = {}
+			out.drift = true
+			out.steer = -sg * maxf(absf(float(out.steer)), 0.5)
+		return
+	# in the drift: turn as little as the bend allows (a long drift charges more),
+	# harder only when the outside edge comes close
+	var dd := k.drift_dir
+	var sgd := -dd                      # the way the bend turns
+	var c := float(tr.curv[(k.idx + 3) % n])
+	var outside := k.lat * sgd           # metres towards the outside of the bend
+	var need := c * k.speed * sgd + maxf(0.0, outside - (Game.HW - 3.0)) * 0.35
+	var tight := clampf((need / turn - 0.5) / 0.62, 0.0, 1.0)
+	out.steer = dd * (2.0 * tight - 1.0)
+	out.drift = true
+	var ending := true
+	for s in range(2, 8):
+		var cc := float(tr.curv[(k.idx + s) % n])
+		if signf(cc) == sgd and absf(cc) * k.speed > turn * DRIFT_IN * 0.6:
+			ending = false
+	var inside := -outside > Game.HW - 0.3          # reached the inside kerb
+	if ending or (inside and need < turn * 0.5):
+		out.drift = false
+
+
+## A long bend coming up: decide once whether to drift through it (by level
+## and driver) and, if so, return the lane at its outside edge to get there
+## in time; NAN when there is nothing to prepare for.
+func _plan_drift(k: Kart, look: int) -> float:
+	var ai: Dictionary = k.ai
+	var tr := track
+	var n := tr.n
+	var plan: Dictionary = ai.get("plan", {})
+	if plan.is_empty():
+		if k.drift_active:
+			return NAN
+		for s in range(4, 22, 2):
+			var i := (k.idx + s) % n
+			if absf(float(tr.curv[i])) < 1.0 / 150.0 or absf(float(tr.curv[(i - 2 + n) % n])) >= 1.0 / 150.0:
+				continue                 # not where a bend begins
+			var bend := _bend_ahead((i - 3 + n) % n)
+			if float(bend[0]) >= DRIFT_ANGLE:
+				var p := clampf(float(diff.get("drift", 0.5)) * float(Game.PERSONA[k.driver].drift), 0.0, 1.0)
+				plan = {"i": i, "sg": float(bend[1]), "go": randf() < p}
+				ai.plan = plan
+				break
+	if plan.is_empty() or not plan.go:
+		if not plan.is_empty() and (k.idx - int(plan.i) + n) % n < n / 2 and (k.idx - int(plan.i) + n) % n > 12:
+			ai.plan = {}
+		return NAN
+	return float(plan.sg) * (Game.HW - 1.5)
+
+
+## The bend of the centre line starting at sample i: [how far it turns (rad), which way].
+func _bend_ahead(i: int) -> Array:
+	var tr := track
+	var n := tr.n
+	var sg := signf(tr.curv[(i + 3) % n])
+	var ang := 0.0
+	for s in range(3, 120):
+		var c := float(tr.curv[(i + s) % n])
+		if signf(c) != sg or absf(c) < 1.0 / 150.0:
+			break
+		ang += absf(c) * tr.step
+	return [ang, sg]
+
+
+## Whether to use the held item now.
+func _ai_item(k: Kart, dif: float, straight: bool) -> bool:
+	match k.item:
+		Game.Item.TURBO:
+			# on a straight, or to get off the grass quickly
+			return (straight and absf(dif) < 0.2) or (k.offroad and absf(dif) < 0.5)
+		Game.Item.STAR:
+			# when falling behind, or to get out of a missile's way
+			return k.rank >= 4 or _threatened(k) or k.spin > 0.0
+		Game.Item.MISSILE:
+			var ah: Kart = order[k.rank - 2] if k.rank >= 2 else null
+			if ah == null:
+				return false
+			var ang := Game.wrap_angle(atan2(ah.x - k.x, ah.z - k.z) - k.heading)
+			return ah.progress() - k.progress() < 70.0 and absf(ang) < 0.5
+		Game.Item.BANANA, Game.Item.OIL:
+			# kept behind as protection: dropped when someone is right behind, or to catch a missile
+			var bh: Kart = order[k.rank] if k.rank < order.size() else null
+			return (bh != null and k.progress() - bh.progress() < 15.0) or _threatened(k)
+		Game.Item.BLUE, Game.Item.LIGHTNING:
+			return true
+		Game.Item.SHIELD:
+			return k.shield <= 0.0 and (_threatened(k) or randf() < 0.004)
+	return false
 
 
 # ---------------------------------------------------------------- items
