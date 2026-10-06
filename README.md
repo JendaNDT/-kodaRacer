@@ -43,6 +43,9 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | Zelené údolí | slunečné odpoledne | větrný mlýn u jezera, dřevěný most přes trať, kopce do 8 m |
 | Pouštní kaňon | západ slunce | skalní oblouk přes trať, nejvyšší kopce (až 11 m) |
 | Ledová laguna | zataženo, sněží | iglú, svítící ledové krystaly, zamrzlé jezero |
+| Podzimní les | zlaté podzimní ráno, padá listí | barevné stromy, dřevěná rozhledna s vlajkou, rybník |
+| Noční město | noc, měsíc a hvězdy | domy s rozsvícenými okny, lampy se světlem na silnici, televizní věž, neonová brána přes trať |
+| Sopečný ostrov | tropické poledne | palmy, pláže a moře kolem, kouřící sopka s lávovými proudy, lávové jezero |
 
 Každá trať má kopce, sjezdy, klopené zatáčky a jeden skok: žlutočernou rampu za vrcholem kopce.
 

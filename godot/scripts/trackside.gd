@@ -153,6 +153,38 @@ void fragment() {
 }
 """
 
+## Lava: dark crust broken by glowing veins that slowly pulse and drift.
+const LAVA_SHADER := """
+shader_type spatial;
+uniform float boost = 1.0;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float cells(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	float d1 = 8.0;
+	float d2 = 8.0;
+	for (int y = -1; y <= 1; y++) {
+		for (int x = -1; x <= 1; x++) {
+			vec2 g = vec2(float(x), float(y));
+			vec2 o = vec2(hash(i + g), hash(i + g + 17.3));
+			o = 0.5 + 0.4 * sin(TIME * 0.4 + 6.2831 * o);
+			float d = length(g + o - f);
+			if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+		}
+	}
+	return d2 - d1;
+}
+void fragment() {
+	vec2 p = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xz;
+	float vein = 1.0 - smoothstep(0.0, 0.16, cells(p * 0.12));
+	float fine = 1.0 - smoothstep(0.0, 0.1, cells(p * 0.37 + 3.0));
+	float heat = clamp(vein + fine * 0.45, 0.0, 1.0) * (0.8 + 0.2 * sin(TIME * 1.7 + p.x * 0.1));
+	ALBEDO = mix(vec3(0.07, 0.04, 0.035), vec3(1.0, 0.45, 0.1), heat);
+	EMISSION = mix(vec3(0.9, 0.18, 0.02), vec3(1.0, 0.55, 0.12), heat * heat) * heat * 1.25 * boost;
+	ROUGHNESS = 0.85;
+}
+"""
+
 static var _shaders := {}
 static var _person: ArrayMesh
 
@@ -183,6 +215,12 @@ static func lake_material(water: Color, sky: Color, frozen: bool) -> ShaderMater
 	return m
 
 
+static func lava_material() -> ShaderMaterial:
+	var m := _material("lava", LAVA_SHADER)
+	m.set_shader_parameter("boost", Gfx.boost())
+	return m
+
+
 # ================================================================== build
 static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var ts := {"lights": null, "spin": [], "spots": {}, "podium": {}}
@@ -201,6 +239,13 @@ static func build(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGene
 			_rock_arch(root, tr, th, rng, used, ts.spots)
 		"laguna":
 			_igloos(root, tr, rng, used, ts.spots)
+		"les":
+			_lookout(root, tr, cloth, ts.spots)
+		"mesto":
+			_tv_tower(root, tr, ts.spots)
+			_neon_gate(root, tr, used, ts.spots)
+		"ostrov":
+			_volcano(root, tr, ts.spots)
 	_podium(root, tr, used, ts, cloth)
 	_boards(root, tr, used, ts.spots)
 	ts.spots.lights = [Vector3(tr.x[0], 6.5, tr.z[0]), -Vector3(tr.tx[0], 0.0, tr.tz[0])]
@@ -874,6 +919,236 @@ static func _crystals(kit: MeshKit, at: Vector3, rng: RandomNumberGenerator, cou
 			_t(Vector3.ZERO, Vector3(0, 0, PI / 2.0))
 		kit.lathe(t, PackedVector2Array([Vector2(-0.3, 0.0), Vector2(-0.3, r), Vector2(len, r), Vector2(len + r * 2.2, 0.0)]),
 			Color.WHITE, MeshKit.GLOSS, 6)
+
+
+## The best spot for a big landmark: beside the track `out` metres away,
+## clear of every part of it by `gap`, preferably seen early in the lap.
+static func _landmark_spot(tr: Track, out: float, gap: float, prefer: float) -> Vector3:
+	var best := INF
+	var spot := Vector3.INF
+	for k in 36:
+		var i := int(k / 36.0 * tr.n)
+		for side in [1.0, -1.0]:
+			var o: Vector3 = _frame(tr, i, side, out).origin
+			if tr.near(o.x, o.z, gap) or (not tr.lake.is_empty() and
+					Vector2(o.x - float(tr.lake.x), o.z - float(tr.lake.z)).length() < float(tr.lake.r) + 10.0):
+				continue
+			var d := absf(tr._from_start(i) - prefer * tr.length)
+			if d < best:
+				best = d
+				spot = o
+	if spot != Vector3.INF:
+		spot.y = tr.terrain(spot.x, spot.z) - 0.3
+	return spot
+
+
+static func _facing(tr: Track, p: Vector3) -> Vector3:
+	var ti := tr.nearest(p.x, p.z)
+	return Vector3(tr.x[ti] - p.x, 0.0, tr.z[ti] - p.z).normalized()
+
+
+## Autumn forest: a wooden lookout tower on a hill by the track.
+static func _lookout(root: Node3D, tr: Track, cloth: Cloth, spots: Dictionary) -> void:
+	var spot := _landmark_spot(tr, Game.BAR + 26.0, Game.BAR + 14.0, 0.15)
+	if spot == Vector3.INF:
+		return
+	var face := _facing(tr, spot)
+	var f := Transform3D(Basis.looking_at(face, Vector3.UP, true), spot)
+	var kit := MeshKit.new()
+	var wood := Color("8b5a2b")
+	var dark := Color("5e3b1c")
+	var top := 19.0
+	var b0 := 3.4
+	var b1 := 1.8
+	var legs: Array = []
+	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		legs.append([Vector3(c.x * b0, 0.0, c.y * b0), Vector3(c.x * b1, top, c.y * b1)])
+		kit.tube(f, Vector3(c.x * b0, -1.0, c.y * b0), Vector3(c.x * b1, top, c.y * b1), 0.28, wood, MeshKit.MATTE, 6)
+	# cross braces on every side, level by level
+	for lv in 4:
+		var y0 := lv * top / 4.0
+		var y1 := (lv + 1) * top / 4.0
+		for k in 4:
+			var a: Array = legs[k]
+			var b: Array = legs[(k + 1) % 4]
+			var pa0: Vector3 = (a[0] as Vector3).lerp(a[1], y0 / top)
+			var pa1: Vector3 = (a[0] as Vector3).lerp(a[1], y1 / top)
+			var pb0: Vector3 = (b[0] as Vector3).lerp(b[1], y0 / top)
+			var pb1: Vector3 = (b[0] as Vector3).lerp(b[1], y1 / top)
+			kit.tube(f, pa0, pb1, 0.12, dark, MeshKit.MATTE, 5)
+			kit.tube(f, pb0, pa1, 0.12, dark, MeshKit.MATTE, 5)
+			kit.tube(f, pa1, pb1, 0.14, wood, MeshKit.MATTE, 5)
+	# platform with railing and a pointed roof
+	kit.rbox(f * _t(Vector3(0, top + 0.15, 0)), Vector3(b1 * 2.0 + 2.2, 0.3, b1 * 2.0 + 2.2), 0.06, wood, MeshKit.MATTE, 1)
+	var r := b1 + 1.1
+	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+		kit.tube(f, Vector3(c.x * r, top + 0.3, c.y * r), Vector3(c.x * r, top + 3.4, c.y * r), 0.12, wood, MeshKit.MATTE, 5)
+	for k in 4:
+		var c0: Vector2 = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)][k]
+		var c1: Vector2 = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)][(k + 1) % 4]
+		kit.tube(f, Vector3(c0.x * r, top + 1.2, c0.y * r), Vector3(c1.x * r, top + 1.2, c1.y * r), 0.07, dark, MeshKit.MATTE, 4)
+	var roof := PackedVector2Array([Vector2(0.0, r + 0.5), Vector2(2.6, 0.0), Vector2(2.8, 0.0)])
+	kit.lathe(f * _t(Vector3(0, top + 3.3, 0), Vector3(0, PI / 4.0, PI / 2.0)), roof, Color("8e2f22"), MeshKit.MATTE, 4)
+	kit.tube(f, Vector3(0, top + 5.5, 0), Vector3(0, top + 8.0, 0), 0.06, Color("e3e8ef"), MeshKit.CHROME, 5)
+	var mi := MeshInstance3D.new()
+	mi.mesh = kit.commit()
+	root.add_child(mi)
+	cloth.flag(f * Vector3(0, top + 7.95, 0), [Color("ffffff"), Color("d7141a"), Color("11457e")])
+	spots.tower = [spot + Vector3(0, 12.0, 0), face]
+
+
+## Night city: a TV tower with a glowing ring of windows and red lights.
+static func _tv_tower(root: Node3D, tr: Track, spots: Dictionary) -> void:
+	var spot := _landmark_spot(tr, Game.BAR + 45.0, Game.BAR + 30.0, 0.12)
+	if spot == Vector3.INF:
+		return
+	var face := _facing(tr, spot)
+	var f := Transform3D(Basis.looking_at(face, Vector3.UP, true), spot)
+	var kit := MeshKit.new()
+	var conc := Color("c9ced8")
+	kit.lathe(f * _t(Vector3.ZERO, Vector3(0, 0, PI / 2.0)), PackedVector2Array([Vector2(-1.0, 4.2), Vector2(6.0, 3.0),
+		Vector2(70.0, 1.8), Vector2(96.0, 1.4), Vector2(96.0, 0.0)]), conc, MeshKit.SATIN, 12)
+	kit.lathe(f * _t(Vector3(0, 62.0, 0), Vector3(0, 0, PI / 2.0)), PackedVector2Array([Vector2(0.0, 1.8), Vector2(2.0, 8.0),
+		Vector2(5.5, 8.6), Vector2(8.0, 5.0), Vector2(9.0, 1.8)]), Color("e9edf3"), MeshKit.GLOSS, 16)
+	kit.tube(f, Vector3(0, 96.0, 0), Vector3(0, 122.0, 0), 0.35, Color("d9dde5"), MeshKit.CHROME, 6)
+	var mi := MeshInstance3D.new()
+	mi.mesh = kit.commit()
+	root.add_child(mi)
+	# glowing parts: a band of windows round the pod, red lights up the mast
+	var glow := MeshKit.new()
+	glow.lathe(f * _t(Vector3(0, 65.4, 0), Vector3(0, 0, PI / 2.0)), PackedVector2Array([Vector2(0.0, 8.66),
+		Vector2(1.4, 8.66)]), Color.WHITE, MeshKit.MATTE, 16)
+	var lights := MeshInstance3D.new()
+	lights.mesh = glow.commit()
+	var lm := StandardMaterial3D.new()
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lm.albedo_color = Color(0.75, 0.9, 1.0) * 1.6 * Gfx.boost()
+	lm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	lights.material_override = lm
+	lights.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(lights)
+	var red := StandardMaterial3D.new()
+	red.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	red.albedo_color = Color(1.0, 0.12, 0.08) * 2.0 * Gfx.boost()
+	var dot := SphereMesh.new()
+	dot.radius = 0.6
+	dot.height = 1.2
+	dot.radial_segments = 6
+	dot.rings = 3
+	for yy in [80.0, 96.5, 110.0, 122.5]:
+		var d := MeshInstance3D.new()
+		d.mesh = dot
+		d.material_override = red
+		d.position = f * Vector3(0, yy, 0)
+		d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(d)
+	spots.tower = [spot + Vector3(0, 40.0, 0), face]
+
+
+## Night city: a gate of neon tubes spanning a straight, pink and blue.
+static func _neon_gate(root: Node3D, tr: Track, used: Array, spots: Dictionary) -> void:
+	var i := _straightest(tr, 0.3, 0.8, 8, used)
+	if i < 0:
+		return
+	used.append(i)
+	var f := _frame(tr, i, 1.0, 0.0)
+	var half := Game.BAR + 1.5
+	var kit := MeshKit.new()
+	var steel := Color("2b303b")
+	for sx in [-1.0, 1.0]:
+		kit.tube(f, Vector3(sx * half, -0.5, 0), Vector3(sx * half, 9.5, 0), 0.35, steel, MeshKit.SATIN, 8)
+	kit.rbox(f * _t(Vector3(0, 9.8, 0)), Vector3(half * 2.0 + 1.0, 0.7, 0.7), 0.1, steel, MeshKit.SATIN, 1)
+	var mi := MeshInstance3D.new()
+	mi.mesh = kit.commit()
+	root.add_child(mi)
+	for k in 2:
+		var neon := MeshKit.new()
+		var col := Color("ff3db4") if k == 0 else Color("33e1ff")
+		var z := -0.45 if k == 0 else 0.45
+		var prev := Vector3(-half + 0.6, 0.8, z)
+		for s in range(1, 25):
+			var u := float(s) / 24.0
+			var p := Vector3(lerpf(-half + 0.6, half - 0.6, u), 0.8 + (8.4 - 0.4 * k) * sin(PI * u), z)
+			neon.tube(f, prev, p, 0.16, Color.WHITE, MeshKit.MATTE, 6)
+			prev = p
+		var nm := MeshInstance3D.new()
+		nm.mesh = neon.commit()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = col * 1.8 * Gfx.boost()
+		nm.material_override = mat
+		nm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(nm)
+	spots.neon = [f * Vector3(0, 6.0, 0), f.basis.z]
+
+
+## Island: a smoking volcano beside the track, lava glowing in its crater
+## and running down its sides.
+static func _volcano(root: Node3D, tr: Track, spots: Dictionary) -> void:
+	var spot := _landmark_spot(tr, Game.BAR + 95.0, Game.BAR + 60.0, 0.55)
+	if spot == Vector3.INF:
+		return
+	spot.y -= 2.0
+	var face := _facing(tr, spot)
+	var f := Transform3D(Basis.looking_at(face, Vector3.UP, true), spot)
+	var kit := MeshKit.new()
+	var rock := Color("4a3b38")
+	var cone := func(i: int, j: int, _c: Vector3) -> Color:
+		var h: float = fposmod(sin(float(i * 13 + j * 7)) * 43758.5, 1.0)
+		return rock.lightened(h * 0.12) if i < 4 else rock.darkened(0.1 + h * 0.08)
+	# profile: (height, radius) from the foot up to the crater floor
+	var prof := PackedVector2Array([Vector2(-2.0, 78.0), Vector2(8.0, 62.0), Vector2(26.0, 38.0), Vector2(44.0, 20.0),
+		Vector2(52.0, 13.0), Vector2(50.0, 9.0), Vector2(44.0, 8.0)])
+	kit.lathe(f * _t(Vector3.ZERO, Vector3(0, 0, PI / 2.0)), prof, cone, MeshKit.MATTE, 14)
+	var side_y := func(r: float) -> float:   # height of the outer slope at radius r
+		for k in 4:
+			if r >= prof[k + 1].y:
+				return lerpf(prof[k + 1].x, prof[k].x, (r - prof[k + 1].y) / (prof[k].y - prof[k + 1].y))
+		return prof[4].x
+	var mi := MeshInstance3D.new()
+	mi.mesh = kit.commit()
+	root.add_child(mi)
+	# glowing crater and streams
+	var hot := MeshKit.new()
+	hot.lathe(f * _t(Vector3(0, 46.0, 0), Vector3(0, 0, PI / 2.0)), PackedVector2Array([Vector2(0.0, 0.0),
+		Vector2(0.0, 9.5)]), Color.WHITE, MeshKit.MATTE, 14)
+	for k in 4:
+		var a := -0.9 + k * 0.55
+		var prev := Vector3(sin(a) * 12.0, float(side_y.call(12.0)) + 0.6, cos(a) * 12.0)
+		for s in range(1, 11):
+			var u := float(s) / 10.0
+			var rr := lerpf(12.0, 64.0 - k * 4.0, u)
+			var aa := a + sin(u * 5.0 + k) * 0.08
+			var p := Vector3(sin(aa) * rr, float(side_y.call(rr)) + 0.6, cos(aa) * rr)
+			hot.tube(f, prev, p, lerpf(1.4, 0.7, u), Color.WHITE, MeshKit.MATTE, 5)
+			prev = p
+	var hm := MeshInstance3D.new()
+	hm.mesh = hot.commit()
+	hm.material_override = lava_material()
+	hm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(hm)
+	# smoke from the crater
+	var smoke := CPUParticles3D.new()
+	smoke.mesh = Kart.particle_mesh(9.0, false)
+	smoke.amount = Gfx.amount(26)
+	smoke.lifetime = 9.0
+	smoke.preprocess = 9.0
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	smoke.emission_sphere_radius = 5.0
+	smoke.direction = Vector3(0.25, 1.0, 0.1)
+	smoke.spread = 12.0
+	smoke.initial_velocity_min = 3.0
+	smoke.initial_velocity_max = 5.0
+	smoke.gravity = Vector3(0.6, 0.4, 0.3)
+	smoke.scale_amount_curve = Effects._curve(0.6, 2.6)
+	smoke.color_ramp = Kart.fade_ramp()
+	smoke.color = Color(0.42, 0.4, 0.4, 0.7)
+	smoke.position = f * Vector3(0, 50.0, 0)
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	smoke.visibility_aabb = AABB(Vector3(-60, -10, -60), Vector3(120, 140, 120))
+	root.add_child(smoke)
+	smoke.emitting = true
+	spots.volcano = [spot + Vector3(0, 30.0, 0), face]
 
 
 # ================================================================== cloth

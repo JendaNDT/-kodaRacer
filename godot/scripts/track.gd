@@ -50,8 +50,11 @@ var f_w := 0
 var f_h := 0
 var field := PackedFloat32Array()
 var lake_y := 0.0
+var edge_y := 0.0                   # height of the land at the grid edge (an island sinks into the sea)
 const FCELL := 6.0
 const FMARGIN := 200.0
+const ISLAND_DEEP := -9.0
+const SEA_Y := -0.5                 # the sea around an island
 
 
 func _init(d: Dictionary) -> void:
@@ -459,16 +462,23 @@ func land() -> void:
 		_build_field()
 
 
-## Gentle rolls of the land far from the road, 0 at the grid edge.
+## Gentle rolls of the land far from the road, edge_y at the grid edge. On
+## an island the land past an oval around the track sinks below the sea.
 func _natural(px: float, pz: float) -> float:
-	var amp := float(def.get("hills", {}).get("land", 0.0))
+	var hp: Dictionary = def.get("hills", {})
+	var amp := float(hp.get("land", 0.0))
 	var a := float(def.seed) * 0.37
 	var h := amp * (sin(px * 0.011 + a) * sin(pz * 0.013 - a * 0.6) + 0.45 * sin(px * 0.029 + pz * 0.023 + a * 1.7))
 	var edge := minf(minf(px - f_x0, f_x0 + (f_w - 1) * FCELL - px), minf(pz - f_z0, f_z0 + (f_h - 1) * FCELL - pz))
-	return h * smoothstep(0.0, 90.0, edge)
+	h *= smoothstep(0.0, 90.0, edge)
+	if hp.get("island", false):
+		var e := Vector2((px - cx) / ((max_x - min_x) * 0.5 + 125.0), (pz - cz) / ((max_z - min_z) * 0.5 + 125.0)).length()
+		h = lerpf(h + 1.5, ISLAND_DEEP, maxf(smoothstep(0.92, 1.18, e), 1.0 - smoothstep(0.0, 60.0, edge)))
+	return h
 
 
 func _build_field() -> void:
+	edge_y = ISLAND_DEEP if def.get("hills", {}).get("island", false) else 0.0
 	f_x0 = min_x - FMARGIN
 	f_z0 = min_z - FMARGIN
 	f_w = int(ceil((max_x - min_x + 2.0 * FMARGIN) / FCELL)) + 1

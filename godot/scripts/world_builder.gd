@@ -6,6 +6,8 @@ extends RefCounted
 ## and landmarks from Trackside.
 
 const GROUND := 3600.0
+const AUTUMN := ["e8862a", "d4522a", "e8b830", "c0392b", "f0a030", "9a8a2a", "b5651d"]
+const BUILDING := ["5d6475", "6b5f5a", "7a7f8c", "4f5666", "8a8278", "5a6a7a", "6e6a80"]
 
 ## Item boxes: rainbow glass with a gleam sweeping across them.
 const BOX_SHADER := """
@@ -60,30 +62,49 @@ static func build(tr: Track) -> Dictionary:
 	var atm := Atmosphere.build(root, tr, th)
 
 	# --- ground
+	# an island colours its land per vertex (grass, beach, sea floor), so its
+	# texture is a neutral speckle the colours tint
+	var tinted := th.has("sea")
+	var g0: Color = Color.WHITE if tinted else th.ground
 	var gimg := Image.create_empty(256, 256, false, Image.FORMAT_RGBA8)
-	gimg.fill(th.ground)
+	gimg.fill(g0)
 	for i in 2600:
 		var c: Color = th.ground2 if i % 2 == 1 else th.ground3
+		if tinted:
+			c = Color(0.84, 0.84, 0.84) if i % 2 == 1 else Color(1.0, 1.0, 1.0)
 		var s := 1 + rng.randi() % 3
 		var rect := Rect2i(rng.randi() % 256, rng.randi() % 256, s, s * (1 + rng.randi() % 3))
-		gimg.fill_rect(rect, Color(th.ground).lerp(c, 0.35 + rng.randf() * 0.45))
+		gimg.fill_rect(rect, g0.lerp(c, 0.35 + rng.randf() * 0.45))
 	gimg.generate_mipmaps()
 	var gmat := StandardMaterial3D.new()
 	gmat.albedo_texture = ImageTexture.create_from_image(gimg)
 	gmat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	gmat.roughness = 1.0
-	root.add_child(_land(tr, gmat))
+	if tinted:
+		gmat.vertex_color_use_as_albedo = true
+		gmat.vertex_color_is_srgb = true
+	root.add_child(_land(tr, gmat, th))
+	if tinted:
+		# the sea all around, the same water as the lakes
+		var sea := PlaneMesh.new()
+		sea.size = Vector2(GROUND, GROUND)
+		var sea_mi := MeshInstance3D.new()
+		sea_mi.mesh = sea
+		sea_mi.position = Vector3(tr.cx, Track.SEA_Y, tr.cz)
+		sea_mi.material_override = Trackside.lake_material(th.sea, th.mood.horizon, false)
+		root.add_child(_no_cast(sea_mi))
 
 	# --- lake in the infield where there is room (Track found the spot)
 	if not tr.lake.is_empty():
 		var r := float(tr.lake.water)
-		var shore := _disc(r + 3.0, Color(th.ground2), 0.02, false)
+		var lava: bool = th.get("lava", false)
+		var shore := _disc(r + 3.0, Color("3a302e") if lava else Color(th.ground2), 0.02, false)
 		shore.position = Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z))
 		root.add_child(shore)
 		var lake := _disc(r, th.lake, 0.035, true)
 		lake.position = Vector3(float(tr.lake.x), tr.lake_y, float(tr.lake.z))
-		(lake.get_child(0) as MeshInstance3D).material_override = Trackside.lake_material(th.lake,
-			th.mood.horizon, th.deco == "pines")
+		(lake.get_child(0) as MeshInstance3D).material_override = Trackside.lava_material() if lava else \
+			Trackside.lake_material(th.lake, th.mood.horizon, th.deco == "pines")
 		root.add_child(lake)
 
 	# --- road and kerbs
@@ -255,7 +276,7 @@ static func ribbon(tr: Track, o0: float, o1: float, y: float, v_len: float) -> A
 ## (12 m is plenty: next to the road the land is a flat continuation of
 ## it), and flat ground at 0 around it out to the horizon. Texture
 ## coordinates in metres so everything joins up.
-static func _land(tr: Track, mat: Material) -> Node3D:
+static func _land(tr: Track, mat: Material, th: Dictionary) -> Node3D:
 	tr.land()
 	var stp := 1 if Gfx.level() == 2 else 2
 	var cols: Array = []
@@ -280,13 +301,15 @@ static func _land(tr: Track, mat: Material) -> Node3D:
 			var r1 := (rows.size() - 1) * (ty + 1) / tiles
 			var c0 := (cols.size() - 1) * tx_ / tiles
 			var c1 := (cols.size() - 1) * (tx_ + 1) / tiles
-			g.add_child(_land_tile(tr, mat, rows.slice(r0, r1 + 1), cols.slice(c0, c1 + 1)))
+			g.add_child(_land_tile(tr, mat, rows.slice(r0, r1 + 1), cols.slice(c0, c1 + 1), th))
 	# flat ground around the grid: four big strips at height 0
 	var c := Track.FCELL
 	var x0 := tr.f_x0
 	var z0 := tr.f_z0
 	var x1 := tr.f_x0 + (tr.f_w - 1) * c
 	var z1 := tr.f_z0 + (tr.f_h - 1) * c
+	var tinted := th.has("sea")
+	var colors := PackedColorArray()
 	var ex0 := tr.cx - GROUND * 0.5
 	var ez0 := tr.cz - GROUND * 0.5
 	var ex1 := tr.cx + GROUND * 0.5
@@ -298,26 +321,41 @@ static func _land(tr: Track, mat: Material) -> Node3D:
 	for rect in [[ex0, ez0, ex1, z0], [ex0, z1, ex1, ez1], [ex0, z0, x0, z1], [x1, z0, ex1, z1]]:
 		var b := verts.size()
 		for p in [Vector2(rect[0], rect[1]), Vector2(rect[2], rect[1]), Vector2(rect[0], rect[3]), Vector2(rect[2], rect[3])]:
-			verts.append(Vector3(p.x, 0.0, p.y))
+			verts.append(Vector3(p.x, tr.edge_y, p.y))
 			norms.append(Vector3.UP)
 			uvs.append(p / 24.0)
+			if tinted:
+				colors.append(_land_color(th, tr.edge_y))
 		idx.append_array(PackedInt32Array([b, b + 1, b + 2, b + 1, b + 3, b + 2]))
-	g.add_child(_mesh_node(verts, norms, uvs, idx, mat))
+	g.add_child(_mesh_node(verts, norms, uvs, idx, mat, colors))
 	return g
 
 
-static func _land_tile(tr: Track, mat: Material, rows: Array, cols: Array) -> MeshInstance3D:
+## Island colours by height: grass, a sandy beach at the water, sea floor.
+static func _land_color(th: Dictionary, h: float) -> Color:
+	var sand: Color = th.dust
+	var grass: Color = th.ground
+	var beach := smoothstep(Track.SEA_Y + 2.4, Track.SEA_Y + 1.0, h)
+	var c := grass.lerp(sand, beach)
+	return c.lerp(sand.darkened(0.35), smoothstep(Track.SEA_Y, Track.SEA_Y - 4.0, h))
+
+
+static func _land_tile(tr: Track, mat: Material, rows: Array, cols: Array, th: Dictionary) -> MeshInstance3D:
 	var c := Track.FCELL
 	var w := cols.size()
 	var verts := PackedVector3Array()
 	var norms := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var idx := PackedInt32Array()
+	var colors := PackedColorArray()
+	var tinted := th.has("sea")
 	for r: int in rows:
 		for q: int in cols:
 			var px := tr.f_x0 + q * c
 			var pz := tr.f_z0 + r * c
 			verts.append(Vector3(px, tr.node_y(q, r), pz))
+			if tinted:
+				colors.append(_land_color(th, tr.node_y(q, r)))
 			var hl := tr.node_y(maxi(q - 1, 0), r)
 			var hr := tr.node_y(mini(q + 1, tr.f_w - 1), r)
 			var hd := tr.node_y(q, maxi(r - 1, 0))
@@ -328,17 +366,19 @@ static func _land_tile(tr: Track, mat: Material, rows: Array, cols: Array) -> Me
 		for q in w - 1:
 			var a := r * w + q
 			idx.append_array(PackedInt32Array([a, a + 1, a + w, a + 1, a + w + 1, a + w]))
-	return _mesh_node(verts, norms, uvs, idx, mat)
+	return _mesh_node(verts, norms, uvs, idx, mat, colors)
 
 
 static func _mesh_node(verts: PackedVector3Array, norms: PackedVector3Array, uvs: PackedVector2Array,
-		idx: PackedInt32Array, mat: Material) -> MeshInstance3D:
+		idx: PackedInt32Array, mat: Material, colors := PackedColorArray()) -> MeshInstance3D:
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = verts
 	arr[Mesh.ARRAY_NORMAL] = norms
 	arr[Mesh.ARRAY_TEX_UV] = uvs
 	arr[Mesh.ARRAY_INDEX] = idx
+	if not colors.is_empty():
+		arr[Mesh.ARRAY_COLOR] = colors
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mi := MeshInstance3D.new()
@@ -627,9 +667,10 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 	var dens := Gfx.foliage()
 	var deco: String = th.deco
 	var base: Color = th.tree
-	if deco == "trees" or deco == "pines":
+	if deco == "trees" or deco == "pines" or deco == "autumn":
 		var pine := deco == "pines"
-		var trees := _scatter(tr, rng, int((240 if pine else 230) * dens), 160.0, clear)
+		var autumn := deco == "autumn"
+		var trees := _scatter(tr, rng, int((240 if pine else (330 if autumn else 230)) * dens), 110.0 if autumn else 160.0, clear)
 		var trunk := CylinderMesh.new()
 		trunk.top_radius = 0.35
 		trunk.bottom_radius = 0.55
@@ -658,19 +699,35 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 		var fol_xf: Array = []
 		var cap_xf: Array = []
 		var fcols: Array = []
+		var fir_xf: Array = []       # autumn: dark firs between the coloured trees
+		var fir_cols: Array = []
 		for t in trees:
 			var s: float = 0.8 + t[2] * 0.8
 			var rot: float = t[3] * 6.0
 			var gy := tr.terrain(t[0], t[1]) - 0.2
 			trunk_xf.append(_xf(0.0, Vector3(s, s, s), Vector3(t[0], gy + 1.5 * s, t[1])))
+			if autumn and t[4] < 0.22:
+				fir_xf.append(_xf(rot, Vector3(s, s * 1.15, s), Vector3(t[0], gy + 6.4 * s, t[1])))
+				fir_cols.append(Color("2f5e3a").lightened(t[2] * 0.12))
+				continue
 			fol_xf.append(_xf(rot, Vector3(s, s * (1.0 if pine else 1.15), s), Vector3(t[0], gy + (6.0 if pine else 5.4) * s, t[1])))
 			cap_xf.append(_xf(rot, Vector3(s, s, s), Vector3(t[0], gy + 8.4 * s, t[1])))
 			var c := base
+			if autumn:
+				c = Color(AUTUMN[int(t[3] * 997.0) % AUTUMN.size()])
 			c.h = fposmod(c.h + (t[4] - 0.5) * 0.05, 1.0)
 			c.v = clampf(c.v + (t[4] - 0.5) * 0.15, 0.0, 1.0)
 			fcols.append(c)
 		root.add_child(_multi(trunk, trunk_mat, trunk_xf))
 		root.add_child(_multi(fol, Trackside.wind_material(0.05, 2.0), fol_xf, fcols))
+		if not fir_xf.is_empty():
+			var fir := CylinderMesh.new()
+			fir.top_radius = 0.0
+			fir.bottom_radius = 2.3
+			fir.height = 7.5
+			fir.radial_segments = 7
+			fir.rings = 1
+			root.add_child(_multi(flat(fir), Trackside.wind_material(0.04, 2.0), fir_xf, fir_cols))
 		if pine:
 			var cap := CylinderMesh.new()
 			cap.top_radius = 0.0
@@ -692,7 +749,8 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			for t in bushes:
 				var s: float = 0.7 + t[2] * 0.9
 				bush_xf.append(_xf(t[3] * 6.0, Vector3(s * 1.3, s, s * 1.3), Vector3(t[0], tr.terrain(t[0], t[1]) + 0.6 * s, t[1])))
-				bcols.append(base.lightened(0.08 + t[4] * 0.1))
+				var bc: Color = Color(AUTUMN[int(t[4] * 991.0) % AUTUMN.size()]) if autumn else base
+				bcols.append(bc.lightened(0.08 + t[4] * 0.1))
 			root.add_child(_multi(flat(bush), Trackside.wind_material(0.06, 0.0), bush_xf, bcols))
 	elif deco == "cactus":
 		var cact := _scatter(tr, rng, int(110 * dens), 150.0, clear)
@@ -742,8 +800,15 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			rcols.append(Color(th.mount).lightened(0.05 + t[4] * 0.15))
 		root.add_child(_multi(flat(rock), _vc_mat(), rock_xf, rcols))
 
-	# distant mountains or mesas
+	elif deco == "city":
+		_city(root, tr, th, rng)
+		return
+	elif deco == "palms":
+		_palms(root, tr, th, rng)
+
+	# distant mountains or mesas (small islands out at sea)
 	var mount: Color = th.mount
+	var islands := th.has("sea")
 	var ring_xf: Array = []
 	var cap_ring_xf: Array = []
 	var mcols: Array = []
@@ -760,6 +825,10 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			var r := 45.0 + r1 * 70.0
 			var h := 30.0 + r2 * 70.0
 			ring_xf.append(_xf(r3 * 6.0, Vector3(r, h, r * (0.7 + r3 * 0.5)), Vector3(px, h * 0.5, pz)))
+		elif islands:
+			var r := 60.0 + r1 * 90.0
+			var h := 25.0 + r2 * 45.0
+			ring_xf.append(_xf(r3 * 6.0, Vector3(r, h, r), Vector3(px, Track.ISLAND_DEEP + h * 0.5, pz)))
 		else:
 			var r := 70.0 + r1 * 80.0
 			var h := 90.0 + r2 * 120.0
@@ -788,6 +857,242 @@ static func _scenery(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberG
 			var cap_mat := StandardMaterial3D.new()
 			cap_mat.albedo_color = th.cap
 			root.add_child(_no_cast(_multi(fcone, cap_mat, cap_ring_xf)))
+
+
+## Night city: blocks of houses with lit windows lined up along the
+## streets, street lamps with pools of light on the road, a skyline
+## around the horizon.
+static func _city(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> void:
+	var wmat := _window_material(rng)
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	var xfs: Array = []
+	var cols: Array = []
+	for t in _scatter(tr, rng, int(190 * Gfx.foliage()), 140.0, Game.BAR + 7.0):
+		var px: float = t[0]
+		var pz: float = t[1]
+		var ni := tr.nearest(px, pz)
+		var far := clampf((Vector2(px - tr.x[ni], pz - tr.z[ni]).length() - 30.0) / 140.0, 0.0, 1.0)
+		var w: float = 10.0 + t[2] * 14.0
+		var d: float = 10.0 + t[3] * 12.0
+		var h: float = 8.0 + t[4] * t[4] * 34.0 + far * 24.0
+		var gy := tr.terrain(px, pz) - 1.0
+		xfs.append(Transform3D(Basis(Vector3.UP, tr.heading(ni)) * Basis.from_scale(Vector3(w, h, d)), Vector3(px, gy + h * 0.5, pz)))
+		cols.append(Color(BUILDING[int(t[2] * 991.0) % BUILDING.size()]).lightened(t[3] * 0.1))
+	root.add_child(_multi(box, wmat, xfs, cols))
+	# skyline far away
+	var sky_xf: Array = []
+	var sky_cols: Array = []
+	for i in 46:
+		var a := float(i) / 46.0 * TAU + rng.randf() * 0.1
+		var rad := tr.radius + 300.0 + rng.randf() * 240.0
+		var w := 30.0 + rng.randf() * 34.0
+		var h := 40.0 + pow(rng.randf(), 1.5) * 110.0
+		sky_xf.append(Transform3D(Basis(Vector3.UP, a) * Basis.from_scale(Vector3(w, h, w * (0.6 + rng.randf() * 0.6))),
+			Vector3(tr.cx + cos(a) * rad, h * 0.5 - 1.0, tr.cz + sin(a) * rad)))
+		sky_cols.append(Color(BUILDING[i % BUILDING.size()]).darkened(0.35))
+	root.add_child(_no_cast(_multi(box, wmat, sky_xf, sky_cols)))
+	_street_lamps(root, tr, th)
+
+
+## Wall texture with a grid of windows, some of them lit (the lit ones glow
+## through an emission texture). World-space triplanar mapping keeps the
+## windows the same size on every house.
+static func _window_material(rng: RandomNumberGenerator) -> StandardMaterial3D:
+	var alb := Image.create_empty(64, 64, false, Image.FORMAT_RGBA8)
+	var em := Image.create_empty(64, 64, false, Image.FORMAT_RGBA8)
+	alb.fill(Color(0.92, 0.92, 0.92))
+	em.fill(Color.BLACK)
+	for wy in 4:
+		for wx in 4:
+			var r := Rect2i(wx * 16 + 3, wy * 16 + 4, 10, 9)
+			var lit := rng.randf() < 0.5
+			var warm := rng.randf() < 0.75
+			var glow := Color("ffd27a") if warm else Color("bfe0ff")
+			alb.fill_rect(r, glow if lit else Color(0.13, 0.15, 0.2))
+			if lit:
+				em.fill_rect(r, glow * rng.randf_range(0.7, 1.0))
+	alb.generate_mipmaps()
+	em.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(alb)
+	m.vertex_color_use_as_albedo = true
+	m.emission_enabled = true
+	m.emission_texture = ImageTexture.create_from_image(em)
+	m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY   # only the lit windows glow
+	m.emission = Color.WHITE
+	m.emission_energy_multiplier = 1.3
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3(1.0 / 14.0, 1.0 / 12.0, 1.0 / 14.0)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	m.roughness = 0.8
+	return m
+
+
+## Lamp posts behind the barriers every 32 m, sides taking turns, each
+## throwing a warm pool of light on the road (additive, so it costs little).
+static func _street_lamps(root: Node3D, tr: Track, th: Dictionary) -> void:
+	var post := MeshKit.new()
+	var steel := Color("3a3f4a")
+	post.tube(MeshKit.at(Vector3.ZERO), Vector3(0, 0, 0), Vector3(0, 7.6, 0), 0.13, steel, MeshKit.SATIN, 6)
+	post.tube(MeshKit.at(Vector3.ZERO), Vector3(0, 7.5, 0), Vector3(-2.6, 7.7, 0), 0.09, steel, MeshKit.SATIN, 5)
+	post.rbox(MeshKit.at(Vector3(-2.6, 7.55, 0)), Vector3(1.0, 0.22, 0.5), 0.06, steel, MeshKit.SATIN, 0)
+	var bulb := BoxMesh.new()
+	bulb.size = Vector3(0.8, 0.08, 0.36)
+	var bulb_mat := StandardMaterial3D.new()
+	bulb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bulb_mat.albedo_color = Color(1.0, 0.86, 0.55) * 2.2
+	var post_xf: Array = []
+	var bulb_xf: Array = []
+	var pools := SurfaceTool.new()
+	pools.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var d := 10.0
+	var side := 1.0
+	while d < tr.length - 6.0:
+		var i := int(d / tr.step) % tr.n
+		var off := side * (Game.BAR + 2.0)
+		var px := tr.x[i] + tr.nx[i] * off
+		var pz := tr.z[i] + tr.nz[i] * off
+		d += 32.0
+		side = -side
+		if tr.near(px, pz, Game.BAR + 1.0):
+			continue
+		var away := Vector3(tr.nx[i], 0.0, tr.nz[i]) * signf(off)
+		var b := Basis(away, Vector3.UP, away.cross(Vector3.UP))
+		var base := Vector3(px, tr.road_y(i, off, 0.0, false) - 0.1, pz)
+		post_xf.append(Transform3D(b, base))
+		bulb_xf.append(Transform3D(b, base + b * Vector3(-2.6, 7.42, 0)))
+		_light_pool(pools, tr, i, signf(off) * 10.5)
+	root.add_child(_multi(post.commit(), null, post_xf))
+	root.add_child(_no_cast(_multi(bulb, bulb_mat, bulb_xf)))
+	var pool_mat := StandardMaterial3D.new()
+	pool_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pool_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	pool_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pool_mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	pool_mat.vertex_color_use_as_albedo = true
+	pool_mat.albedo_texture = _radial()
+	var pm := MeshInstance3D.new()
+	pm.mesh = pools.commit()
+	pm.material_override = pool_mat
+	root.add_child(_no_cast(pm))
+
+
+## A soft round patch of lamp light on the road around lateral offset la.
+static func _light_pool(st: SurfaceTool, tr: Track, i: int, la: float) -> void:
+	var rows := 5
+	var cols := 3
+	var grid: Array = []
+	for r in rows:
+		var j := (i + (r - 2) * 2 + tr.n) % tr.n
+		var row: Array = []
+		for c in cols:
+			var o := la + (c - 1) * 8.0
+			row.append([Vector3(tr.x[j] + tr.nx[j] * o, tr.road_y(j, o, 0.0, false) + 0.09, tr.z[j] + tr.nz[j] * o),
+				Vector2(float(c) / (cols - 1), float(r) / (rows - 1))])
+		grid.append(row)
+	var col := Color(1.0, 0.78, 0.45, 0.55)
+	for r in rows - 1:
+		for c in cols - 1:
+			for v in [grid[r][c], grid[r + 1][c], grid[r + 1][c + 1], grid[r][c], grid[r + 1][c + 1], grid[r][c + 1]]:
+				st.set_color(col)
+				st.set_uv(v[1])
+				st.add_vertex(v[0])
+
+
+static func _radial() -> ImageTexture:
+	var img := Image.create_empty(64, 64, false, Image.FORMAT_RGBA8)
+	for yy in 64:
+		for xx in 64:
+			var dd := Vector2(xx - 31.5, yy - 31.5).length() / 32.0
+			var a := clampf(1.0 - dd, 0.0, 1.0)
+			img.set_pixel(xx, yy, Color(1, 1, 1, a * a))
+	return ImageTexture.create_from_image(img)
+
+
+## Island: palms swaying in the wind and dark lava rocks.
+static func _palms(root: Node3D, tr: Track, th: Dictionary, rng: RandomNumberGenerator) -> void:
+	var dens := Gfx.foliage()
+	var palm := _palm_mesh(Color(th.tree))
+	var xfs: Array = []
+	var cols: Array = []
+	for t in _scatter(tr, rng, int(200 * dens), 110.0, Game.BAR + 4.0):
+		var gy := tr.terrain(t[0], t[1])
+		if gy < Track.SEA_Y + 0.6:
+			continue
+		var s: float = 0.8 + t[2] * 0.6
+		xfs.append(_xf(t[3] * TAU, Vector3(s, s * (0.9 + t[4] * 0.3), s), Vector3(t[0], gy - 0.2, t[1])))
+		cols.append(Color.WHITE.darkened(t[4] * 0.2))
+	root.add_child(_multi(palm, Trackside.wind_material(0.035, 3.5), xfs, cols))
+	var rock := SphereMesh.new()
+	rock.radius = 1.5
+	rock.height = 3.0
+	rock.radial_segments = 5
+	rock.rings = 3
+	var rock_xf: Array = []
+	var rcols: Array = []
+	for t in _scatter(tr, rng, int(70 * dens), 110.0, Game.BAR + 3.0):
+		var s: float = 0.6 + t[2] * 2.0
+		var b := Basis.from_euler(Vector3(t[3], t[4] * 6.0, 0)) * Basis.from_scale(Vector3(s, s * 0.7, s))
+		rock_xf.append(Transform3D(b, Vector3(t[0], tr.terrain(t[0], t[1]) + 0.3 * s, t[1])))
+		rcols.append(Color(th.mount).lightened(t[4] * 0.12))
+	root.add_child(_multi(flat(rock), _vc_mat(), rock_xf, rcols))
+
+
+## One palm: a curved ringed trunk and drooping fronds (vertex colours, both
+## sides of each frond so it shows from below).
+static func _palm_mesh(leaf: Color) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tri := func(a: Vector3, b: Vector3, c: Vector3, col: Color) -> void:
+		var nrm := (c - a).cross(b - a).normalized()
+		for v in [a, b, c]:
+			st.set_color(col)
+			st.set_normal(nrm)
+			st.add_vertex(v)
+	var h := 7.5
+	var lean := 1.3
+	var segs := 7
+	var sides := 6
+	var rings: Array = []
+	for k in segs + 1:
+		var u := float(k) / segs
+		var c := Vector3(lean * u * u, h * u, 0.0)
+		var r := lerpf(0.34, 0.2, u)
+		var ring: Array = []
+		for sd in sides:
+			var a := TAU * sd / sides
+			ring.append(c + Vector3(cos(a) * r, 0.0, sin(a) * r))
+		rings.append(ring)
+	for k in segs:
+		var col := Color("8b6a45") if k % 2 == 0 else Color("7a5a3a")
+		for sd in sides:
+			var s1 := (sd + 1) % sides
+			tri.call(rings[k][sd], rings[k + 1][s1], rings[k + 1][sd], col)
+			tri.call(rings[k][sd], rings[k][s1], rings[k + 1][s1], col)
+	var top := Vector3(lean, h, 0.0)
+	for f in 9:
+		var a := TAU * f / 9.0 + 0.2
+		var dir := Vector3(cos(a), 0.18, sin(a)).normalized()
+		var side := dir.cross(Vector3.UP).normalized()
+		var col := leaf.lightened(0.08) if f % 2 == 0 else leaf.darkened(0.08)
+		var prev_l := top
+		var prev_r := top
+		var steps := 5
+		for k in range(1, steps + 1):
+			var u := float(k) / steps
+			var p := top + dir * (u * 3.6) + Vector3.DOWN * (u * u * 2.0)
+			var w := 0.8 * sin(PI * minf(u * 1.15, 1.0)) + 0.05
+			var l := p + side * w
+			var r := p - side * w
+			tri.call(prev_l, l, r, col)
+			tri.call(prev_l, r, prev_r, col)
+			tri.call(prev_l, r, l, col.darkened(0.15))
+			tri.call(prev_l, prev_r, r, col.darkened(0.15))
+			prev_l = l
+			prev_r = r
+	return st.commit()
 
 
 static func _snowmen(root: Node3D, tr: Track, rng: RandomNumberGenerator) -> void:

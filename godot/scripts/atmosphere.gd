@@ -1,9 +1,10 @@
 class_name Atmosphere
 extends RefCounted
-## Light and mood of a track: sky with a sun disk, the sun (real shadows on
-## Střední and Vysoká), fog, film colours, glow, SSAO, drifting clouds and
-## falling snow. Colours and light look the same on every quality level;
-## shadows, glow, SSAO and snow follow Gfx.
+## Light and mood of a track: sky with a sun disk (or the moon and stars at
+## night), the sun (real shadows on Střední and Vysoká), fog, film colours,
+## glow, SSAO, drifting clouds and falling snow or leaves. Colours and light
+## look the same on every quality level; shadows, glow, SSAO and the
+## weather follow Gfx.
 
 const SNOW_FLAKES := 2600
 
@@ -87,10 +88,59 @@ static func build(root: Node3D, tr: Track, th: Dictionary) -> Dictionary:
 		"plain": Color(mood.sun_color), "plain_energy": float(mood.sun_energy)}
 	_shadowed_sun(atm, th)
 	_clouds(root, tr, mood, rng, atm)
-	if mood.get("weather", "") == "snow" and Gfx.weather() > 0.0:
-		atm.snow = _snow(int(SNOW_FLAKES * Gfx.weather()))
+	var weather: String = mood.get("weather", "")
+	if weather == "snow" and Gfx.weather() > 0.0:
+		atm.snow = _snow(int(SNOW_FLAKES * Gfx.weather()), Color(1, 1, 1, 0.95), 0.06, 2.6)
 		root.add_child(atm.snow)
+	elif weather == "leaves" and Gfx.weather() > 0.0:
+		# autumn leaves: two colours tumbling down slower and bigger than snow
+		atm.snow = Node3D.new()
+		for col in [Color(0.93, 0.5, 0.14, 0.95), Color(0.75, 0.22, 0.12, 0.95)]:
+			atm.snow.add_child(_snow(int(320 * Gfx.weather()), col, 0.13, 1.3))
+		root.add_child(atm.snow)
+	if mood.get("stars", false):
+		root.add_child(_stars(tr, rng))
 	return atm
+
+
+## Stars on a big dome over the track (nights only).
+static func _stars(tr: Track, rng: RandomNumberGenerator) -> MeshInstance3D:
+	var verts := PackedVector3Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var rad := 1500.0
+	for i in 420:
+		var a := rng.randf() * TAU
+		var el := asin(lerpf(0.06, 1.0, pow(rng.randf(), 0.7)))
+		var dir := Vector3(cos(a) * cos(el), sin(el), sin(a) * cos(el))
+		var c := Vector3(tr.cx, 0.0, tr.cz) + dir * rad
+		var sz := rng.randf_range(1.6, 4.2)
+		var right := dir.cross(Vector3.UP).normalized()
+		var up := right.cross(dir).normalized()
+		var b := verts.size()
+		for q in [Vector2(-1, 0), Vector2(0, 1), Vector2(1, 0), Vector2(0, -1)]:
+			verts.append(c + (right * q.x + up * q.y) * sz)
+			var w := rng.randf_range(0.65, 1.0)
+			cols.append(Color(w, w, lerpf(w, 1.0, 0.5)))
+		idx.append_array(PackedInt32Array([b, b + 1, b + 2, b, b + 2, b + 3]))
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_INDEX] = idx
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.disable_fog = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mi := MeshInstance3D.new()
+	mi.name = "Stars"
+	mi.mesh = m
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
 
 
 ## The Compatibility renderer draws a sun that casts shadows in a second pass
@@ -191,9 +241,9 @@ static func _clouds(root: Node3D, tr: Track, mood: Dictionary, rng: RandomNumber
 	holder.add_child(mm)
 
 
-## Falling snow: one mesh of flakes that a shader wraps into a box around
-## whichever camera draws it, so split-screen gets snow for both players.
-static func _snow(count: int) -> MeshInstance3D:
+## Falling snow (or leaves): one mesh of flakes that a shader wraps into a
+## box around whichever camera draws it, so split-screen gets it for both.
+static func _snow(count: int, tint: Color, size: float, fall: float) -> MeshInstance3D:
 	if _snow_shader == null:
 		_snow_shader = Shader.new()
 		_snow_shader.code = """
@@ -258,6 +308,9 @@ void fragment() {
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mat := ShaderMaterial.new()
 	mat.shader = _snow_shader
+	mat.set_shader_parameter("tint", tint)
+	mat.set_shader_parameter("size", size)
+	mat.set_shader_parameter("fall", fall)
 	var mi := MeshInstance3D.new()
 	mi.name = "Snow"
 	mi.mesh = mesh

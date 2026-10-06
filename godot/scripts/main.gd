@@ -70,9 +70,19 @@ func _ready() -> void:
 				bk = maxf(bk, absf(tr.bank[j]))
 				var c := -(tr.y[(j + 1) % tr.n] - 2.0 * tr.y[j] + tr.y[(j - 1 + tr.n) % tr.n]) / (tr.step * tr.step)
 				crest = maxf(crest, c)
+			# closest approach of two parts of the lap far apart along it, sharpest bend
+			var gap := INF
+			var bend := 0.0
+			for j in range(0, tr.n, 2):
+				bend = maxf(bend, absf(tr.curv[j]))
+				for q in range(j + 2, tr.n, 2):
+					var dd := absi(q - j)
+					if mini(dd, tr.n - dd) * tr.step > 120.0:
+						gap = minf(gap, Vector2(tr.x[j] - tr.x[q], tr.z[j] - tr.z[q]).length())
 			# a crest throws a kart at speed v into the air when v*v*crest > gravity
-			print("TRACK %s len=%d y=%.1f..%.1f slope=%.3f bank=%.3f lift_at=%.0f m/s ramp=%s at %.0f m" % [tr.def.id,
-				tr.length, lo, hi, sl, bk, sqrt(Game.GRAVITY / maxf(crest, 1e-6)), str(tr.ramp), float(tr.ramp.get("i", 0)) * tr.step])
+			print("TRACK %s len=%d y=%.1f..%.1f slope=%.3f bank=%.3f lift_at=%.0f m/s gap=%.0f m bend_r=%.0f m ramp at %.0f m lake=%s" % [
+				tr.def.id, tr.length, lo, hi, sl, bk, sqrt(Game.GRAVITY / maxf(crest, 1e-6)), gap, 1.0 / maxf(bend, 1e-6),
+				float(tr.ramp.get("i", 0)) * tr.step, str(not tr.lake.is_empty())])
 		get_tree().quit()
 		return
 	if a.has("bench"):
