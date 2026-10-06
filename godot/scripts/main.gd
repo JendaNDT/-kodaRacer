@@ -28,6 +28,8 @@ var cup := {}
 var trial := false      # the last race started was a time trial
 var _trial_runs := 0
 var _jump_track := 0
+var _items_phase := 0
+var _items_bad := 0
 var _jump_bad := 0
 
 
@@ -139,6 +141,16 @@ func _ready() -> void:
 				pts -= 4
 			cup.round = int(a["cup-start"])
 			_start_cup_round()
+		return
+	if a.has("itemtest"):
+		# every new item in a set-up situation, then a whole race where the
+		# items are handed out in turn and the drivers use them
+		_test_mode = "items"
+		menu.visible = false
+		start_offline(1)
+		race.fast = int(a.get("fast", "8"))
+		for k in race.locals:
+			k.autopilot = true
 		return
 	if a.has("jumptest"):
 		# one lap on every track, all six karts on autopilot with endless turbo
@@ -586,6 +598,8 @@ func _process(delta: float) -> void:
 					_next_cup_round(pts)
 		elif _test_t > float(Game.cmd_args.get("timeout", "900")):
 			_finish_test(false, "timeout in round %d" % (int(cup.round) + 1))
+	elif _test_mode == "items" and race != null:
+		_items_tick()
 	elif _test_mode == "jump" and race != null:
 		_jump_tick()
 	elif _test_mode == "autotest" and race != null:
@@ -619,6 +633,7 @@ func _process(delta: float) -> void:
 			var rep := race.prediction_report()
 			print("PREDICTION lag=%d ms: error avg %.2f p95 %.2f max %.2f m (%d), correction avg %.2f p95 %.2f max %.2f m" % [
 				int(Net.fake_lag), rep.err.avg, rep.err.p95, rep.err.max, rep.err.n, rep.corr.avg, rep.corr.p95, rep.corr.max])
+			print("CLIENT SAW: %s" % ", ".join(race.net_seen.keys()))
 			var pred_ok: bool = rep.err.n > 100 and rep.err.p95 <= float(Game.cmd_args.get("max-err", "1.0"))
 			if race.cup.is_empty():
 				_finish_test(me.finished and pred_ok, "client finished place %d, prediction %s" % [race._place_of(me), "ok" if pred_ok else "too far"])
@@ -655,6 +670,23 @@ func _show_fx(what: String) -> void:
 			k.obs.level = int(Game.cmd_args.get("level", "3"))
 		"star":
 			k.star = 4.0
+		"shield":
+			k.shield = Game.SHIELD_TIME
+		"oil":
+			var node := race._oil_node()
+			race.fx.add_child(node)
+			var o := {"x": front.x, "y": 0.0, "z": front.z, "node": node, "owner": null, "age": 0.0}
+			race._place_oil(o, race.track.project(front.x, front.z, k.idx))
+			race.oils.append(o)
+		"lightning":
+			race._lightning(k)
+		"blue":
+			k.item = Game.Item.BLUE
+			k.item_n = 1
+			race.use_item(k)
+		"icon":
+			k.item = int(Game.cmd_args.get("level", "5"))
+			k.item_n = 1
 		"roulette":
 			k.item = 0
 			k.roulette = 1.3
@@ -671,6 +703,167 @@ func _show_fx(what: String) -> void:
 				for sx in [-1.0, 1.0]:
 					race.skids.add(k.position + ahead * (4.0 + i * 0.75) + side * (w0 + sx),
 						k.position + ahead * (4.75 + i * 0.75) + side * (w1 + sx), 1.0)
+
+
+func _items_tick() -> void:
+	if _items_phase == 0 and race.state == "race":
+		_items_phase = 1
+		_item_checks()
+		Game.cmd_args["item-cycle"] = "1"
+		start_offline(1)
+		race.fast = int(Game.cmd_args.get("fast", "8"))
+		for k in race.locals:
+			k.autopilot = true
+		_test_t = 0.0
+	elif _items_phase == 1 and race.results_shown:
+		var used: Array = []
+		for it in range(1, Game.ITEM_COUNT + 1):
+			var n := int(race.item_uses.get(it, 0))
+			used.append("%s %d" % [Game.ITEM_NAMES[it], n])
+			if n == 0:
+				_items_bad += 1
+		print("ITEMS USED IN THE RACE: ", ", ".join(used))
+		_finish_test(_items_bad == 0, "every item works and gets used" if _items_bad == 0 else "%d problems" % _items_bad)
+	elif _test_t > float(Game.cmd_args.get("timeout", "240")):
+		_finish_test(false, "timeout")
+
+
+## A kart standing still at track sample i, lat metres to the right, on lap 1.
+func _put(k: Kart, i: int, lat: float) -> void:
+	var tr := race.track
+	i = posmod(i, tr.n)
+	k.reset(tr.x[i] + tr.nx[i] * lat, tr.z[i] + tr.nz[i] * lat, tr.heading(i))
+	k.constrain()
+	k.lap = 1
+	k.max_lap = 1
+	k.last_s = k.s
+	k.y = tr.road_y(k.idx, k.lat, k.along)
+
+
+## Moves a kart to x, z and stands it on the road there.
+func _move(k: Kart, px: float, pz: float) -> void:
+	k.x = px
+	k.z = pz
+	k.idx = race.track.nearest(px, pz)   # far from where it stood: look for the road around it afresh
+	k.constrain()
+	k.lap = 1
+	k.y = race.track.road_y(k.idx, k.lat, k.along)
+
+
+func _check(name: String, ok: bool, info := "") -> void:
+	print("ITEM CHECK %s: %s %s" % [name, "ok" if ok else "FAIL", info])
+	if not ok:
+		_items_bad += 1
+
+
+func _item_checks() -> void:
+	var r := race
+	r.paused = true
+	var K: Array = r.karts
+	var dt := Game.SIM_DT
+	for i in K.size():
+		_put(K[i], 40 + i * 30, 0.0)
+	# shield: swallows exactly one hit
+	var a: Kart = K[0]
+	a.item = Game.Item.SHIELD
+	a.item_n = 1
+	r.use_item(a)
+	_check("shield up", is_equal_approx(a.shield, Game.SHIELD_TIME))
+	for n in 2:
+		var node := r._banana_node()
+		r.fx.add_child(node)
+		r.bananas.append({"x": a.x, "y": a.y, "z": a.z, "node": node, "owner": null, "age": 1.0})
+		r._update_items(dt)
+		if n == 0:
+			_check("shield swallows a banana", a.spin <= 0.0 and a.shield <= 0.0 and r.bananas.is_empty())
+			a.invuln = 0.0
+		else:
+			_check("next banana hits again", a.spin > 0.0)
+	# oil: a puddle behind, a long skid for others, not for the owner at first, gone after 20 s
+	var b: Kart = K[1]
+	var c: Kart = K[2]
+	b.item = Game.Item.OIL
+	b.item_n = 1
+	r.use_item(b)
+	_check("oil dropped", r.oils.size() == 1)
+	var oil: Dictionary = r.oils[0]
+	var behind := Vector2(b.x - float(oil.x), b.z - float(oil.z)).dot(Vector2(sin(b.heading), cos(b.heading)))
+	_check("oil lies behind the kart", behind > 2.0, "(%.1f m)" % behind)
+	_move(b, oil.x, oil.z)
+	_move(c, float(oil.x) + 1.0, oil.z)
+	r._update_items(dt)
+	_check("oil: a long skid", c.spin > 1.5, "(spin %.2f s)" % c.spin)
+	_check("oil: the owner gets away", b.spin <= 0.0)
+	var e: Kart = K[3]
+	e.shield = Game.SHIELD_TIME
+	_move(e, oil.x, oil.z)
+	r._update_items(dt)
+	_check("shield swallows the oil", e.spin <= 0.0 and e.shield <= 0.0)
+	oil.age = r.OIL_TIME - 0.01
+	r._update_items(0.02)
+	_check("oil dries up after 20 s", r.oils.is_empty())
+	# lightning: the others shrink, the star and a shield protect, the small can be run over
+	for i in K.size():
+		_put(K[i], 40 + i * 30, 0.0)
+	var zap: Kart = K[0]
+	K[1].star = 5.0
+	K[2].shield = Game.SHIELD_TIME
+	var normal_top: float = K[3].max_speed()
+	zap.item = Game.Item.LIGHTNING
+	zap.item_n = 1
+	r.use_item(zap)
+	_check("lightning spares its owner", zap.shrink <= 0.0)
+	_check("star protects from the lightning", K[1].shrink <= 0.0)
+	_check("shield protects from the lightning", K[2].shrink <= 0.0 and K[2].shield <= 0.0)
+	var shrunk := true
+	for i in range(3, K.size()):
+		shrunk = shrunk and K[i].shrink > 0.0
+	_check("lightning shrinks the others", shrunk)
+	_check("small karts are slower", K[3].max_speed() < normal_top * 0.9, "(%.1f → %.1f)" % [normal_top, K[3].max_speed()])
+	_move(K[4], zap.x + 1.0, zap.z)
+	r._kart_collisions()
+	_check("a small kart gets run over", K[4].spin > 0.0 and zap.spin <= 0.0)
+	for k in K:
+		k.update(6.1, {"steer": 0.0, "gas": false, "brake": false, "drift": false, "item": false})
+	_check("karts grow back after 6 s", K[3].shrink <= 0.0)
+	# blue missile: flies to the leader, the blast catches the karts next to them
+	for i in K.size():
+		_put(K[i], 10 + i * 12, 0.0)
+	var lead: Kart = K[5]
+	_put(lead, 260, 0.0)
+	var near: Kart = K[4]
+	_put(near, 258, 2.0)
+	var far: Kart = K[3]
+	_put(far, 200, 0.0)
+	r._compute_ranks()
+	var shooter: Kart = K[0]
+	shooter.item = Game.Item.BLUE
+	shooter.item_n = 1
+	r.use_item(shooter)
+	_check("blue missile goes for the leader", r.blues.size() == 1 and r.blues[0].target == lead)
+	var t := 0.0
+	while not r.blues.is_empty() and t < 20.0:
+		r._update_items(dt)
+		t += dt
+	_check("blue missile reaches the leader", r.blues.is_empty() and lead.spin > 0.0, "(%.1f s)" % t)
+	_check("its blast catches the kart next to the leader", near.spin > 0.0)
+	_check("karts further away are safe", far.spin <= 0.0 and shooter.spin <= 0.0)
+	# the snapshot carries the new items and states to Wi-Fi players
+	var oil2 := r._oil_node()
+	r.fx.add_child(oil2)
+	r.oils.append({"x": lead.x, "y": lead.y, "z": lead.z, "node": oil2, "owner": null, "age": 3.0})
+	K[2].shield = 4.0
+	K[1].shrink = 2.0
+	var d := r._pack()
+	_check("snapshot has the oil", int(d[9]) == 1)
+	var copy := Kart.new()
+	copy.race = r
+	copy.unpack(d, 14 + 2 * Kart.SNAP_FIELDS)
+	var sh := copy.shield
+	copy.unpack(d, 14 + 1 * Kart.SNAP_FIELDS)
+	_check("snapshot has shield and size", is_equal_approx(sh, 4.0) and is_equal_approx(copy.shrink, 2.0))
+	copy.free()
+	r.paused = false
 
 
 func _start_jump_race() -> void:

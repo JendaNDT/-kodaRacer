@@ -187,9 +187,15 @@ func save_ghost(track: int, diff: int, ghost: Dictionary) -> void:
 	save_settings()
 
 
-## Item types: 0 none, 1 turbo, 2 banana, 3 missile, 4 star
-enum Item { NONE, TURBO, BANANA, MISSILE, STAR }
-var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda"]
+## Item types: 0 none, 1 turbo, 2 banana, 3 missile, 4 star, 5 blue missile
+## (flies to the leader), 6 oil puddle, 7 lightning (shrinks the others), 8 shield
+enum Item { NONE, TURBO, BANANA, MISSILE, STAR, BLUE, OIL, LIGHTNING, SHIELD }
+var ITEM_NAMES := ["", "Turbo", "Banán", "Raketa", "Hvězda", "Modrá raketa", "Olej", "Blesk", "Štít"]
+const ITEM_COUNT := 8
+const SHIELD_TIME := 10.0
+const SHRINK_TIME := 6.0
+const SHRINK_SCALE := 0.55       # how small the lightning makes the others
+const SHRINK_SPEED := 0.78       # and how fast they can go
 
 # ---------------------------------------------------------------- settings
 const SETTINGS_PATH := "user://settings.cfg"

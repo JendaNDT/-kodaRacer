@@ -245,6 +245,16 @@ func _build_sounds() -> void:
 	b = _buf(0.32); _tone(b, 0, 0.3, 380, 1400, W.TRI, 0.3); _noise(b, 0, 0.28, 1, 1800, 4200, 0.35); sounds.trick = _to_stream(b)
 	b = _buf(0.22); _noise(b, 0, 0.2, 0, 240, 0, 1.3); _tone(b, 0, 0.16, 70, 40, W.SINE, 0.8); sounds.land = _to_stream(b)
 	b = _buf(0.52); _noise(b, 0, 0.5, 1, 3000, 600, 0.7); sounds.missile = _to_stream(b)
+	# new items: a rising whistle (blue missile), a splat (oil), a shimmer (shield),
+	# a pop (shield used up) and a crack of thunder (lightning)
+	b = _buf(0.7); _tone(b, 0, 0.65, 500, 1600, W.SINE, 0.3); _noise(b, 0, 0.6, 1, 2400, 900, 0.5); sounds.blue = _to_stream(b)
+	b = _buf(0.3); _noise(b, 0, 0.25, 0, 700, 120, 1.1); _tone(b, 0, 0.2, 180, 60, W.SINE, 0.5); sounds.oil = _to_stream(b)
+	b = _buf(0.5)
+	for i in 5:
+		_tone(b, i * 0.06, 0.2, mtof(79 + i * 3), 0, W.SINE, 0.22)
+	sounds.shield = _to_stream(b)
+	b = _buf(0.18); _tone(b, 0, 0.05, 1400, 500, W.SINE, 0.45); _noise(b, 0, 0.12, 1, 3500, 1200, 0.5); sounds.pop = _to_stream(b)
+	b = _buf(1.0); _noise(b, 0, 0.08, 1, 6000, 3000, 1.3); _noise(b, 0.05, 0.9, 0, 900, 60, 1.2); _tone(b, 0, 0.5, 1200, 80, W.SAW, 0.2); sounds.zap = _to_stream(b)
 	b = _buf(0.5)
 	var steps := [0, 4, 7, 12, 16, 19, 24]
 	for i in steps.size():

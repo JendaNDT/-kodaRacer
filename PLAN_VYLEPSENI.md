@@ -8,7 +8,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 | --- | --- | --- | --- | --- |
 | A ✅ | 1, 4 | 1.11.0 | malá | čisté menu, žádné náhodné poskoky |
 | B ✅ | 2 | 1.12.0 | střední | ovládání po Wi-Fi bez zpoždění |
-| C | 5 | 1.13.0 | střední | čtyři nové předměty |
+| C ✅ | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
 | E | 8 | 1.15.0 | velká | zkratka na každé trati |
 | F | 6 | 1.16.0 | střední | poháry, odemykání barev, tajný jezdec, zrcadlové tratě |
@@ -92,7 +92,16 @@ a mistrovství po Wi-Fi projdou.
 
 ---
 
-## Etapa C – Nové předměty (bod 5)
+## Etapa C – Nové předměty (bod 5)  ✅ hotovo (verze 1.13.0)
+
+> **Výsledek:** všechny čtyři předměty jsou ve hře včetně ikon, zvuků a efektů. Modrá raketa letí 4 m nad tratí
+> rychlostí 85 m/s, za vedoucím se snese dolů a výbuch zasáhne vše do 7 m. Louže zasahuje do 2,4 m, majitel má 1 s
+> na odjetí, po 20 s zaschne. Blesk zmenší ostatní na 55 % a zpomalí je na 78 % (6 s), zmenšené motokáry se dají
+> přejet. Štít je skleněná bublina na 10 s, posledních 2 s bliká. Šance podle pořadí (6 motokár): 1. místo banán 44 %,
+> olej 20 %, turbo 24 %, raketa 9 %, štít 3 %; 6. místo raketa 23 %, 3× turbo 21 %, turbo 19 %, hvězda 14 %,
+> modrá raketa 9 %, blesk 4 %. Test `--itemtest` prošel 22 kontrolami, síťový test v GitHub Actions rozdává předměty
+> postupně dokola a ověřuje, že klient vidí louže, modré rakety, štít i zmenšení.
+
 
 | Předmět | Co dělá | Kdo ho dostane |
 | --- | --- | --- |

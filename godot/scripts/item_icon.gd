@@ -1,6 +1,7 @@
 class_name ItemIcon
 extends Control
-## Draws the held item: 1 turbo (lightning), 2 banana, 3 missile, 4 star.
+## Draws the held item: 1 turbo (lightning), 2 banana, 3 missile, 4 star,
+## 5 blue missile, 6 oil, 7 lightning (bolt from a cloud), 8 shield.
 ## While an item is being drawn it is a slot-machine reel: icons run down,
 ## slow down and the won item clicks into place (Hud drives `reel`).
 
@@ -16,11 +17,11 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
-## Icon on reel cell c: a fixed shuffle of the four items, the win on its cell.
+## Icon on reel cell c: a fixed shuffle of all the items, the win on its cell.
 func cell_item(c: int) -> int:
 	if c == win_cell:
 		return win_item
-	return 1 + posmod(c * 7 + (c >> 2) * 3, 4)
+	return 1 + posmod(c * 5 + (c >> 3) * 3, Game.ITEM_COUNT)
 
 
 func _draw() -> void:
@@ -67,6 +68,43 @@ func _item(it: int, c: Vector2, r: float, alpha: float) -> void:
 				var rr := 1.0 if i % 2 == 0 else 0.45
 				pts.append(Vector2(cos(a), sin(a)) * rr)
 			_poly(pts, c, r, Color("ffc43d", alpha), ink)
+		5:
+			# the blue missile, with wings and a white band
+			var body := PackedVector2Array([Vector2(-0.3, 0.75), Vector2(-0.3, -0.35), Vector2(0.0, -1.0),
+				Vector2(0.3, -0.35), Vector2(0.3, 0.75)])
+			_poly(PackedVector2Array([Vector2(-0.3, -0.1), Vector2(-0.85, 0.35), Vector2(-0.3, 0.35)]), c, r, Color("9cc4ff", alpha), ink)
+			_poly(PackedVector2Array([Vector2(0.3, -0.1), Vector2(0.85, 0.35), Vector2(0.3, 0.35)]), c, r, Color("9cc4ff", alpha), ink)
+			_poly(body, c, r, Color("2f6fe8", alpha), ink)
+			_poly(PackedVector2Array([Vector2(-0.3, 0.45), Vector2(0.3, 0.45), Vector2(0.3, 0.6), Vector2(-0.3, 0.6)]), c, r, Color("f5f5f5", alpha), ink)
+			_poly(PackedVector2Array([Vector2(-0.18, 0.75), Vector2(0.0, 1.05), Vector2(0.18, 0.75)]), c, r, Color("ffb347", alpha), ink)
+		6:
+			# an oil puddle with a shine
+			var blob := PackedVector2Array()
+			for i in 16:
+				var a := i * TAU / 16.0
+				var rr := 0.8 + 0.16 * sin(a * 3.0 + 0.6) + 0.08 * sin(a * 5.0)
+				blob.append(Vector2(cos(a) * rr * 1.1, sin(a) * rr * 0.45 + 0.35))
+			_poly(blob, c, r, Color(0.1, 0.1, 0.14, alpha), Color(0.8, 0.8, 0.9, alpha * 0.8))
+			# a rainbow shine on the oil
+			for e in [[Color(0.55, 0.85, 1.0, alpha), 0.0], [Color(0.85, 0.6, 1.0, alpha), 0.12]]:
+				draw_arc(c + Vector2(-0.15, 0.3 + float(e[1])) * r, r * 0.42, PI * 1.12, PI * 1.6, 12, e[0], maxf(2.0, r * 0.08), true)
+			# a drop falling into it
+			_poly(PackedVector2Array([Vector2(0.35, -1.0), Vector2(0.18, -0.6), Vector2(0.35, -0.48), Vector2(0.52, -0.6)]), c, r, Color(0.1, 0.1, 0.14, alpha), Color(0.8, 0.8, 0.9, alpha * 0.8))
+		7:
+			# a thundercloud with a bolt
+			var bolt := PackedVector2Array([Vector2(0.05, -0.1), Vector2(-0.35, 0.45), Vector2(-0.05, 0.45),
+				Vector2(-0.2, 1.0), Vector2(0.38, 0.25), Vector2(0.06, 0.25), Vector2(0.2, -0.1)])
+			_poly(bolt, c, r, Color("fff27a", alpha), ink)
+			for e in [[Vector2(-0.4, -0.35), 0.38], [Vector2(0.05, -0.55), 0.48], [Vector2(0.45, -0.32), 0.36], [Vector2(0.0, -0.2), 0.42]]:
+				draw_circle(c + e[0] * r, float(e[1]) * r + maxf(2.0, r * 0.1), ink)
+			for e in [[Vector2(-0.4, -0.35), 0.38], [Vector2(0.05, -0.55), 0.48], [Vector2(0.45, -0.32), 0.36], [Vector2(0.0, -0.2), 0.42]]:
+				draw_circle(c + e[0] * r, float(e[1]) * r, Color("7d8db3", alpha))
+		8:
+			# the shield bubble
+			draw_circle(c, r * 0.92 + maxf(2.0, r * 0.1), ink)
+			draw_circle(c, r * 0.92, Color(0.3, 0.75, 1.0, alpha * 0.55))
+			draw_arc(c, r * 0.92, 0.0, TAU, 32, Color(0.75, 0.95, 1.0, alpha), maxf(2.0, r * 0.12), true)
+			draw_arc(c, r * 0.62, PI * 1.05, PI * 1.45, 10, Color(1, 1, 1, alpha * 0.9), maxf(2.0, r * 0.14), true)
 
 
 func _poly(pts: PackedVector2Array, c: Vector2, r: float, fill: Color, ink: Color) -> void:

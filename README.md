@@ -76,7 +76,7 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 - **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší.
 - **Raketový start**: šlápni na plyn, až se při odpočtu objeví „1“.
 - **Trik**: když letíš z rampy, zmáčkni ve vzduchu drift. Motokára se otočí a po dopadu dostaneš turbo.
-- **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš. Předmět se losuje jako na hracím automatu: obrázky se protáčejí, zpomalí a vyhraný zacvakne.
+- **Otazníky**: čím víc jsi vzadu, tím lepší předmět dostaneš. Vepředu padají hlavně banány, olej a turbo, uprostřed štít, vzadu rakety, hvězda a modrá raketa. Předmět se losuje jako na hracím automatu: obrázky se protáčejí, zpomalí a vyhraný zacvakne.
 
 | Předmět | Co dělá |
 | --- | --- |
@@ -84,6 +84,10 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 | Banán | položíš ho za sebe, kdo do něj najede, dostane smyk |
 | Raketa | letí za soupeřem před tebou a vyhodí ho |
 | Hvězda | 7 s nesmrtelnosti a vyšší rychlosti, srážkou shodíš soupeře |
+| Modrá raketa | letí vysoko nad tratí až k vedoucímu a vybuchne nad ním; výbuch shodí i motokáry těsně u něj. Padá jen na posledních místech |
+| Olej | položíš za sebe velkou louži, kdo do ní vjede, dostane dlouhý smyk. Po 20 s zaschne |
+| Blesk | všichni ostatní se na 6 s zmenší, jsou pomalejší a dá se přes ně přejet. Chrání hvězda a štít. Velmi vzácný, jen pro poslední dva |
+| Štít | bublina kolem motokáry na 10 s, pohltí jeden zásah (banán, olej, raketa, blesk) |
 
 ## Grafika a výkon
 
