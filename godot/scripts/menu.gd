@@ -506,7 +506,7 @@ func _setup() -> void:
 		sec.add_child(_paint_row(d, Game.paint_of(d), _pick_paint.bind(d)))
 	if setup_mode == "cup":
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
-		cs.add_child(_cup_tracks())
+		cs.add_child(_cup_tracks(bool(Game.settings.mirror)))
 		var pts := Game.CUP_POINTS.map(func(p): return str(p))
 		var info := UI.label("Body za 1.–6. místo: %s. Kdo jede nejlíp, startuje příště ze zadu." % ", ".join(pts), 16, UI.MUTED)
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -656,12 +656,12 @@ func _go_setup(n: int, mode := "race") -> void:
 
 
 ## The tracks of the championship in their order, small maps in a row.
-func _cup_tracks() -> GridContainer:
+func _cup_tracks(mirror := false) -> GridContainer:
 	var g := UI.grid(3, 6)
 	for i in Game.TRACKS.size():
 		var v := UI.vbox(2)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var th := TrackThumb.new(i, false)
+		var th := TrackThumb.new(Game.race_track(i, mirror), false)
 		th.custom_minimum_size = Vector2(0, 54)
 		v.add_child(th)
 		var l := UI.label("%d. %s" % [i + 1, Game.TRACKS[i].name], 14, UI.PAPER)
@@ -889,7 +889,7 @@ func _lobby() -> void:
 		modes.add_child(mb)
 	if Net.cup_mode:
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
-		cs.add_child(_cup_tracks())
+		cs.add_child(_cup_tracks(Net.mirror))
 	else:
 		var ts := _section("Trať")
 		ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track, false, Net.mirror))
