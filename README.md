@@ -22,6 +22,7 @@ Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). 
 - **Závod**: ty proti pěti počítačovým soupeřům, 3 kola.
 - **Mistrovství**: všech šest tratí za sebou se stejnými soupeři. Za 1.–6. místo dostaneš 10, 8, 6, 4, 2 a 1 bod. Po každém závodě uvidíš průběžné pořadí, kdo vede, startuje příště ze zadu. Na konci stojí tři nejlepší z celého mistrovství na stupních vítězů a hra si pamatuje tvůj nejlepší pohár pro každou obtížnost. Jde hrát sám, ve dvou na jednom počítači i po Wi-Fi (hostitel v lobby přepne na Mistrovství, další závod spouští on, až dojedou všichni hráči).
 - **Časovka proti rekordu**: jedeš sám, bez soupeřů a otazníků, se třemi turby. Proti tobě jede průhledný duch tvé nejlepší jízdy na téhle trati a obtížnosti. Po každém kole uvidíš, o kolik jsi před ním (zeleně) nebo za ním (červeně), a když ho porazíš, stane se z tvé jízdy nový duch.
+- **Bitva s balónky**: nezávodí se na kola, ale v aréně si navzájem praskáte balónky. Sám proti pěti počítačovým soupeřům, na počítači i ve dvou (rozdělená obrazovka). Víc níže.
 - **2 hráči na jednom počítači**: obrazovka se rozdělí na horní a dolní půlku.
 - **Hra po Wi-Fi (crossplay)**: až 6 hráčů na stejné Wi-Fi, telefony i počítače dohromady. Volná místa doplní počítač.
 
@@ -53,11 +54,29 @@ V hlavním menu je obrazovka **Sbírka**. Ukazuje poháry z mistrovství (bronz,
 | Zlatý lak motokáry (pro každého jezdce zvlášť) | zlatý pohár na Těžké s tímto jezdcem |
 | **Zrcadlové tratě** (všech šest otočených zrcadlově) | zlatý pohár na Střední nebo Těžké |
 | **Tajný jezdec Profesor Píst** | zlatý pohár na Těžké |
+| Bitevní lak motokáry (pro každého jezdce zvlášť) | vítězství v bitvě s balónky na Těžké s tímto jezdcem |
 | **Duch vývojáře** v časovce (zlatý průhledný soupeř) | časovka pod limitem na všech šesti tratích (limit je o 10 % pomalejší než duch, najdeš ho ve Sbírce) |
 
 - **Lak** si vybereš pod jezdci při nastavení závodu i v lobby po Wi-Fi. Ostatní hráči tvůj lak uvidí.
 - **Zrcadlové tratě** zapneš přepínačem *Tratě: Normální / Zrcadlové* u výběru trati. Platí pro závod, mistrovství i časovku a po Wi-Fi je zapíná hostitel. Rekordy a duchové se pro zrcadlové tratě ukládají zvlášť.
 - **Tajného jezdce** vidí v lobby i hráči, kteří ho ještě nemají, ale vybrat si ho nemůžou.
+
+## Bitva s balónky
+
+V menu **Bitva s balónky** vybereš jezdce, lak, arénu a obtížnost. Na počítači můžete hrát i dva (rozdělená obrazovka).
+
+- Každý začíná se **3 balónky** nad motokárou v barvě jezdce.
+- Balónek praskne, když tě zasáhne raketa, modrá raketa, banán nebo olej, když do tebe narazí soupeř s hvězdou, nebo když tě přejede soupeř, zatímco jsi zmenšený bleskem. Samotný blesk balónek nebere.
+- Po zásahu máš aspoň **2 s ochranu**: balónky blikají a další zásah nic nebere, takže nepřijdeš o všechny naráz.
+- Kdo přijde o poslední balónek, **vypadává**. Jeho kamera pak sleduje ostatní.
+- Bitva končí, když zbyde jeden, nebo po **3 minutách**. Pak vyhraje, kdo má víc balónků; při rovnosti ten, kdo jich víc praskl ostatním. Pořadí ostatních je podle toho, kdo vypadl později.
+- Předměty jsou stejné jako v závodě, jen častěji padají rakety a banány a méně turbo. Raketa letí k nejbližšímu soupeři před tebou, modrá raketa k tomu, kdo má nejvíc balónků.
+- Vlevo nahoře máš své balónky, zbývající čas a seznam soupeřů s jejich balónky. Minimapa ukazuje arénu.
+
+| Aréna | Co v ní je |
+| --- | --- |
+| **Náměstí** | čtvercové náměstí s kašnou uprostřed, čtyři květináče se stromy, nízké zídky a na okrajích čtyři rampy; kolem domy s radnicí |
+| **Ledový stadion** | kulatý stadion, uprostřed kluzký led, kolem sněhové valy, za které se dá schovat, tři rampy u mantinelu; tribuny s diváky a sněžení |
 
 ## Tratě
 

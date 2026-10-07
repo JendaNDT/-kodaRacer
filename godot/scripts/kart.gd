@@ -93,6 +93,11 @@ var air_t := 0.0
 var trick := 0.0            # > 0 while the trick roll plays
 var tricked := false        # a trick was done on this flight
 var along := 0.0            # metres ahead of sample idx
+# balloon battle (Etapa H)
+var balloons := 0
+var pops := 0               # balloons this kart popped on others
+var out := false            # lost its last balloon
+var out_at := Vector3.ZERO  # where it was then
 
 # --- visuals
 var body: Node3D            # hops and spins with the kart (wheels included)
@@ -142,6 +147,8 @@ var vis_up := Vector3.UP
 var yaw := 0.0              # where the kart points on screen (for the camera)
 var was_air := false
 var land_v := 0.0
+var balloon_root: Node3D
+var balloon_nodes: Array = []
 
 static var _m := {}
 ## --jumptest: every take-off is written down here ([track id, arc metres, speed]).
@@ -379,7 +386,7 @@ func _build_model() -> void:
 		p.gravity = Vector3(0, -14, 0)
 		add_child(p)
 		sparks.append(p)
-	_wheel_fx(race.track.def.theme)
+	_wheel_fx(race.theme())
 	flame_fx = _emitter(0.7, true, 24, 0.18)
 	flame_fx.position = Vector3(0, ex.y + 0.02, ex.z - 0.45)
 	flame_fx.direction = Vector3(0, 0.2, -1)
@@ -515,17 +522,27 @@ func reset(px: float, pz: float, h: float) -> void:
 	finished = false; finish_time = 0.0; offroad = false; lat = 0.0; rank = 6; on_cut = false; cut_i = 0
 	drift_prev = false; drift_active = false; drift_dir = 0.0; drift_charge = 0.0; drift_level = 0; braking = false
 	bump_cd = 0.0; wrong_t = 0.0; autopilot = false
-	var pj := race.track.project(x, z, -1)
-	idx = pj[0]
-	lat = pj[1]
-	along = pj[2]
-	s = race.track.arc_pos(idx, pj[2])
-	last_s = s
-	y = race.track.road_y(idx, lat, along)
+	if race.arena != null:
+		# a battle arena: no centre line, the floor under the kart
+		idx = 0
+		lat = 0.0
+		along = 0.0
+		s = 0.0
+		last_s = 0.0
+		y = race.arena.ground(x, z)
+		vis_up = race.arena.normal(x, z)
+	else:
+		var pj := race.track.project(x, z, -1)
+		idx = pj[0]
+		lat = pj[1]
+		along = pj[2]
+		s = race.track.arc_pos(idx, pj[2])
+		last_s = s
+		y = race.track.road_y(idx, lat, along)
+		vis_up = race.track.normal(idx, lat, along)
 	vy = 0.0; air = false; air_t = 0.0; trick = 0.0; tricked = false; was_air = false; land_v = 0.0
 	prev_x = x; prev_z = z; prev_h = heading; prev_y = y
 	vis_x = x; vis_z = z; vis_h = heading; vis_y = y
-	vis_up = race.track.normal(idx, lat, along)
 	yaw = heading
 	for f in flames + cores:
 		f.visible = false
@@ -544,7 +561,7 @@ func reset(px: float, pz: float, h: float) -> void:
 
 
 func progress() -> float:
-	return (lap - 1) * race.track.length + s
+	return 0.0 if race.track == null else (lap - 1) * race.track.length + s
 
 
 func max_speed() -> float:
@@ -591,6 +608,8 @@ func update(dt: float, inp: Dictionary) -> void:
 	var handling: float = ch.handling
 	if on_cut:
 		handling *= float(race.track.cut.grip)   # ice and sand: the kart slides
+	elif race.arena != null:
+		handling *= race.arena.grip(x, z)        # the ice in the stadium
 	boost = maxf(0.0, boost - dt)
 	star = maxf(0.0, star - dt)
 	shield = maxf(0.0, shield - dt)
@@ -670,16 +689,18 @@ func update(dt: float, inp: Dictionary) -> void:
 			race.use_item(self)
 	slip = Game.approach(slip, drift_dir * 0.4 if drift_active else 0.0, 3.0 * dt)
 
-	if not air and not on_cut:
+	if not air and not on_cut and race.track != null:
 		# uphill slows you down, downhill helps (only up to the usual top speed)
 		var tr := race.track
 		var fx := sin(heading)
 		var fz := cos(heading)
 		var dh := tr.slope[idx] * (fx * tr.tx[idx] + fz * tr.tz[idx]) + tr.bank[idx] * (fx * tr.nx[idx] + fz * tr.nz[idx])
 		speed -= SLOPE_PULL * dh * signf(speed) * dt
+	var ox := x
+	var oz := z
 	x += sin(heading) * speed * dt
 	z += cos(heading) * speed * dt
-	constrain()
+	constrain(ox, oz)
 	_vertical(dt)
 
 	if roulette > 0.0 and race.mode != Race.Mode.CLIENT:   # the host draws the items
@@ -714,7 +735,7 @@ func _vertical(dt: float) -> void:
 	if gy < free_y - STEP_DROP and absf(speed) > 3.0:
 		air = true
 		air_t = 0.0
-		if log_takeoffs:
+		if log_takeoffs and race.track != null:
 			takeoffs.append([race.track.def.id, s, speed])
 		tricked = false
 		vy -= Game.GRAVITY * dt
@@ -724,7 +745,13 @@ func _vertical(dt: float) -> void:
 	y = gy
 
 
-func constrain() -> void:
+## ox, oz: where the kart was before this step's move (a step up in an
+## arena sends it back there).
+func constrain(ox := INF, oz := INF) -> void:
+	if race.arena != null:
+		race.arena.constrain(self, x if ox == INF else ox, z if oz == INF else oz)
+		offroad = false
+		return
 	var tr := race.track
 	if not tr.cut.is_empty() and _constrain_cut(tr):
 		return
@@ -824,11 +851,15 @@ func _constrain_cut(tr: Track) -> bool:
 
 ## Heading of the way the kart is on (the road or the shortcut).
 func way_heading() -> float:
+	if race.arena != null:
+		return heading
 	return race.track.cut_heading(cut_i) if on_cut else race.track.heading(idx)
 
 
 ## Height of the ground under the kart (road or shortcut).
 func ground_y() -> float:
+	if race.arena != null:
+		return race.arena.ground(x, z)
 	return race.track.cut_ground(x, z, cut_i, cut_along) if on_cut else race.track.road_y(idx, lat, along)
 
 
@@ -882,6 +913,8 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	ack = int(d[o + 33])
 	shield = d[o + 34]; shrink = d[o + 35]
 	last_s = s
+	if race.arena != null:
+		return
 	var tr := race.track
 	if on_cut and not tr.cut.is_empty():
 		var pc := tr.cut_project(x, z, cut_i if was_cut else -1)
@@ -920,6 +953,10 @@ func correct(dx: float, dy: float, dz: float, dh: float) -> void:
 
 ## alpha: physics interpolation fraction; smooth > 0 eases toward network state instead.
 func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
+	if out:
+		# out of the balloon battle: gone from the arena
+		visible = false
+		return
 	var px: float
 	var pz: float
 	var ph: float
@@ -1001,6 +1038,89 @@ func render(delta: float, alpha: float, smooth: bool, t: float) -> void:
 	if stars.visible:
 		stars.rotation.y = t * 5.0
 		stars.position.y = float(model.top) + 0.45 + hop_y()
+	if race.battle != null:
+		_render_balloons(t)
+
+
+# ================================================================== balloons (Etapa H)
+const BALLOON_AT := [Vector3(-0.55, 1.75, -0.15), Vector3(0.0, 2.1, -0.35), Vector3(0.55, 1.85, -0.1)]
+
+
+## Balloons tied behind the driver in the kart's colour, three strings from
+## one knot. They lean back with speed, sway and blink while the kart is
+## protected after losing one.
+func _make_balloons() -> void:
+	var m := _shared()
+	if not m.has("balloon"):
+		var sph := SphereMesh.new()
+		sph.radius = 0.48
+		sph.height = 1.2
+		sph.radial_segments = 14
+		sph.rings = 8
+		m.balloon = sph
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.018
+		cyl.bottom_radius = 0.018
+		cyl.height = 1.0
+		cyl.radial_segments = 4
+		cyl.rings = 1
+		m.string = cyl
+		var sm := StandardMaterial3D.new()
+		sm.albedo_color = Color(0.95, 0.95, 0.95)
+		sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.stringm = sm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = (ch.color as Color).lightened(0.12)
+	mat.roughness = 0.22
+	mat.metallic_specular = 0.9
+	mat.rim_enabled = true
+	mat.rim = 0.35
+	# a rival's balloons right in front of the camera fade away instead of filling the view
+	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+	mat.distance_fade_min_distance = 2.5
+	mat.distance_fade_max_distance = 5.0
+	balloon_root = Node3D.new()
+	balloon_root.position = Vector3(0.0, float(model.top) - 0.35, float(model.rear.z) * 0.55)
+	add_child(balloon_root)
+	for i in Game.BALLOONS:
+		var arm := Node3D.new()
+		balloon_root.add_child(arm)
+		var at: Vector3 = BALLOON_AT[i % BALLOON_AT.size()]
+		var b := MeshInstance3D.new()
+		b.mesh = m.balloon
+		b.material_override = mat
+		b.position = at
+		b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		arm.add_child(b)
+		var st := MeshInstance3D.new()
+		st.mesh = m.string
+		st.material_override = m.stringm
+		st.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# from the knot (the arm's origin) up to the bottom of the balloon
+		var tip := at - Vector3(0, 0.55, 0)
+		st.transform = Transform3D(Basis(Quaternion(Vector3.UP, tip.normalized())) * Basis.from_scale(Vector3(1.0, tip.length(), 1.0)),
+			tip * 0.5)
+		arm.add_child(st)
+		balloon_nodes.append(arm)
+
+
+## Where balloon i is in the world (its pop is shown there).
+func balloon_pos(i: int) -> Vector3:
+	if i < 0 or i >= balloon_nodes.size():
+		return global_position + Vector3(0, 2.4, 0)
+	var arm: Node3D = balloon_nodes[i]
+	return (arm.get_child(0) as Node3D).global_position
+
+
+func _render_balloons(t: float) -> void:
+	if balloon_root == null:
+		_make_balloons()
+	var lean := clampf(absf(speed) * 0.012, 0.0, 0.55)
+	var blink := invuln > 0.0 and fmod(t * 8.0, 1.0) > 0.6
+	for i in balloon_nodes.size():
+		var arm: Node3D = balloon_nodes[i]
+		arm.visible = i < balloons and not blink
+		arm.rotation = Vector3(-lean + sin(t * 2.1 + i * 1.7) * 0.07, 0.0, sin(t * 1.6 + i * 2.3) * 0.1 - steer * 0.12)
 
 
 ## Stands the kart on the road surface (slope and bank); in the air the
@@ -1013,6 +1133,8 @@ func _orient(pos: Vector3, delta: float) -> void:
 		var right := Vector3(cos(yaw), 0.0, -sin(yaw))
 		var fwd := Vector3(f.x, clampf(vy / maxf(absf(speed), 12.0), -0.6, 0.6) * 0.7, f.z).normalized()
 		want = fwd.cross(right).normalized()
+	elif race.arena != null:
+		want = race.arena.normal(pos.x, pos.z)
 	else:
 		want = tr.cut_normal(cut_i) if on_cut else tr.normal(idx, lat, along)
 	vis_up = vis_up.lerp(want, 1.0 - exp(-(5.0 if air else 14.0) * delta)).normalized()

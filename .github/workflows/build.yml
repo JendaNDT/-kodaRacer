@@ -133,6 +133,14 @@ jobs:
           grep -q "TEST PASS: every event buzzes" haptics-test.log
           grep -q "TEST PASS: every event buzzes" haptics2-test.log
 
+      - name: Test – balloon battle (the rules, then both arenas on every difficulty with only the computer driving)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --battletest --fast=8 2>&1 | tee battle-test.log
+          grep "^BATTLE" battle-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" battle-test.log; then exit 1; fi
+          if grep "BATTLE CHECK.*FAIL" battle-test.log; then exit 1; fi
+          grep -q "TEST PASS: battles end with a winner" battle-test.log
+
       - name: Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint
         run: |
           ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --cut-always --mirror --unlock=mirror,paint2_0 --paint=2 --timeout=260 > host.log 2>&1 &

@@ -96,7 +96,38 @@ Pořadí je schválně tohle: G je rychlá a hned je na telefonu znát. H je nej
 
 ---
 
-## Etapa H – Bitva s balónky (sám nebo ve dvou)
+## Etapa H – Bitva s balónky (sám nebo ve dvou)  ✅ hotovo (verze 1.18.0)
+
+> **Výsledek:** v menu je **Bitva s balónky** (1 hráč, na počítači i 2 hráči s rozdělenou obrazovkou; jezdec, lak,
+> aréna, obtížnost). Pravidla podle návrhu: 3 balónky, 3 minuty. **Náměstí** (čtverec 132 m se zaoblenými rohy,
+> kašna s vodotryskem, čtyři květináče se stromy, čtyři nízké zídky, čtyři rampy v uličkách u okraje, kolem domy
+> s radnicí a diváci) a **Ledový stadion** (kruh o poloměru 70 m, uprostřed kluzký led, šest sněhových valů, tři
+> rampy u mantinelu, tribuny s diváky, stožáry světel, sněžení). V každé aréně 14 otazníků rozházených po ploše
+> (vždy stejně), 6 startů po obvodu čelem ke středu.
+> **Volný pohyb:** všechno pevné v aréně je jedna funkce vzdálenosti `Arena.space`. Motokáry po stěnách
+> klouzají jako po bariérách na trati, nízké věci ve vzduchu přeletí, vysoké boky a zadní hrana ramp jsou zeď,
+> z rampy se vzlétá jako na trati. Na ledu se zatáčí o polovinu hůř.
+> **Bitva:** zásah, který projde (`Race.hit_kart`), stojí balónek; potom aspoň 2 s ochrana (balónky blikají).
+> Blesk jen zmenšuje, přejetí zmenšeného stojí balónek. Kdo nemá balónky, zmizí z arény a jeho kamera sleduje
+> vedoucího. Konec, když zbyde jeden, nebo po 3 minutách (víc balónků, pak víc prasknutých). Šance na předměty:
+> raketa 26, banán 22, štít 10, olej 8, turbo 8, hvězda 7, modrá raketa 5, 3× turbo 3, blesk 2. Raketa letí
+> k nejbližšímu soupeři před motokárou a v aréně sleduje jen toho, koho má do 38 m před sebou; modrá k tomu
+> s nejvíc balónky. Otazníky se vracejí za 6 s.
+> **Počítač:** cíl podle vzdálenosti a balónků (povaha „hunt“), bez předmětu jede pro nejbližší otazník,
+> s posledním balónkem (Karel už s dvěma) drží odstup a pokládá banány, střílí, když má soupeře v dosahu
+> a před sebou (povaha „aim“, Profesor Píst míří nejlíp), rozhlíží se 13 směry po volném místě, každých 0,08 s.
+> Když se zasekne, couvne tak, aby se otočil k volnému místu.
+> **HUD a menu:** vlastní balónky vlevo nahoře, zbývající čas (posledních 30 s červeně), soupeři s balónky,
+> „Pepa Plyn vypadl!“, „Vypadl jsi · sleduješ: …“, minimapa arény. Výsledky s balónky, prasknutými a časem
+> vypadnutí, stupně vítězů za zdí arény. Ve Sbírce **bitevní lak** (tmavý s neonovými doplňky) za vítězství
+> na Těžké s daným jezdcem.
+> **Test `--battletest`:** 18 kontrol pravidel (raketa vezme balónek, ochrana, poslední balónek, blesk nebere,
+> přejetí zmenšeného, hvězda, cíl rakety i modré rakety, konec po 3 minutách se správným pořadím, poslední ve
+> hře vyhraje, bitevní lak) a 6 bitev jen s počítačem (obě arény, všechny obtížnosti). Pět opakování po sobě
+> (30 bitev): všechny skončily vítězem, nikdo neopustil arénu ani se nezasekl, každý zásah stál právě jeden
+> balónek. Bitva šesti počítačů trvá 40–100 s; s hráčem, který se brání, bude delší. Celý test trvá asi minutu.
+> **Co jde ověřit jen hraním:** jestli je bitva zábavná (délka, síla soupeřů, velikost arén) a jak běží na
+> telefonu.
 
 **Cíl:** nový režim, ve kterém se nezávodí na kola. V aréně se motokáry honí a předměty si navzájem praskají
 balónky. Vyhraje, kdo vydrží nejdéle.

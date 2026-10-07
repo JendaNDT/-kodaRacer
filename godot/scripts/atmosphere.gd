@@ -13,7 +13,7 @@ static var _snow_shader: Shader
 
 ## Adds the environment, sun, clouds and snow to `root`. The race calls
 ## apply_quality() before showing it.
-static func build(root: Node3D, tr: Track, th: Dictionary) -> Dictionary:
+static func build(root: Node3D, tr, th: Dictionary) -> Dictionary:   # tr: a Track or an Arena
 	var mood: Dictionary = th.mood
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(tr.def.seed) * 7 + 3
@@ -104,7 +104,7 @@ static func build(root: Node3D, tr: Track, th: Dictionary) -> Dictionary:
 
 
 ## Stars on a big dome over the track (nights only).
-static func _stars(tr: Track, rng: RandomNumberGenerator) -> MeshInstance3D:
+static func _stars(tr, rng: RandomNumberGenerator) -> MeshInstance3D:
 	var verts := PackedVector3Array()
 	var cols := PackedColorArray()
 	var idx := PackedInt32Array()
@@ -208,7 +208,7 @@ static func animate(atm: Dictionary) -> void:
 		atm.clouds.rotation.y = fmod(Time.get_ticks_msec() * 0.001 * float(atm.mood.get("wind", 0.006)), TAU)
 
 
-static func _clouds(root: Node3D, tr: Track, mood: Dictionary, rng: RandomNumberGenerator, atm: Dictionary) -> void:
+static func _clouds(root: Node3D, tr, mood: Dictionary, rng: RandomNumberGenerator, atm: Dictionary) -> void:
 	var holder := Node3D.new()
 	holder.name = "Clouds"
 	holder.position = Vector3(tr.cx, 0.0, tr.cz)

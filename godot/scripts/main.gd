@@ -26,6 +26,7 @@ var _bench_prims := 0
 # the championship being driven: {players, diff, round, roster, points}; empty = none
 var cup := {}
 var trial := false      # the last race started was a time trial
+var battle := false     # the last race started was a balloon battle
 var _trial_runs := 0
 var _jump_track := 0
 var _items_phase := 0
@@ -41,6 +42,14 @@ var _hap_phase := 0
 var _hap_at := 0.0
 var _hap_off := []       # [buzzes before vibrations went off, buzzes when they came on again]
 var _hap_asked_off := 0  # events while they were off
+var _bt_runs: Array = []      # --battletest: [arena, difficulty] still to drive
+var _bt_watch := {}           # kart -> {x, z, t, n}: where it was 5 s ago, windows without moving
+var _bt_left := {}            # karts seen outside the arena or inside something solid
+var _bt_stuck := {}           # karts stuck for 10 s
+var _bt_done_at := -1.0
+var _bt_air := {}             # kart -> was in the air (counting take-offs from the ramps)
+var _bt_jumps := 0
+var _bt_rows: Array = []
 
 
 func _ready() -> void:
@@ -55,6 +64,7 @@ func _ready() -> void:
 	menu.start_offline.connect(func(n: int): fade_to(start_offline.bind(n)))
 	menu.start_cup.connect(func(n: int): fade_to(start_cup.bind(n)))
 	menu.start_trial.connect(func(): fade_to(start_trial))
+	menu.start_battle.connect(func(n: int): fade_to(start_battle.bind(n)))
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
 	menu.quality_changed.connect(_start_demo)
@@ -310,6 +320,20 @@ func _ready() -> void:
 		start_offline(1)
 		_test_t = 0.0
 		return
+	if a.has("battletest"):
+		# the battle's rules in set-up situations, then battles with only the
+		# computer driving, in both arenas on every difficulty: each must end
+		# with a winner within 3 minutes, nobody may leave the arena or get
+		# stuck, and every hit that lands costs exactly one balloon
+		_test_mode = "battle"
+		menu.visible = false
+		_battle_rule_checks()
+		for ai in Game.ARENAS.size():
+			for d in Game.DIFFS.size():
+				if (not a.has("arena") or int(a.arena) == ai) and (not a.has("diff") or int(a.diff) == d):
+					_bt_runs.append([ai, d])
+		_next_battle_run()
+		return
 	if a.has("hapticstest"):
 		# a whole race with the autopilot; the buzzes are written into a list
 		# instead of the phone. Every kind of event must buzz, never two within
@@ -372,6 +396,15 @@ func _ready() -> void:
 		race.fast = int(a.get("fast", "1"))
 		if a.has("autopilot"):
 			race.locals[0].autopilot = true
+	elif a.has("battle"):
+		# --battle --arena=N: screenshots and trying it out
+		if a.has("arena"):
+			Game.settings.arena = clampi(int(a.arena), 0, Game.ARENAS.size() - 1)
+		start_battle(int(a.get("players", "1")))
+		race.fast = int(a.get("fast", "1"))
+		if a.has("autopilot"):
+			for k in race.locals:
+				k.autopilot = true
 	elif a.has("race"):
 		start_offline(int(a.get("players", "1")))
 		race.fast = int(a.get("fast", "1"))
@@ -505,6 +538,7 @@ func _start_demo() -> void:
 func start_offline(players: int) -> void:
 	cup = {}
 	trial = false
+	battle = false
 	var roster := _offline_roster(players)
 	menu.visible = false
 	_new_race().start(Race.Mode.OFFLINE, Game.race_track(int(Game.settings.track), bool(Game.settings.mirror)),
@@ -515,6 +549,7 @@ func start_offline(players: int) -> void:
 ## after each race; the grid of the next race is the standings reversed.
 func start_cup(players: int) -> void:
 	trial = false
+	battle = false
 	var roster := _offline_roster(players)
 	var pts := {}
 	for r in roster:
@@ -539,6 +574,7 @@ func _start_cup_round() -> void:
 func start_trial() -> void:
 	cup = {}
 	trial = true
+	battle = false
 	last_players = 1
 	menu.visible = false
 	var d := int(Game.settings.driver)
@@ -551,10 +587,25 @@ func start_trial() -> void:
 		r.locals[0].autopilot = true
 
 
+## The balloon battle in the chosen arena: six karts, the local players
+## among them (Etapa H).
+func start_battle(players: int) -> void:
+	cup = {}
+	trial = false
+	battle = true
+	var roster := _offline_roster(players)
+	menu.visible = false
+	var r := _new_race()
+	r.battle_mode = true
+	r.start(Race.Mode.OFFLINE, int(Game.settings.arena), int(Game.settings.diff), roster)
+
+
 ## "Restart" from the pause menu or the results: the same race again, in a
 ## championship the same round; after its last race a new championship.
 func _restart() -> void:
-	if trial:
+	if battle:
+		start_battle(last_players)
+	elif trial:
 		start_trial()
 	elif cup.is_empty():
 		start_offline(last_players)
@@ -766,7 +817,7 @@ func _process(delta: float) -> void:
 		Showcase.hold(race)
 	# --shot-cut=0.8: once the first player has been on the shortcut that long;
 	# --shot-sign: as the first player comes up to the sign before it
-	if _shot_path != "" and race != null and not race.locals.is_empty() and not race.track.cut.is_empty():
+	if _shot_path != "" and race != null and not race.locals.is_empty() and race.track != null and not race.track.cut.is_empty():
 		var lk: Kart = race.locals[0]
 		if Game.cmd_args.has("shot-cut"):
 			_air_t = _air_t + delta if lk.on_cut else 0.0
@@ -869,6 +920,8 @@ func _process(delta: float) -> void:
 		_items_tick()
 	elif _test_mode == "jump" and race != null:
 		_jump_tick()
+	elif _test_mode == "battle" and race != null:
+		_battle_tick()
 	elif _test_mode == "tilt" and race != null:
 		_tilt_tick()
 	elif _test_mode == "haptics" and race != null:
@@ -1518,6 +1571,217 @@ func _jump_tick() -> void:
 	else:
 		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
 			else "%d problems" % _jump_bad)
+
+
+# ---------------------------------------------------------------- --battletest
+func _bt_check(name: String, ok: bool, info := "") -> void:
+	print("BATTLE CHECK %s: %s %s" % [name, "ok" if ok else "FAIL", info])
+	if not ok:
+		_items_bad += 1
+
+
+## A battle on Náměstí stopped at the start, every kart parked where the
+## check wants it.
+func _bt_setup() -> Race:
+	Game.settings.arena = 0
+	start_battle(1)
+	var r := race
+	r.paused = true
+	r.state = "race"
+	r.countdown = 0.0
+	# everybody out of the way first, on the far side
+	for i in r.karts.size():
+		(r.karts[i] as Kart).reset(35.0 + (i % 3) * 7.0, -10.0 + (i / 3) * 14.0, PI)
+	return r
+
+
+func _bt_steps(r: Race, k: Kart, secs: float) -> void:
+	var idle := {"steer": 0.0, "gas": false, "brake": false, "drift": false, "item": false}
+	for i in int(secs / Game.SIM_DT):
+		k.update(Game.SIM_DT, idle)
+
+
+func _battle_rule_checks() -> void:
+	var r := _bt_setup()
+	var K: Array = r.karts
+	var b: Battle = r.battle
+	var dt := Game.SIM_DT
+	var A: Kart = K[0]
+	var B: Kart = K[1]
+	var C: Kart = K[2]
+	var D: Kart = K[3]
+	var E: Kart = K[4]
+	var F: Kart = K[5]
+	_bt_check("everybody starts with %d balloons" % Game.BALLOONS, K.all(func(k): return k.balloons == Game.BALLOONS))
+	# a missile takes a balloon (the nearest rival in front is the target)
+	A.reset(-30.0, -25.0, 0.0)
+	B.reset(-30.0, 0.0, 0.0)
+	C.reset(-30.0, -40.0, 0.0)          # behind A: not the target
+	_bt_check("missile target: the nearest rival in front", b.missile_target(A) == B)
+	A.item = Game.Item.MISSILE
+	A.item_n = 1
+	r.use_item(A)
+	for i in 300:
+		r._update_items(dt)
+		if r.missiles.is_empty():
+			break
+	_bt_check("a missile takes a balloon", B.balloons == 2 and A.pops == 1 and r.hits_landed == 1,
+		"(B %d balloons, A popped %d)" % [B.balloons, A.pops])
+	# protection: nothing more for 2 s, then the next hit counts again
+	var node := r._banana_node()
+	r.fx.add_child(node)
+	r.bananas.append({"x": B.x, "y": B.y, "z": B.z, "node": node, "owner": C, "age": 1.0})
+	r._update_items(dt)
+	_bt_check("no balloon lost while protected", B.balloons == 2 and C.pops == 0, "(invuln %.2f s)" % B.invuln)
+	_bt_check("protected for at least %d s" % int(Game.BATTLE_GUARD), B.invuln >= Game.BATTLE_GUARD - 0.01)
+	_bt_steps(r, B, B.invuln + 0.05)
+	var node2 := r._banana_node()
+	r.fx.add_child(node2)
+	r.bananas.append({"x": B.x, "y": B.y, "z": B.z, "node": node2, "owner": C, "age": 1.0})
+	r._update_items(dt)
+	_bt_check("after the protection a banana takes one", B.balloons == 1 and C.pops == 1)
+	# the last balloon: out of the battle
+	_bt_steps(r, B, B.invuln + 0.05)
+	var at := Vector3(B.x, B.y, B.z)
+	r.hit_kart(B, 1.1, false, C)
+	_bt_check("the last balloon: out", B.out and B.finished and B.balloons == 0 and b.outs == [B] and C.pops == 2)
+	_bt_check("out of the arena", not r.arena.inside(B.x, B.z) and B.out_at.distance_to(at) < 0.01)
+	# the lightning only shrinks; running over a shrunk kart costs it a balloon
+	D.reset(30.0, 30.0, 0.0)
+	D.item = Game.Item.LIGHTNING
+	D.item_n = 1
+	var before := r.hits_landed
+	r.use_item(D)
+	_bt_check("the lightning takes no balloon", r.hits_landed == before and A.balloons == 3 and A.shrink > 0.0 and D.shrink <= 0.0)
+	A.reset(30.0, 30.0, PI)
+	A.shrink = Game.SHRINK_TIME
+	D.reset(30.0, 31.0, 0.0)
+	r._kart_collisions()
+	_bt_check("running over a shrunk kart costs it a balloon", A.balloons == 2 and D.pops == 1)
+	# a kart with the star pushes a balloon off
+	E.reset(-20.0, 40.0, 0.0)
+	F.reset(-20.0, 41.0, PI)
+	E.star = 5.0
+	r._kart_collisions()
+	_bt_check("the star pushes a balloon off", F.balloons == 2 and E.pops == 1)
+	# the blue missile goes for whoever has the most balloons
+	C.balloons = 3
+	D.balloons = 2
+	E.balloons = 2
+	_bt_check("blue missile: the most balloons", b.blue_target(E) == C, "(%s)" % (b.blue_target(E).ch.name if b.blue_target(E) != null else "nobody"))
+	_bt_check("every hit cost exactly one balloon", r.hits_landed == b.pops.size())
+	# time is up: most balloons first, then most popped, then those out (last out first)
+	A.balloons = 2; A.pops = 1
+	C.balloons = 3; C.pops = 0
+	D.balloons = 2; D.pops = 3
+	E.balloons = 1; E.pops = 4
+	F.balloons = 2; F.pops = 0
+	r.race_time = Game.BATTLE_TIME
+	b.tick()
+	var rows := b.standings()
+	_bt_check("3 minutes: the battle ends", b.over and b.winner() == C)
+	_bt_check("3 minutes: places by balloons, then by balloons popped", rows == [C, D, A, F, E, B],
+		"(%s)" % ", ".join(rows.map(func(k): return "%s %d/%d" % [k.ch.name, k.balloons, k.pops])))
+	# one kart left: it wins, the others by when they went out
+	r = _bt_setup()
+	K = r.karts
+	b = r.battle
+	for i in [3, 1, 4, 0, 2]:
+		var k: Kart = K[i]
+		k.balloons = 1
+		r.hit_kart(k, 1.1, false, K[5])
+	_bt_check("one left: it wins", b.over and b.winner() == K[5] and K[5].pops == 5)
+	_bt_check("one left: the last one out is second", b.standings() == [K[5], K[2], K[0], K[4], K[1], K[3]])
+	# a win on Hard gives the winning driver the battle paint (nothing saved)
+	var was_off := Game.save_off
+	Game.save_off = true
+	var keep: Dictionary = Game.settings.unlocks.duplicate()
+	var keep_b: Dictionary = Game.settings.battles.duplicate()
+	Game.settings.unlocks.erase("paint3_4")
+	var none := Game.award_battle([4], 1)
+	var got := Game.award_battle([4], 2)
+	_bt_check("a win on Hard: the battle paint", none.is_empty() and got == ["paint3_4"] and Game.paint_open(4, 3)
+		and Game.look(4, 3).color == Game.BATTLE_PAINT[0] and Game.unlock_name("paint3_4").ends_with("bitevní lak"))
+	Game.settings.unlocks = keep
+	Game.settings.battles = keep_b
+	Game.save_off = was_off
+	r.paused = false
+
+
+func _next_battle_run() -> void:
+	if _bt_runs.is_empty():
+		for row in _bt_rows:
+			print(row)
+		_finish_test(_items_bad == 0, "battles end with a winner, karts stay in, every hit costs one balloon" if _items_bad == 0
+			else "%d problems" % _items_bad)
+		return
+	var run: Array = _bt_runs.pop_front()
+	Game.settings.arena = int(run[0])
+	Game.settings.diff = int(run[1])          # not saved
+	start_battle(1)
+	race.fast = int(Game.cmd_args.get("fast", "8"))
+	for k in race.locals:
+		k.autopilot = true
+	_bt_watch = {}
+	_bt_left = {}
+	_bt_stuck = {}
+	_bt_air = {}
+	_bt_jumps = 0
+	_bt_done_at = -1.0
+	_test_t = 0.0
+
+
+func _battle_tick() -> void:
+	var r := race
+	var b: Battle = r.battle
+	if b == null:
+		return
+	if r.state == "race" and not b.over:
+		for k: Kart in r.karts:
+			if k.out:
+				continue
+			if k.air and not _bt_air.get(k, false):
+				_bt_jumps += 1
+			_bt_air[k] = k.air
+			var sp := r.arena.space(k.x, k.z, k.y - 0.3)      # the same as Arena.constrain
+			if (not r.arena.inside(k.x, k.z) or sp < Game.KART_R - 0.35) and not _bt_left.has(k):
+				_bt_left[k] = true
+				print("BATTLE LEFT %s at %.1f, %.1f (%.2f m from the nearest solid)" % [k.ch.name, k.x, k.z, sp])
+			var w: Dictionary = _bt_watch.get(k, {})
+			if w.is_empty() or r.race_time - float(w.t) >= 5.0:
+				var n := 0
+				if not w.is_empty():
+					var moved := Vector2(k.x - float(w.x), k.z - float(w.z)).length()
+					n = int(w.n) + 1 if moved < 3.0 else 0
+					if n >= 2 and not _bt_stuck.has(k):
+						_bt_stuck[k] = true
+						print("BATTLE STUCK %s at %.1f, %.1f" % [k.ch.name, k.x, k.z])
+				_bt_watch[k] = {"x": k.x, "z": k.z, "t": r.race_time, "n": n}
+	var lost := 0
+	for k: Kart in r.karts:
+		lost += Game.BALLOONS - k.balloons
+	if b.over and _bt_done_at < 0.0:
+		_bt_done_at = _test_t
+		var how := "one left" if b.alive().size() <= 1 else "time up"
+		var ok := b.winner() != null and b.end_time <= Game.BATTLE_TIME + 0.05 and _bt_left.is_empty() and _bt_stuck.is_empty() \
+			and lost == b.pops.size() and r.hits_landed == b.pops.size()
+		if not ok:
+			_items_bad += 1
+		var used := []
+		for it in range(1, Game.ITEM_COUNT + 1):
+			if int(r.item_uses.get(it, 0)) > 0:
+				used.append("%s %d" % [Game.ITEM_NAMES[it], int(r.item_uses[it])])
+		_bt_rows.append("BATTLE %s %s: %s after %.0f s, winner %s with %d, %d balloons popped (hits %d), left the arena %d, stuck %d, jumps %d %s; items: %s" % [
+			Game.ARENAS[int(Game.settings.arena)].id, Game.DIFFS[int(Game.settings.diff)].name, how, b.end_time,
+			b.winner().ch.name, b.winner().balloons, b.pops.size(), r.hits_landed, _bt_left.size(), _bt_stuck.size(),
+			_bt_jumps, "ok" if ok else "FAIL", ", ".join(used)])
+		print(_bt_rows[-1])
+	if _bt_done_at >= 0.0 and _test_t - _bt_done_at > 1.0:
+		_next_battle_run()
+	elif _test_t > float(Game.cmd_args.get("timeout", "90")):
+		_items_bad += 1
+		print("BATTLE TIMEOUT in %s %s at %.0f s" % [Game.ARENAS[int(Game.settings.arena)].id, Game.DIFFS[int(Game.settings.diff)].name, r.race_time])
+		_next_battle_run()
 
 
 ## Gravity in the screen's frame (as Godot gives it) for a phone tilted back

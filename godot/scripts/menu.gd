@@ -7,6 +7,7 @@ extends Control
 signal start_offline(players: int)
 signal start_cup(players: int)
 signal start_trial
+signal start_battle(players: int)
 signal quit_requested
 signal track_changed
 signal quality_changed
@@ -16,7 +17,7 @@ var scroll: ScrollContainer
 var content: VBoxContainer
 var screen := "home"
 var players := 1
-var setup_mode := "race"      # setup screen: "race", "cup" (championship) or "trial" (time trial)
+var setup_mode := "race"      # setup screen: "race", "cup" (championship), "trial" (time trial) or "battle" (balloons)
 var status_text := ""
 var _hosts_box: VBoxContainer
 var _status_l: Label
@@ -80,6 +81,46 @@ class CupIcon:
 		draw_rect(Rect2(w * 0.26, h * 0.77, w * 0.48, h * 0.15), c)
 		if won:
 			draw_line(Vector2(w * 0.32, h * 0.14), Vector2(w * 0.38, h * 0.36), Color(1, 1, 1, 0.55), 2.0)
+
+
+## A small plan of a battle arena: its edge, the solid parts and the ramps.
+class ArenaThumb:
+	extends Control
+	var idx := 0
+	var active := false
+	func _init(i: int, a: bool) -> void:
+		idx = i
+		active = a
+		custom_minimum_size = Vector2(0, 74)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var ar := Race.get_arena(idx)
+		var th: Dictionary = ar.def.theme
+		var bg: Color = th.ground
+		bg.a = 0.35
+		draw_rect(Rect2(Vector2.ZERO, size), bg)
+		var pad := 8.0
+		var sc := minf((size.x - 2 * pad) / (ar.max_x - ar.min_x), (size.y - 2 * pad) / (ar.max_z - ar.min_z))
+		var at := func(x: float, z: float) -> Vector2:
+			return size * 0.5 - Vector2((x - ar.cx) * sc, (z - ar.cz) * sc)
+		var pts := PackedVector2Array()
+		for q in ar.outline(5.0):
+			pts.append(at.call(q.x, q.y))
+		var fl: Color = th.floor
+		fl.a = 0.9
+		draw_colored_polygon(pts, fl)
+		if not ar.ice.is_empty():
+			draw_circle(at.call(float(ar.ice.x), float(ar.ice.z)), float(ar.ice.r) * sc, Color("bfe3f5"))
+		var solid := Color(th.trim).darkened(0.1)
+		for c in ar.circles:
+			draw_circle(at.call(float(c.x), float(c.z)), maxf(1.5, float(c.r) * sc), solid)
+		for c in ar.caps:
+			if c.has("ramp"):
+				continue
+			draw_line(at.call(float(c.x0), float(c.z0)), at.call(float(c.x1), float(c.z1)), solid, maxf(2.0, float(c.r) * 2.0 * sc), true)
+		for r in ar.ramps:
+			draw_circle(at.call(float(r.x), float(r.z)), maxf(2.0, float(r.w) * 0.4 * sc), Color("ffc21a"))
+		draw_polyline(pts, Color.WHITE if active else Color("c9d1e0"), 3.0, true)
 
 
 class TrackThumb:
@@ -353,6 +394,42 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false
 	return g
 
 
+## The battle arenas to pick from: a plan of each, its name and what is in it.
+func _arena_grid(selected: int) -> GridContainer:
+	var g := UI.grid(2, 8)
+	var group := ButtonGroup.new()
+	for i in Game.ARENAS.size():
+		var ad: Dictionary = Game.ARENAS[i]
+		var sel := i == selected
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = sel
+		b.custom_minimum_size = Vector2(150, 176)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var v := UI.vbox(3)
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 8
+		v.offset_top = 8
+		v.offset_right = -8
+		v.offset_bottom = -8
+		b.add_child(v)
+		v.add_child(ArenaThumb.new(i, sel))
+		v.add_child(UI.label(ad.name, 16, UI.on_tile(sel, UI.PAPER), UI.bold_font))
+		var info := UI.label(ad.desc, 13, UI.on_tile(sel, UI.MUTED))
+		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.custom_minimum_size = Vector2(60, 0)
+		v.add_child(info)
+		b.pressed.connect(func():
+			Game.settings.arena = i
+			Game.save_settings()
+			Sfx.play("ui", 0.6)
+			show_screen("setup"))
+		g.add_child(b)
+	return g
+
+
 func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer:
 	var h := UI.hbox(8)
 	var group := ButtonGroup.new()
@@ -374,9 +451,10 @@ func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer
 
 
 ## Paints of one driver: the own colours, the second paint (any cup with
-## this driver) and gold (a gold cup on Hard); not yet won ones are locked.
-func _paint_row(d: int, selected: int, on_pick: Callable) -> HBoxContainer:
-	var h := UI.hbox(8)
+## this driver), gold (a gold cup on Hard) and the battle paint (a battle won
+## on Hard); not yet won ones are locked. Two in a row.
+func _paint_row(d: int, selected: int, on_pick: Callable) -> GridContainer:
+	var h := UI.grid(2, 8)
 	var group := ButtonGroup.new()
 	for p in Game.PAINT_NAMES.size():
 		var open := Game.paint_open(d, p)
@@ -441,6 +519,7 @@ func _home() -> void:
 	_wide(UI.button("Závod", _go_setup.bind(1), true))
 	_wide(UI.button("Mistrovství (6 tratí)", _go_setup.bind(1, "cup")))
 	_wide(UI.button("Časovka proti rekordu", _go_setup.bind(1, "trial")))
+	_wide(UI.button("Bitva s balónky", _go_setup.bind(1, "battle")))
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
 	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
@@ -492,15 +571,31 @@ func _setup() -> void:
 	_brand(true)
 	if players == 2 and setup_mode == "trial":
 		setup_mode = "race"
-	var heading: String = {"race": "Závod", "cup": "Mistrovství", "trial": "Časovka"}[setup_mode] if players == 1 \
-		else "2 hráči na jednom počítači"
+	var battle := setup_mode == "battle"
+	var heading: String = {"race": "Závod", "cup": "Mistrovství", "trial": "Časovka", "battle": "Bitva s balónky"}[setup_mode] \
+		if players == 1 or battle else "2 hráči na jednom počítači"
 	content.add_child(UI.label(heading, 26, UI.PAPER, UI.bold_font))
-	# one race, the championship over all tracks or a time trial (alone)
+	# one race, the championship over all tracks or a time trial (alone);
+	# the battle instead: alone or two on one computer
 	var modes := UI.hbox(8)
 	content.add_child(modes)
 	var opts := [["race", "Jeden závod"], ["cup", "Mistrovství"]]
 	if players == 1:
 		opts.append(["trial", "Časovka"])
+	if battle:
+		opts = []
+		if not Game.is_mobile():
+			for n in [1, 2]:
+				var pb := Button.new()
+				pb.text = "1 hráč" if n == 1 else "2 hráči (rozdělená obrazovka)"
+				pb.toggle_mode = true
+				pb.button_pressed = players == n
+				pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				pb.pressed.connect(func():
+					players = n
+					Sfx.play("ui", 0.6)
+					show_screen("setup"))
+				modes.add_child(pb)
 	var group := ButtonGroup.new()
 	for o in opts:
 		var mb := Button.new()
@@ -525,7 +620,15 @@ func _setup() -> void:
 		sec.add_child(KartStage.new(d, 170.0 if players == 2 else 200.0, Game.paint_of(d)))
 		sec.add_child(_driver_grid(d, taken, _pick_driver.bind(key)))
 		sec.add_child(_paint_row(d, Game.paint_of(d), _pick_paint.bind(d)))
-	if setup_mode == "cup":
+	if battle:
+		var as_ := _section("Aréna")
+		as_.add_child(_arena_grid(int(Game.settings.arena)))
+		var rules := UI.label("Každý má %d balónky. Zásah raketou, banánem, olejem, hvězdou nebo přejetí zmenšeného soupeře stojí balónek, pak máš %d s ochranu. Kdo přijde o všechny, vypadá. Vyhraje poslední ve hře, nebo kdo má po %d minutách nejvíc balónků." % [
+			Game.BALLOONS, int(Game.BATTLE_GUARD), int(Game.BATTLE_TIME / 60.0)], 16, UI.MUTED)
+		rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rules.custom_minimum_size = Vector2(300, 0)
+		as_.add_child(rules)
+	elif setup_mode == "cup":
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
 		cs.add_child(_cup_tracks(bool(Game.settings.mirror)))
 		var pts := Game.CUP_POINTS.map(func(p): return str(p))
@@ -543,7 +646,7 @@ func _setup() -> void:
 			info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			info.custom_minimum_size = Vector2(300, 0)
 			ts.add_child(info)
-	if Game.unlocked("mirror"):
+	if Game.unlocked("mirror") and not battle:
 		var mrs := _section("Tratě")
 		mrs.add_child(_mirror_row(bool(Game.settings.mirror), true, _pick_mirror))
 	var ds := _section("Obtížnost")
@@ -558,7 +661,7 @@ func _setup() -> void:
 		_text("Hráč 1 (horní obrazovka): WASD, drift mezerník, předmět E.\nHráč 2 (dolní obrazovka): šipky, drift pravý Shift, předmět Enter.\nPřipojené ovladače: první patří hráči 1, druhý hráči 2.", 16)
 	var row := UI.hbox(10)
 	content.add_child(row)
-	var go_text: String = {"race": "Závodit!", "cup": "Začít mistrovství!", "trial": "Začít časovku!"}[setup_mode]
+	var go_text: String = {"race": "Závodit!", "cup": "Začít mistrovství!", "trial": "Začít časovku!", "battle": "Do bitvy!"}[setup_mode]
 	var go := UI.button(go_text, _start_setup, true)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(go)
@@ -596,6 +699,14 @@ func _collection() -> void:
 		"Všech šest tratí otočených zrcadlově. Zapínají se u výběru trati.")
 	_reward(rs, secret_open, Game.unlock_name("secret") if secret_open else "Tajný jezdec", "Zlatý pohár na Těžké.",
 		"Sedmý jezdec s vlastní motokárou. Do závodu jich jede šest.", Game.SECRET if secret_open else -1)
+	var won_b := 0
+	for d in Game.DIFFS.size():
+		won_b += int(Game.settings.battles.get(str(d), 0))
+	var any_b := false
+	for d in Game.CHARS.size():
+		any_b = any_b or Game.paint_open(d, 3)
+	_reward(rs, any_b, "Bitevní lak", "Vítězství v bitvě s balónky na Těžké s tímto jezdcem.",
+		"Tmavý lak s neonovými doplňky pro jezdce, se kterým vyhraješ. Vyhrané bitvy: %d." % won_b)
 	var dev_txt := "Časovka pod limitem na všech tratích (na jakékoli obtížnosti)."
 	_reward(rs, Game.unlocked("dev"), Game.unlock_name("dev"), dev_txt,
 		"V časovce jede s tebou rychlý duch vývojáře.")
@@ -610,7 +721,7 @@ func _collection() -> void:
 		lim.add_child(tl)
 	rs.add_child(lim)
 	var ps := _section("Laky motokár")
-	_text("Druhý lak: jakýkoli pohár s tímto jezdcem. Zlatý lak: zlatý pohár na Těžké s tímto jezdcem.", 15)
+	_text("Druhý lak: jakýkoli pohár s tímto jezdcem. Zlatý lak: zlatý pohár na Těžké s tímto jezdcem. Bitevní lak: vítězství v bitvě na Těžké s tímto jezdcem.", 15)
 	var g := UI.grid(2, 8)
 	ps.add_child(g)
 	for d in Game.CHARS.size():
@@ -622,7 +733,7 @@ func _collection() -> void:
 		var v := UI.vbox(0)
 		v.add_child(UI.label(Game.CHARS[d].name, 15, UI.PAPER, UI.bold_font))
 		var row := UI.hbox(6)
-		for p in [1, 2]:
+		for p in [1, 2, 3]:
 			var lk := Game.look(d, p)
 			var sw := Swatch.new(lk.color, lk.accent) if Game.paint_open(d, p) else Swatch.new(Color(1, 1, 1, 0.12),
 				Color(1, 1, 1, 0.08))
@@ -662,6 +773,8 @@ func _reward(parent: Control, open: bool, title: String, how: String, what: Stri
 
 func _start_setup() -> void:
 	match setup_mode:
+		"battle":
+			start_battle.emit(players)
 		"cup":
 			start_cup.emit(players)
 		"trial":
