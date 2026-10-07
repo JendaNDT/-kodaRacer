@@ -745,10 +745,14 @@ func _build_cut(pts: PackedVector2Array, a: int, b: int, sa: float, sb: float, k
 		ctz.append(d.y)
 	var ya := road_y(a, sa * CUT_IN, 0.0, false)
 	var yb := road_y(b, sb * CUT_IN, 0.0, false)
+	# for each point the road sample beside it, or -1 where the road is too far
+	# to share its surface anywhere across the path (see cut_ground)
+	var road_at := PackedInt32Array()
 	for k in m:
 		var base := lerpf(ya, yb, smoothstep(0.0, 1.0, cs[k] / total))
 		# where it runs beside the road the path lies on the road's own surface
 		var pj := project(cx_[k], cz_[k], a if cs[k] < total * 0.5 else b)
+		road_at.append(int(pj[0]) if absf(float(pj[1])) < Game.BAR + 8.0 + CUT_W + 4.0 else -1)
 		var road := road_y(pj[0], clampf(pj[1], -Game.BAR - 6.0, Game.BAR + 6.0), pj[2], false)
 		var yy := lerpf(base, road, _road_share(absf(float(pj[1]))))
 		if not lake.is_empty() and Vector2(cx_[k] - float(lake.x), cz_[k] - float(lake.z)).length() < float(lake.r) + 4.0:
@@ -772,7 +776,7 @@ func _build_cut(pts: PackedVector2Array, a: int, b: int, sa: float, sb: float, k
 		slow = (def.cut.slow as Array).duplicate()   # measured by --cutcal (entry, bends and all)
 	cut = {"a": a, "b": b, "sa": sa, "sb": sb, "m": m, "x": cx_, "z": cz_, "tx": ctx, "tz": ctz, "y": cy, "s": cs,
 		"len": total, "arc_a": a * step, "arc_span": span_m, "kind": kind,
-		"slow": slow, "grip": float(kd.grip), "color": kd.color}
+		"slow": slow, "grip": float(kd.grip), "color": kd.color, "road_at": road_at}
 	_cgrid = {}
 	for k in m:
 		var key := Vector2i(floori(cx_[k] / CELL), floori(cz_[k] / CELL))
@@ -841,10 +845,10 @@ static func _road_share(la: float) -> float:
 ## own (banked) surface exactly where the kart is, so getting on and off is smooth.
 func cut_ground(px: float, pz: float, k: int, along: float) -> float:
 	var yc := cut_y(k, along)
-	var m: int = cut.m
-	if k > 40 and k < m - 41:
-		return yc
-	var pj := project(px, pz, int(cut.a) + 10 if k < m / 2 else int(cut.b) - 10)
+	var hint: int = cut.road_at[k]
+	if hint < 0:
+		return yc                        # far from the road: the share is nothing anywhere here
+	var pj := project(px, pz, hint)
 	var w := _road_share(absf(float(pj[1])))
 	if w <= 0.0:
 		return yc
@@ -855,7 +859,10 @@ func cut_ground(px: float, pz: float, k: int, along: float) -> float:
 func cut_y(k: int, along: float) -> float:
 	var ys: PackedFloat32Array = cut.y
 	var j := clampi(k + (1 if along >= 0.0 else -1), 0, int(cut.m) - 1)
-	return lerpf(ys[k], ys[j], clampf(absf(along) / 2.0, 0.0, 1.0))
+	if j == k:
+		return ys[k]
+	var gap := absf(float(cut.s[j]) - float(cut.s[k]))
+	return lerpf(ys[k], ys[j], clampf(absf(along) / maxf(gap, 0.01), 0.0, 1.0))
 
 
 ## Up direction of the shortcut's surface (it only slopes along the way).

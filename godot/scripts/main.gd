@@ -880,6 +880,9 @@ func _cut_checks() -> void:
 		if tr.cut.is_empty():
 			_check("%s has a shortcut" % tr.def.id, false)
 			continue
+		var step := _cut_surface_step(tr)
+		_check("%s: no take-off on the shortcut, even with the star" % tr.def.id, float(step[0]) < Kart.STEP_DROP * 0.6,
+			"(drops %.2f m at most, %.0f m along the path, %.1f m from its middle)" % step)
 		for d in Game.DIFFS.size():      # every difficulty: the karts' speed changes the balance
 			var times := {}
 			for how in ["road", "cut", "cut+turbo", "cut+star"]:
@@ -890,6 +893,38 @@ func _cut_checks() -> void:
 			_check("%s: the shortcut alone does not pay" % id, times.cut > times.road * 0.97)
 			_check("%s: with a turbo it does" % id, times["cut+turbo"] < times.road)
 			_check("%s: with the star it does" % id, times["cut+star"] < times.road)
+
+
+## Drives the whole path at full speed with the star (every 1 m across it) the
+## way Kart._vertical does and returns how far the ground fell away below the
+## kart in one tick at worst [m, along, across]: STEP_DROP or more throws it into the air.
+func _cut_surface_step(tr: Track) -> Array:
+	var worst := [0.0, 0.0, 0.0]
+	var m: int = tr.cut.m
+	var total: float = tr.cut.len
+	var dt := Game.SIM_DT
+	var ds := 62.0 * dt
+	var off := -Track.CUT_W + 0.5
+	while off <= Track.CUT_W - 0.5:
+		var y := NAN
+		var vy := 0.0
+		var along := 0.0
+		while along <= total:
+			var k := clampi(tr.cut.s.bsearch(along), 1, m - 1)
+			var f := (along - float(tr.cut.s[k - 1])) / maxf(float(tr.cut.s[k]) - float(tr.cut.s[k - 1]), 0.01)
+			var px := lerpf(tr.cut.x[k - 1], tr.cut.x[k], f) - lerpf(tr.cut.tz[k - 1], tr.cut.tz[k], f) * off
+			var pz := lerpf(tr.cut.z[k - 1], tr.cut.z[k], f) + lerpf(tr.cut.tx[k - 1], tr.cut.tx[k], f) * off
+			var pc := tr.cut_project(px, pz, k)
+			var gy := tr.cut_ground(px, pz, int(pc[0]), float(pc[2]))
+			if not is_nan(y):
+				var drop := y + vy * dt - Kart.STICK * Game.GRAVITY * dt * dt - gy
+				if drop > float(worst[0]):
+					worst = [drop, along, off]
+				vy = clampf((gy - y) / dt, -30.0, 30.0)
+			y = gy
+			along += ds
+		off += 1.0
+	return worst
 
 
 ## --cuttest, second part: a race on each track with everybody on the shortcut every lap.
