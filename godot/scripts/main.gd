@@ -70,7 +70,7 @@ func _ready() -> void:
 	if a.has("track"):
 		Game.settings.track = clampi(int(a.track), 0, Game.TRACKS.size() - 1)
 	if a.has("quality"):
-		Game.settings.quality = clampi(int(a.quality), 0, 2)   # not saved
+		Game.settings.quality = clampi(int(a.quality), 0, Gfx.NAMES.size() - 1)   # not saved
 	if a.has("mirror"):
 		Game.settings.mirror = true      # the mirrored tracks (tests, screenshots; not saved)
 	if a.has("unlock"):

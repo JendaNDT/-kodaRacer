@@ -7,7 +7,7 @@ extends RefCounted
 
 enum { LOW, MEDIUM, HIGH }
 
-const NAMES := ["Nízká", "Střední", "Vysoká"]
+const NAMES := ["Nízká", "Střední", "Vysoká", "Test: bez vyhlazení", "Test: bez stínů", "Test: bez záře"]
 
 const LEVELS := [
 	{	# Nízká – slower phones
@@ -30,13 +30,17 @@ const LEVELS := [
 	},
 ]
 
+## DOČASNĚ (hledání chyby, kdy na telefonu na Střední po prvním závodě
+## zmizí 3D grafika): Střední s jednou věcí vypnutou. Po opravě pryč.
+const TESTS := [{"msaa": Viewport.MSAA_DISABLED}, {"shadows": false}, {"glow": false}]
+
 
 static func default_level() -> int:
 	return MEDIUM if Game.is_mobile() else HIGH
 
 
 static func level() -> int:
-	return clampi(int(Game.settings.quality), LOW, HIGH)
+	return clampi(int(Game.settings.quality), LOW, NAMES.size() - 1)
 
 
 static func level_name() -> String:
@@ -44,7 +48,10 @@ static func level_name() -> String:
 
 
 static func _val(key: String) -> Variant:
-	return LEVELS[level()][key]
+	var l := level()
+	if l >= LEVELS.size():
+		return TESTS[l - LEVELS.size()].get(key, LEVELS[MEDIUM][key])
+	return LEVELS[l][key]
 
 
 ## Cycles Nízká → Střední → Vysoká → Nízká and saves the choice.
