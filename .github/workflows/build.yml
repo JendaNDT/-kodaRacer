@@ -104,14 +104,27 @@ jobs:
           if grep -E "SCRIPT ERROR|Parse Error" jump-test.log; then exit 1; fi
           grep -q "TEST PASS: take-offs only from the ramp" jump-test.log
 
-      - name: Test – Wi-Fi game with 120 ms delay each way, every item in turn, everybody on the shortcut
+      - name: Test – take-offs only from the ramp on the mirrored tracks
         run: |
-          ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --cut-always --timeout=260 > host.log 2>&1 &
+          ~/godot-bin/godot --headless --path godot -- --jumptest --mirror --fast=8 2>&1 | tee jump-mirror-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" jump-mirror-test.log; then exit 1; fi
+          grep -q "TEST PASS: take-offs only from the ramp" jump-mirror-test.log
+
+      - name: Test – unlocks (made-up cups and time trials, paints, secret driver, mirrored tracks, developer's ghost)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --unlocktest 2>&1 | tee unlock-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" unlock-test.log; then exit 1; fi
+          if grep "ITEM CHECK.*FAIL" unlock-test.log; then exit 1; fi
+          grep -q "TEST PASS: unlocks work" unlock-test.log
+
+      - name: Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --cut-always --mirror --unlock=mirror,paint2_0 --paint=2 --timeout=260 > host.log 2>&1 &
           sleep 3
           ~/godot-bin/godot --headless --path godot -- --nettest=client --cut-always --fake-lag=120 --fake-jitter=20 --timeout=260 > client.log 2>&1 || true
           wait || true
           grep -h "TEST\|PREDICTION\|CLIENT SAW" host.log client.log
-          for w in "modrá raketa" olej štít blesk zkratka; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
+          for w in "modrá raketa" olej štít blesk zkratka zrcadlo lak; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
           if grep -hE "SCRIPT ERROR|Parse Error" host.log client.log; then exit 1; fi
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log

@@ -23,6 +23,7 @@ const FLAME_COL := Color(1.0, 0.63, 0.19)
 var race: Race
 var ch: Dictionary
 var driver := 0
+var paint := 0               # 0 own colours, 1 second paint, 2 gold (Etapa F)
 var human := false
 var local_slot := -1        # 0/1 = player on this device, -1 = AI or remote
 var peer := 0               # network peer that drives it (0 = AI)
@@ -148,10 +149,11 @@ static var takeoffs: Array = []
 static var log_takeoffs := false
 
 
-func setup(p_race: Race, p_driver: int) -> void:
+func setup(p_race: Race, p_driver: int, p_paint := 0) -> void:
 	race = p_race
 	driver = p_driver
-	ch = Game.CHARS[p_driver]
+	paint = p_paint
+	ch = Game.look(p_driver, p_paint)
 	_build_model()
 
 
@@ -304,17 +306,17 @@ static func _lod_pair(parent: Node3D, near: Mesh, far: Mesh, dist: float) -> Arr
 
 func _build_model() -> void:
 	var m := _shared()
-	model = KartModel.get_model(driver)
+	model = KartModel.get_model(driver, paint)
 	body = Node3D.new()
 	add_child(body)
 	chassis = Node3D.new()
 	body.add_child(chassis)
 	# one material per kart so the star can make just this kart glow
-	var paint := MeshKit.body_material()
-	glow_mats = [paint]
+	var mat := MeshKit.body_material()
+	glow_mats = [mat]
 	var lod := Gfx.kart_lod()
 	for mesh in _lod_pair(chassis, model.body, model.body_low, lod):
-		mesh.set_surface_override_material(0, paint)
+		mesh.set_surface_override_material(0, mat)
 	var ex: Vector3 = model.exhaust
 	flame_mat = m.flamem.duplicate()
 	for sx in [-1.0, 1.0]:
@@ -355,7 +357,7 @@ func _build_model() -> void:
 	var seat: Vector3 = model.seat
 	var wheel: Vector3 = model.wheel
 	rig.position = seat
-	rig.setup(driver, wheel - seat, float(model.tilt), paint, lod * 1.3)
+	rig.setup(driver, wheel - seat, float(model.tilt), mat, lod * 1.3, paint)
 	# soft dark spot under the kart, used where the sun casts no real shadows
 	var size: Vector2 = model.size
 	blob = MeshInstance3D.new()

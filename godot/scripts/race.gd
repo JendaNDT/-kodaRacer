@@ -95,6 +95,12 @@ var ghost_node: Node3D
 var ghost_i := 0
 var ghost_idx := 0
 var ghost_shown := false        # the ghost was out on the track (tests check it)
+var dev := {}                   # the developer's ghost (Etapa F), once won
+var dev_node: Node3D
+var dev_i := 0
+var dev_idx := -1
+var dev_shown := false
+var unlocked_now: Array = []    # rewards won by this race, shown with the results (Etapa F)
 var trial_prev := 0.0           # the record before this drive (0 = none)
 var rec := PackedFloat32Array() # this drive: every GHOST_DT seconds t, x, y, z, yaw, in the air
 var rec_next := 0.0
@@ -104,7 +110,7 @@ const GHOST_F := 6
 
 static func get_track(i: int) -> Track:
 	if not _tracks.has(i):
-		_tracks[i] = Track.new(Game.TRACKS[i])
+		_tracks[i] = Track.new(Game.track_def(i))
 		(_tracks[i] as Track).prepare_line()   # the computer drivers' racing line, in the background
 	return _tracks[i]
 
@@ -178,7 +184,7 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	for i in roster.size():
 		var r: Dictionary = roster[i]
 		var k := Kart.new()
-		k.setup(self, int(r.driver))
+		k.setup(self, int(r.driver), int(r.get("paint", 0)))
 		holder.add_child(k)
 		k.human = bool(r.get("human", false))
 		k.peer = int(r.get("peer", 0))
@@ -220,6 +226,12 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	if not cup.is_empty():
 		get_tree().create_timer(0.5).timeout.connect(_cup_banner)
 	Sfx.music(mode != Mode.DEMO, false)
+	if mode == Mode.CLIENT:              # the Wi-Fi test checks these arrived
+		if Game.is_mirror(track_idx):
+			net_seen["zrcadlo"] = true
+		for k in karts:
+			if k.paint > 0:
+				net_seen["lak"] = true
 
 
 ## Remove the cached world before this race is freed so it can be reused.
@@ -1613,7 +1625,7 @@ func _process(delta: float) -> void:
 	_update_box_visuals(dt)
 	Atmosphere.animate(atm)
 	Trackside.update(ts, self)
-	if ghost_node != null:
+	if ghost_node != null or dev_node != null:
 		_move_ghost()
 	for b in bananas:
 		b.node.position.y = float(b.y) + 0.25 + sin(time * 3.0 + float(b.x)) * 0.04
@@ -2070,6 +2082,8 @@ func pause_from_system() -> void:
 
 func _show_results() -> void:
 	results_shown = true
+	if Game.cmd_args.has("fake-unlock"):     # screenshots of the announcement
+		unlocked_now = Array(String(Game.cmd_args["fake-unlock"]).split(",", false))
 	_start_podium()
 	if pause_panel != null:
 		pause_panel.queue_free()
@@ -2173,7 +2187,7 @@ func _refresh_podium() -> void:
 		if i < podium.size():
 			(podium[i] as KartShow).queue_free()
 		var show := KartShow.new()
-		show.setup(k.driver, false)
+		show.setup(k.driver, false, k.paint)
 		show.cheering = true
 		show.steer_amp = 0.25
 		show.transform = slots[i]
@@ -2201,9 +2215,10 @@ func _podium_order() -> Array:
 const GHOST_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_opaque, cull_back;
+uniform vec3 tint = vec3(0.6, 0.88, 1.0);
 void fragment() {
 	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.0);
-	ALBEDO = vec3(0.6, 0.88, 1.0);
+	ALBEDO = tint;
 	ALPHA = 0.16 + 0.6 * rim;
 }
 """
@@ -2217,17 +2232,32 @@ func _start_trial() -> void:
 	trial_prev = float(ghost.get("t", 0.0))
 	rec = PackedFloat32Array()
 	rec_next = 0.0
-	if ghost.is_empty():
-		return
-	# the ghost: the recorded kart, see-through with a glowing edge
+	if not ghost.is_empty():
+		# the ghost: the recorded kart, see-through with a glowing edge
+		ghost_node = _ghost_kart(ghost, Color(0.6, 0.88, 1.0))
+		ghost_i = 0
+		ghost_idx = -1
+	# the developer's ghost (won in the time trials, --dev-ghost in tests): gold
+	if Game.unlocked("dev") or Game.cmd_args.has("dev-ghost"):
+		dev = Game.dev_ghost(track_idx, diff_idx)
+		if not dev.is_empty():
+			dev_node = _ghost_kart(dev, Color(1.0, 0.78, 0.3))
+			dev_i = 0
+			dev_idx = -1
+	if ghost_node != null or dev_node != null:
+		_move_ghost()
+
+
+func _ghost_kart(g: Dictionary, tint: Color) -> Node3D:
 	var show := KartShow.new()
-	show.setup(clampi(int(ghost.get("driver", 0)), 0, Game.CHARS.size() - 1), false)
+	show.setup(clampi(int(g.get("driver", 0)), 0, Game.CHARS.size() - 1), false, int(g.get("paint", 0)))
 	show.steer_amp = 0.0
 	if _ghost_shader == null:
 		_ghost_shader = Shader.new()
 		_ghost_shader.code = GHOST_SHADER
 	var mat := ShaderMaterial.new()
 	mat.shader = _ghost_shader
+	mat.set_shader_parameter("tint", Vector3(tint.r, tint.g, tint.b))
 	var stack: Array = [show]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
@@ -2235,11 +2265,8 @@ func _start_trial() -> void:
 			(n as GeometryInstance3D).material_override = mat
 			(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		stack.append_array(n.get_children())
-	ghost_node = show
-	fx.add_child(ghost_node)
-	ghost_i = 0
-	ghost_idx = -1
-	_move_ghost()
+	fx.add_child(show)
+	return show
 
 
 func _record(k: Kart) -> void:
@@ -2247,33 +2274,47 @@ func _record(k: Kart) -> void:
 	rec_next += GHOST_DT
 
 
-## The ghost where the best drive was at this moment of the race; it waits
-## at the start during the countdown and leaves the track after its finish.
 func _move_ghost() -> void:
-	var d: PackedFloat32Array = ghost.data
+	if ghost_node != null:
+		var r := _place_ghost(ghost, ghost_node, ghost_i, ghost_idx)
+		ghost_i = r[0]
+		ghost_idx = r[1]
+		if r[2]:
+			ghost_shown = true
+	if dev_node != null:
+		var r := _place_ghost(dev, dev_node, dev_i, dev_idx)
+		dev_i = r[0]
+		dev_idx = r[1]
+		if r[2]:
+			dev_shown = true
+
+
+## A ghost where its drive was at this moment of the race; it waits at the
+## start during the countdown and leaves the track after its finish.
+## Returns [frame, track sample, out on the track during the race].
+func _place_ghost(g: Dictionary, node: Node3D, gi: int, gidx: int) -> Array:
+	var d: PackedFloat32Array = g.data
 	var n := d.size() / GHOST_F
 	if n < 2:
-		return
+		return [gi, gidx, false]
 	var t := race_time if state == "race" else 0.0
 	if t > d[(n - 1) * GHOST_F]:
-		ghost_node.visible = false
-		return
-	ghost_node.visible = true
-	while ghost_i < n - 2 and d[(ghost_i + 1) * GHOST_F] <= t:
-		ghost_i += 1
-	var a := ghost_i * GHOST_F
+		node.visible = false
+		return [gi, gidx, false]
+	node.visible = true
+	while gi < n - 2 and d[(gi + 1) * GHOST_F] <= t:
+		gi += 1
+	var a := gi * GHOST_F
 	var b := a + GHOST_F
 	var u := clampf((t - d[a]) / maxf(1e-4, d[b] - d[a]), 0.0, 1.0)
 	var pos := Vector3(lerpf(d[a + 1], d[b + 1], u), lerpf(d[a + 2], d[b + 2], u), lerpf(d[a + 3], d[b + 3], u))
 	var yaw := d[a + 4] + Game.wrap_angle(d[b + 4] - d[a + 4]) * u
-	var pj := track.project(pos.x, pos.z, ghost_idx)
-	ghost_idx = pj[0]
+	var pj := track.project(pos.x, pos.z, gidx)
 	var up := Vector3.UP if d[a + 5] > 0.5 else track.normal(pj[0], pj[1], pj[2])
 	var f := Vector3(sin(yaw), 0.0, cos(yaw))
 	var zf := (f - up * f.dot(up)).normalized()
-	ghost_node.transform = Transform3D(Basis(up.cross(zf), up, zf), pos)
-	if state == "race":
-		ghost_shown = true
+	node.transform = Transform3D(Basis(up.cross(zf), up, zf), pos)
+	return [gi, int(pj[0]), state == "race"]
 
 
 ## Seconds ahead (−) or behind (+) the ghost after `laps` laps; INF without one.
@@ -2300,7 +2341,8 @@ func _trial_finish(k: Kart) -> void:
 	if trial_prev <= 0.0 or k.finish_time < trial_prev:
 		k.set_meta("new_record", true)
 		Game.save_ghost(track_idx, diff_idx, {"t": k.finish_time, "laps": k.lap_times.duplicate(), "driver": k.driver,
-			"data": rec})
+			"paint": k.paint, "data": rec})
+	unlocked_now = Game.award_trial()
 
 
 func _show_trial_results() -> void:
@@ -2321,6 +2363,11 @@ func _show_trial_results() -> void:
 	sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sl.custom_minimum_size = Vector2(470, 0)
 	inner.add_child(sl)
+	if not dev.is_empty():
+		var dd := k.finish_time - float(dev.t)
+		inner.add_child(UI.label("Duch vývojáře %s (%s)" % [Game.fmt_time(float(dev.t)), _signed(dd)], 17,
+			UI.GO if dd < 0.0 else UI.GOLD))
+	_unlock_box(inner)
 	var best := INF
 	for t in k.lap_times:
 		best = minf(best, float(t))
@@ -2400,6 +2447,8 @@ func _cup_place(k: Kart) -> int:
 
 func _show_cup_results() -> void:
 	var last := _cup_last()
+	if last and unlocked_now.is_empty():
+		unlocked_now = _award_cup()
 	var title := ""
 	if last:
 		if locals.size() == 1:
@@ -2423,6 +2472,7 @@ func _show_cup_results() -> void:
 	if locals.size() == 1:
 		tl.add_theme_color_override("font_color", UI.place_color(_cup_place(locals[0]) if last else _place_of(locals[0])))
 	inner.add_child(UI.label(sub, 18, UI.MUTED))
+	_unlock_box(inner)
 	var cols := UI.hbox(26)
 	inner.add_child(cols)
 	var left := UI.vbox(2)
@@ -2481,6 +2531,39 @@ func _cup_wait_check() -> void:
 		cup_next.text = "Čekáme na ostatní hráče…"
 	else:
 		cup_next.text = "Další závod: " + String(Game.TRACKS[int(cup.round) + 1].name)
+
+
+## End of a championship: each local player wins with their own driver
+## and place (cups, paints, mirrored tracks, the secret driver).
+func _award_cup() -> Array:
+	var out: Array = []
+	for k in locals:
+		for key in Game.award_cup([k.driver], int(cup.diff), _cup_place(k)):
+			if not (key in out):
+				out.append(key)
+	return out
+
+
+## "Odemčeno!" with the results: what this race has just won, with a fanfare.
+func _unlock_box(inner: VBoxContainer) -> void:
+	if unlocked_now.is_empty():
+		return
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UI.box(Color(UI.GOLD, 0.16), 14, 2, UI.GOLD))
+	var v := UI.vbox(3)
+	box.add_child(UI.margin(v, 16, 10, 16, 12))
+	v.add_child(UI.label("ODEMČENO!", 24, UI.GOLD, UI.display_font))
+	for key in unlocked_now:
+		v.add_child(UI.label(Game.unlock_name(String(key)), 18, UI.PAPER, UI.bold_font))
+	v.add_child(UI.label("Najdeš v menu ve Sbírce.", 14, UI.MUTED))
+	inner.add_child(box)
+	box.modulate.a = 0.0
+	var tw := box.create_tween()
+	tw.tween_interval(0.4)
+	tw.tween_property(box, "modulate:a", 1.0, 0.35)
+	tw.tween_callback(func(): Sfx.play("unlock", 0.9))
+	if trial and not locals.is_empty():
+		Effects.confetti_burst(fx, (locals[0] as Kart).position + Vector3(0, 1.5, 0))
 
 
 ## The best championship place of the local players goes into the records.

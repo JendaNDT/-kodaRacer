@@ -71,6 +71,16 @@ func _ready() -> void:
 		Game.settings.track = clampi(int(a.track), 0, Game.TRACKS.size() - 1)
 	if a.has("quality"):
 		Game.settings.quality = clampi(int(a.quality), 0, 2)   # not saved
+	if a.has("mirror"):
+		Game.settings.mirror = true      # the mirrored tracks (tests, screenshots; not saved)
+	if a.has("unlock"):
+		Game.save_off = true             # screenshots: --unlock=secret,mirror,paint1_0 (nothing saved)
+		for key in String(a.unlock).split(",", false):
+			Game.settings.unlocks[key] = true
+	if a.has("driver"):
+		Game.settings.driver = clampi(int(a.driver), 0, Game.CHARS.size() - 1)   # not saved
+	if a.has("paint"):
+		Game.settings.paints[str(Game.settings.driver)] = int(a.paint)
 	if a.has("fps"):
 		Game.settings.show_fps = true
 	if a.has("cursor"):
@@ -220,6 +230,25 @@ func _ready() -> void:
 			print("CUTCAL \"%s\": slow [%s]" % [Game.TRACKS[ti].id, ", ".join(found)])
 		get_tree().quit()
 		return
+	if a.has("unlocktest"):
+		# rewards from made-up championships and time trials, the secret
+		# driver and paints in a race, every mirrored track checked against
+		# the original, the developer's ghosts and the Collection screen
+		_test_mode = "unlock"
+		menu.visible = false
+		_unlock_checks()
+		_finish_test(_items_bad == 0, "unlocks work" if _items_bad == 0 else "%d problems" % _items_bad)
+		return
+	if a.has("devghosts"):
+		# records the developer's ghost for every track and difficulty into
+		# res://ghosts (kept with the game): the autopilot at its very best
+		menu.visible = false
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://ghosts"))
+		for ti in Game.TRACKS.size():
+			for d in Game.DIFFS.size():
+				_dev_ghost_run(ti, d)
+		get_tree().quit()
+		return
 	if a.has("cuttest"):
 		# every track: the stretch with the shortcut driven by road, by the
 		# shortcut without and with a turbo and with the star, then a race in
@@ -279,10 +308,10 @@ func _ready() -> void:
 		menu.visible = false
 		_start_demo()
 		if a.nettest == "host":
-			Net.host("Hostitel", 0)
+			Net.host("Hostitel", 0, Game.paint_of(0))
 			Net.cup_mode = a.has("cup")   # --cup: a championship (--cup-start=4: only the last races)
 		else:
-			Net.join("127.0.0.1", "Klient", 1)
+			Net.join("127.0.0.1", "Klient", 1, Game.paint_of(1))
 		return
 	if a.has("showcase"):
 		return
@@ -419,9 +448,9 @@ func _new_race() -> Race:
 
 func _start_demo() -> void:
 	var roster: Array = []
-	var ids := range(Game.CHARS.size())
+	var ids := Game.open_drivers()
 	ids.shuffle()
-	for i in ids:
+	for i in ids.slice(0, Game.MAX_KARTS):
 		roster.append({"driver": i, "human": false, "peer": 0, "name": ""})
 	_new_race().start(Race.Mode.DEMO, int(Game.settings.track), 1, roster)
 
@@ -431,7 +460,8 @@ func start_offline(players: int) -> void:
 	trial = false
 	var roster := _offline_roster(players)
 	menu.visible = false
-	_new_race().start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff), roster)
+	_new_race().start(Race.Mode.OFFLINE, Game.race_track(int(Game.settings.track), bool(Game.settings.mirror)),
+		int(Game.settings.diff), roster)
 
 
 ## A championship: every track once with the same six drivers, points
@@ -442,7 +472,8 @@ func start_cup(players: int) -> void:
 	var pts := {}
 	for r in roster:
 		pts[int(r.driver)] = 0
-	cup = {"players": players, "diff": int(Game.settings.diff), "round": 0, "roster": roster, "points": pts}
+	cup = {"players": players, "diff": int(Game.settings.diff), "round": 0, "roster": roster, "points": pts,
+		"mirror": bool(Game.settings.mirror)}
 	_start_cup_round()
 
 
@@ -450,7 +481,7 @@ func _start_cup_round() -> void:
 	menu.visible = false
 	var r := _new_race()
 	r.cup = cup
-	r.start(Race.Mode.OFFLINE, int(cup.round), int(cup.diff), cup.roster)
+	r.start(Race.Mode.OFFLINE, Game.race_track(int(cup.round), bool(cup.get("mirror", false))), int(cup.diff), cup.roster)
 	if _test_mode == "cup":
 		r.fast = int(Game.cmd_args.get("fast", "8"))
 		for k in r.locals:
@@ -466,8 +497,8 @@ func start_trial() -> void:
 	var d := int(Game.settings.driver)
 	var r := _new_race()
 	r.trial = true
-	r.start(Race.Mode.OFFLINE, int(Game.settings.track), int(Game.settings.diff),
-		[{"driver": d, "human": true, "peer": 0, "local": 0, "name": Game.player_name()}])
+	r.start(Race.Mode.OFFLINE, Game.race_track(int(Game.settings.track), bool(Game.settings.mirror)), int(Game.settings.diff),
+		[{"driver": d, "paint": Game.paint_of(d), "human": true, "peer": 0, "local": 0, "name": Game.player_name()}])
 	if _test_mode == "trial":
 		r.fast = int(Game.cmd_args.get("fast", "8"))
 		r.locals[0].autopilot = true
@@ -512,18 +543,19 @@ func _offline_roster(players: int) -> Array:
 	last_players = players
 	var humans: Array = []
 	var d1 := int(Game.settings.driver)
-	humans.append({"driver": d1, "human": true, "peer": 0, "local": 0,
+	humans.append({"driver": d1, "paint": Game.paint_of(d1), "human": true, "peer": 0, "local": 0,
 		"name": Game.player_name() if players == 1 else "Hráč 1"})
 	if players == 2:
 		var d2 := int(Game.settings.driver2)
-		if d2 == d1:
-			d2 = (d1 + 1) % Game.CHARS.size()
-		humans.append({"driver": d2, "human": true, "peer": 0, "local": 1, "name": "Hráč 2"})
+		if d2 == d1 or not Game.driver_open(d2):
+			d2 = Game.free_driver([d1])
+		humans.append({"driver": d2, "paint": Game.paint_of(d2), "human": true, "peer": 0, "local": 1, "name": "Hráč 2"})
 	var used := {}
 	for h in humans:
 		used[h.driver] = true
+	# seven drivers once the secret one is won, six of them race
 	var ai: Array = []
-	for i in Game.CHARS.size():
+	for i in Game.open_drivers():
 		if not used.has(i):
 			ai.append({"driver": i, "human": false, "peer": 0, "name": ""})
 	ai.shuffle()
@@ -823,6 +855,154 @@ func _show_fx(what: String) -> void:
 ## One drive through the stretch with the shortcut on track ti, alone:
 ## "road", "cut", "cut+turbo" or "cut+star"; slow > 0 overrides the
 ## shortcut's slowdown. Returns the time.
+func _unlock_checks() -> void:
+	Game.save_off = true
+	Game.settings.unlocks = {}
+	Game.settings.cups = {}
+	Game.settings.trials = {}
+	Game.settings.paints = {}
+	Game.settings.mirror = false
+	var S := Game.SECRET
+	_check("at first the secret driver is locked", not Game.driver_open(S) and Game.open_drivers().size() == 6)
+	_check("at first only the own paints", not Game.paint_open(2, 1) and Game.paint_open(2, 0) and Game.paint_of(2) == 0)
+	var won := Game.award_cup([2], 0, 3)
+	_check("bronze on Easy: second paint of that driver", won == ["paint1_2"], str(won))
+	_check("  … and nothing else", not Game.unlocked("mirror") and not Game.paint_open(2, 2) and not Game.paint_open(0, 1))
+	won = Game.award_cup([0], 0, 1)
+	_check("gold on Easy: no mirrored tracks yet", won == ["paint1_0"], str(won))
+	won = Game.award_cup([0], 1, 1)
+	_check("gold on Normal: mirrored tracks", won == ["mirror"], str(won))
+	won = Game.award_cup([1], 2, 4)
+	_check("4th place on Hard: nothing", won.is_empty(), str(won))
+	won = Game.award_cup([4], 2, 1)
+	_check("gold on Hard: paints of that driver and the secret driver",
+		won == ["paint1_4", "paint2_4", "secret"], str(won))
+	_check("  … he can be picked now", Game.driver_open(S) and Game.open_drivers().size() == 7)
+	_check("the same cup again wins nothing new", Game.award_cup([4], 2, 1).is_empty())
+	_check("best cups kept per difficulty", Game.cup_best(0) == 1 and Game.cup_best(1) == 1 and Game.cup_best(2) == 1)
+	Game.set_paint(4, 2)
+	_check("the chosen paint", Game.paint_of(4) == 2 and Game.look(4, 2).color == Game.GOLD_PAINT[0])
+	Game.set_paint(3, 2)
+	_check("a paint not won falls back to the own one", Game.paint_of(3) == 0)
+	# rosters: six drivers, all different, the secret one only once won
+	var bad := 0
+	for it in 40:
+		Game.settings.driver = it % 7
+		for players in [1, 2]:
+			var ro := _offline_roster(players)
+			var ids := {}
+			for e in ro:
+				ids[int(e.driver)] = true
+				if not Game.driver_open(int(e.driver)):
+					bad += 1
+			if ro.size() != Game.MAX_KARTS or ids.size() != Game.MAX_KARTS:
+				bad += 1
+	_check("rosters: 6 different drivers out of 7", bad == 0, "(%d bad)" % bad)
+	var seen := {}
+	for it in 60:
+		Game.settings.driver = 0
+		for e in _offline_roster(1):
+			seen[int(e.driver)] = true
+	_check("the secret driver also races as a computer driver", seen.has(S))
+	# mirrored tracks: the same road flipped left to right, shortcut and ramp included
+	for t in Game.TRACKS.size():
+		var a := Race.get_track(t)
+		var m := Race.get_track(t + Game.TRACKS.size())
+		var worst := 0.0
+		for i in a.n:
+			worst = maxf(worst, absf(m.x[i] + a.x[i]) + absf(m.z[i] - a.z[i]) + absf(m.y[i] - a.y[i]))
+		var cw := 0.0
+		if a.cut.is_empty() or m.cut.is_empty() or int(a.cut.m) != int(m.cut.m):
+			cw = INF
+		else:
+			for k in int(a.cut.m):
+				cw = maxf(cw, absf(float(m.cut.x[k]) + float(a.cut.x[k])) + absf(float(m.cut.z[k]) - float(a.cut.z[k])))
+		_check("%s mirrored: the same road flipped" % a.def.id, m.n == a.n and worst < 0.05 and
+			int(m.ramp.get("i", -1)) == int(a.ramp.get("i", -1)) and m.lake.is_empty() == a.lake.is_empty(),
+			"(off by %.3f m)" % worst)
+		_check("%s mirrored: the shortcut flipped" % a.def.id, cw < 0.05, "(off by %.3f m)" % cw)
+		var step := _cut_surface_step(m)
+		_check("%s mirrored: no take-off on the shortcut" % a.def.id, float(step[0]) < Kart.STEP_DROP * 0.6,
+			"(drops %.2f m)" % float(step[0]))
+		_check("%s mirrored: own records" % a.def.id, Game.record_key(t, 1) != Game.record_key(t + Game.TRACKS.size(), 1)
+			and Game.ghost_path(t, 1) != Game.ghost_path(t + Game.TRACKS.size(), 1))
+		# the developer's ghost on every difficulty, flipped on the mirrored track
+		for d in Game.DIFFS.size():
+			var g := Game.dev_ghost(t, d)
+			var gm := Game.dev_ghost(t + Game.TRACKS.size(), d)
+			var ok := not g.is_empty() and not gm.is_empty() and float(g.t) > 30.0 and (g.laps as Array).size() == Game.LAPS
+			if ok:
+				var gd: PackedFloat32Array = g.data
+				var md: PackedFloat32Array = gm.data
+				ok = gd.size() == md.size() and absf(md[61] + gd[61]) < 0.001 and absf(md[63] - gd[63]) < 0.001
+			_check("%s %s: developer's ghost" % [a.def.id, Game.DIFFS[d].name], ok and Game.dev_limit(t, d) > float(g.get("t", 0.0)),
+				"(%s, limit %s)" % [Game.fmt_time(float(g.get("t", 0.0))), Game.fmt_time(Game.dev_limit(t, d))])
+	# time trials: under the limit on five tracks is not enough, on all six it is
+	for t in Game.TRACKS.size() - 1:
+		Game.settings.trials[Game.record_key(t, 1)] = Game.dev_limit(t, 1) - 0.5
+	_check("time trials under the limit on 5 tracks: no ghost yet", Game.award_trial().is_empty())
+	Game.settings.trials[Game.record_key(5, 2)] = Game.dev_limit(5, 2) + 1.0
+	_check("  … over the limit on the 6th: still no ghost", Game.award_trial().is_empty())
+	Game.settings.trials[Game.record_key(5, 0)] = Game.dev_limit(5, 0) - 0.1
+	_check("  … under it on the 6th (another difficulty): the developer's ghost", Game.award_trial() == ["dev"])
+	# a race on a mirrored track with the secret driver in gold
+	Game.settings.driver = S
+	Game.set_paint(S, 2)
+	Game.settings.unlocks["paint2_%d" % S] = true
+	Game.settings.mirror = true
+	Game.settings.track = 2
+	start_offline(1)
+	var r := race
+	r.paused = true
+	var me: Kart = r.locals[0]
+	_check("race on the mirrored track", r.track_idx == 2 + Game.TRACKS.size() and r.track.def.get("mirror", false))
+	_check("the secret driver in gold", me.driver == S and me.paint == 2 and me.ch.color == Game.GOLD_PAINT[0])
+	for k in r.karts:
+		k.autopilot = true
+	r._go()
+	var t0 := me.progress()
+	for i in int(25.0 / Game.SIM_DT):
+		r._step(Game.SIM_DT)
+	var moved := 1e9
+	for k in r.karts:
+		moved = minf(moved, k.progress() - t0)
+	_check("everybody drives on the mirrored track", moved > 250.0, "(slowest %.0f m in 25 s)" % moved)
+	# a time trial with the developer's ghost
+	Game.settings.unlocks["dev"] = true
+	start_trial()
+	_check("time trial: the developer's ghost is out", race.dev_node != null and not race.dev.is_empty())
+	# the Collection screen with everything won
+	menu.show_screen("collection")
+	_check("Collection screen", menu.content.get_child_count() > 5)
+	menu.show_screen("setup")
+	_check("race setup with mirrored tracks and paints", menu.content.get_child_count() > 5)
+
+
+func _dev_ghost_run(ti: int, d: int) -> void:
+	Game.settings.track = ti
+	Game.settings.diff = d
+	Game.settings.mirror = false
+	Game.settings.driver = 0
+	seed(4321)
+	start_trial()
+	var r := race
+	r.paused = true
+	var k: Kart = r.locals[0]
+	k.autopilot = true
+	k.ai.skill = 1.0
+	r._go()
+	var t := 0.0
+	while not k.finished and t < 400.0:
+		r._step(Game.SIM_DT)
+		t += Game.SIM_DT
+	var path := "res://ghosts/dev_%s_%d.dat" % [Game.TRACKS[ti].id, d]
+	var f := FileAccess.open_compressed(path, FileAccess.WRITE, FileAccess.COMPRESSION_ZSTD)
+	f.store_var({"t": k.finish_time, "laps": k.lap_times.duplicate(), "driver": 0, "paint": 2, "data": r.rec})
+	f.close()
+	print("DEVGHOST %s %s: %s (limit %s)" % [Game.TRACKS[ti].id, Game.DIFFS[d].name, Game.fmt_time(k.finish_time),
+		Game.fmt_time(Game.dev_limit(ti, d))])
+
+
 func _cut_run(ti: int, how: String, slow: float, diff: int) -> float:
 	Game.settings.track = ti
 	Game.settings.diff = diff            # not saved

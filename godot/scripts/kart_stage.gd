@@ -8,12 +8,13 @@ var vp: SubViewport
 var turn: Node3D
 var show: KartShow
 var driver := -1
+var paint := 0
 
 static var _thumb_root: Node
 static var _thumbs := {}
 
 
-func _init(p_driver: int, height := 190.0) -> void:
+func _init(p_driver: int, height := 190.0, p_paint := 0) -> void:
 	stretch = true
 	custom_minimum_size = Vector2(0, height)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -28,17 +29,18 @@ func _init(p_driver: int, height := 190.0) -> void:
 	turn.rotation.y = 0.6
 	vp.add_child(turn)
 	turn.add_child(_pedestal())
-	set_driver(p_driver)
+	set_driver(p_driver, p_paint)
 
 
-func set_driver(d: int) -> void:
-	if d == driver:
+func set_driver(d: int, p := 0) -> void:
+	if d == driver and p == paint:
 		return
 	driver = d
+	paint = p
 	if show != null:
 		show.queue_free()
 	show = KartShow.new()
-	show.setup(d)
+	show.setup(d, true, p)
 	show.position.y = 0.32
 	turn.add_child(show)
 	show.wave(1.3)
@@ -107,9 +109,10 @@ static func host_thumbs(root: Node) -> void:
 
 
 ## A still picture of a driver's kart, rendered once.
-static func thumb(d: int) -> Texture2D:
-	if _thumbs.has(d):
-		return _thumbs[d]
+static func thumb(d: int, p := 0) -> Texture2D:
+	var key := d * 10 + p
+	if _thumbs.has(key):
+		return _thumbs[key]
 	if _thumb_root == null or not is_instance_valid(_thumb_root):
 		return null
 	var vp := _viewport(Vector2i(220, 140), Viewport.MSAA_4X)
@@ -119,10 +122,10 @@ static func thumb(d: int) -> Texture2D:
 	_aim(cam, Vector3(3.5, 2.3, 4.9), Vector3(0, 0.85, 0.15))
 	vp.add_child(cam)
 	var s := KartShow.new()
-	s.setup(d, false)
+	s.setup(d, false, p)
 	s.steer_amp = 0.0
 	s.process_mode = Node.PROCESS_MODE_DISABLED
 	vp.add_child(s)
 	_thumb_root.add_child(vp)
-	_thumbs[d] = vp.get_texture()
-	return _thumbs[d]
+	_thumbs[key] = vp.get_texture()
+	return _thumbs[key]

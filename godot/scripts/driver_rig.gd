@@ -29,8 +29,8 @@ static var _cache := {}
 ## to the hips, tilt: how far the wheel leans back towards the driver,
 ## lod: beyond this distance from the camera the arms and the steering
 ## wheel are not drawn (too small to see).
-func setup(driver: int, wheel_pos: Vector3, tilt: float, mat: Material, lod: float) -> void:
-	var m := _meshes(driver)
+func setup(driver: int, wheel_pos: Vector3, tilt: float, mat: Material, lod: float, paint := 0) -> void:
+	var m := _meshes(driver, paint)
 	torso = _mi(m.torso, mat, self)
 	head = Node3D.new()
 	head.position = NECK
@@ -68,10 +68,11 @@ static func _mi(mesh: Mesh, mat: Material, parent: Node3D) -> MeshInstance3D:
 
 
 # ================================================================== meshes
-static func _meshes(driver: int) -> Dictionary:
-	if _cache.has(driver):
-		return _cache[driver]
-	var ch: Dictionary = Game.CHARS[driver]
+static func _meshes(driver: int, kart_paint := 0) -> Dictionary:
+	var key := driver * 10 + kart_paint
+	if _cache.has(key):
+		return _cache[key]
+	var ch: Dictionary = Game.look(driver, kart_paint)
 	var suit: Color = ch.accent
 	var trim: Color = ch.color
 	var helm: Color = ch.helmet
@@ -135,7 +136,7 @@ static func _meshes(driver: int) -> Dictionary:
 	k.lathe(MeshKit.at(Vector3.ZERO, Vector3(0, PI / 2.0, 0)), PackedVector2Array([Vector2(0.03, 0.075),
 		Vector2(0.045, 0.05), Vector2(0.05, 0.0)]), trim, MeshKit.GLOSS, 12)
 	out.wheel = k.commit()
-	_cache[driver] = out
+	_cache[key] = out
 	return out
 
 
