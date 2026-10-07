@@ -60,7 +60,7 @@ var TRACKS := [
 		"boxes": [0.1, 0.36, 0.6, 0.84],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 105, "b": 299, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": 0.50},
+		"cut": {"a": 105, "b": 299, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": [0.37, 0.45, 0.48]},
 		# amp: height of the rolling hills, jump_hill: the hill before the ramp, land: rolls of the land around
 		"hills": {"amp": 9.0, "jump_hill": 3.0, "land": 3.5},
 		"theme": {"ground": Color("4caa3c"), "ground2": Color("41983a"),
@@ -82,7 +82,7 @@ var TRACKS := [
 		"boxes": [0.08, 0.3, 0.55, 0.78],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 357, "b": 642, "sa": -1, "sb": -1, "bow": -25, "hand": 0.38, "slow": 0.53},
+		"cut": {"a": 357, "b": 642, "sa": -1, "sb": -1, "bow": -25, "hand": 0.38, "slow": [0.43, 0.48, 0.53]},
 		"hills": {"amp": 11.0, "jump_hill": 3.5, "land": 3.0},
 		"theme": {"ground": Color("d9aa62"), "ground2": Color("c99852"),
 			"ground3": Color("e6bb7c"), "road": Color("594b43"), "kerb_a": Color("d9480f"), "kerb_b": Color("fff1dc"),
@@ -103,7 +103,7 @@ var TRACKS := [
 		"boxes": [0.12, 0.38, 0.62, 0.86],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 276, "b": 518, "sa": -1, "sb": -1, "bow": 0, "hand": 0.25, "slow": 0.69},
+		"cut": {"a": 276, "b": 518, "sa": -1, "sb": -1, "bow": 0, "hand": 0.25, "slow": [0.50, 0.59, 0.69]},
 		"hills": {"amp": 5.5, "jump_hill": 3.0, "land": 2.5},
 		"theme": {"ground": Color("e4ebf4"), "ground2": Color("d5dfec"),
 			"ground3": Color("f4f7fb"), "road": Color("4b5564"), "kerb_a": Color("2a7de1"), "kerb_b": Color("f7fbff"),
@@ -124,7 +124,7 @@ var TRACKS := [
 		"boxes": [0.1, 0.34, 0.58, 0.82],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 213, "b": 398, "sa": 1, "sb": 1, "bow": 0, "hand": 0.38, "slow": 0.48},
+		"cut": {"a": 213, "b": 398, "sa": 1, "sb": 1, "bow": 0, "hand": 0.38, "slow": [0.36, 0.43, 0.48]},
 		"hills": {"amp": 7.0, "jump_hill": 3.0, "land": 4.0},
 		"theme": {"ground": Color("8f9b3e"), "ground2": Color("7f8a35"),
 			"ground3": Color("b0a64c"), "road": Color("4a4a52"), "kerb_a": Color("d9480f"), "kerb_b": Color("f7f3e8"),
@@ -145,7 +145,7 @@ var TRACKS := [
 		"boxes": [0.12, 0.36, 0.6, 0.84],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 309, "b": 612, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": 0.33},
+		"cut": {"a": 309, "b": 612, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": [0.29, 0.31, 0.33]},
 		"hills": {"amp": 6.0, "jump_hill": 3.0, "land": 1.5},
 		"theme": {"ground": Color("4b515d"), "ground2": Color("434955"), "ground3": Color("59606c"),
 			"road": Color("2d3037"), "kerb_a": Color("e63946"), "kerb_b": Color("eef0f4"),
@@ -166,7 +166,7 @@ var TRACKS := [
 		"boxes": [0.1, 0.35, 0.6, 0.85],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 414, "b": 677, "sa": -1, "sb": -1, "bow": 50, "hand": 0.30, "slow": 0.69},
+		"cut": {"a": 414, "b": 677, "sa": -1, "sb": -1, "bow": 50, "hand": 0.30, "slow": [0.53, 0.62, 0.71]},
 		"hills": {"amp": 7.0, "jump_hill": 3.0, "land": 3.0, "island": true},
 		"theme": {"ground": Color("62b14a"), "ground2": Color("55a142"), "ground3": Color("7cc25c"),
 			"road": Color("3c3838"), "kerb_a": Color("ff7b00"), "kerb_b": Color("fff3e0"),

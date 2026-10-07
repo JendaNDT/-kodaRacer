@@ -608,7 +608,7 @@ func update(dt: float, inp: Dictionary) -> void:
 		var slow := (offroad or on_cut) and boost <= 0.0 and star <= 0.0 and not air
 		var cap := mx
 		if slow:
-			cap *= 0.5 if offroad else float(race.track.cut.slow)   # grass, or the shortcut's dirt / sand / ice
+			cap *= 0.5 if offroad else float(race.track.cut.slow[race.diff_idx])   # grass, or the shortcut's dirt / sand / ice
 		if star > 0.0:
 			cap *= 1.18
 		if air:
