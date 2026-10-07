@@ -303,7 +303,8 @@ func _ready() -> void:
 
 
 func is_mobile() -> bool:
-	return OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile")
+	# --mobile: a computer behaves as a phone (tests of the phone's graphics settings)
+	return OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile") or cmd_args.has("mobile")
 
 
 # ---------------------------------------------------------------- helpers

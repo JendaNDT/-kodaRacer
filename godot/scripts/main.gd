@@ -670,6 +670,11 @@ func _soak_tick(delta: float) -> void:
 	_soak_t += delta
 	match _soak_phase:
 		"race":
+			# --soak-shot=N: a screenshot in the middle of race N (--soak-shot-menu=N: in the menu after it)
+			if _shot_path != "" and int(Game.cmd_args.get("soak-shot", "-1")) == _soak_n and _soak_t > 8.0 \
+					and _shot_delay > _test_t + 1.0:
+				_soak_mem("shot")
+				_shot_delay = _test_t
 			if race != null and race.results_shown and _soak_t > 3.0:
 				_soak_mem("race")
 				_soak_t = 0.0
@@ -682,6 +687,9 @@ func _soak_tick(delta: float) -> void:
 			elif _soak_t > 240.0:
 				_finish_test(false, "race %d did not finish" % _soak_n)
 		"menu":
+			if _shot_path != "" and int(Game.cmd_args.get("soak-shot-menu", "-1")) == _soak_n and _soak_t > 2.5 \
+					and _shot_delay > _test_t + 1.0:
+				_shot_delay = _test_t
 			if _soak_t > 3.0:
 				_soak_mem("menu")
 				_soak_n += 1
