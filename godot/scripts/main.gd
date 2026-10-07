@@ -198,23 +198,26 @@ func _ready() -> void:
 			_start_cup_round()
 		return
 	if a.has("cutcal"):
-		# finds each shortcut's slowdown so that it loses about 6 % to the
-		# road without a turbo (to put into Game.TRACKS)
+		# finds each shortcut's slowdown on every difficulty so that it loses
+		# about 6 % to the road without a turbo (to put into Game.TRACKS)
 		menu.visible = false
 		Game.settings.driver = 0         # Turbo Tonda, balanced (not saved)
 		for ti in Game.TRACKS.size():
 			Game.settings.track = ti
-			var lo := 0.3
-			var hi := 0.95
-			var road := _cut_run(ti, "road", 0.0)
-			for it in 7:
-				var mid := (lo + hi) * 0.5
-				var tc := _cut_run(ti, "cut", mid)
-				if tc > road * 1.06:
-					lo = mid
-				else:
-					hi = mid
-			print("CUTCAL \"%s\": slow %.2f" % [Game.TRACKS[ti].id, (lo + hi) * 0.5])
+			var found: Array[String] = []
+			for d in Game.DIFFS.size():
+				var lo := 0.2
+				var hi := 0.95
+				var road := _cut_run(ti, "road", 0.0, d)
+				for it in 8:
+					var mid := (lo + hi) * 0.5
+					var tc := _cut_run(ti, "cut", mid, d)
+					if tc > road * 1.06:
+						lo = mid
+					else:
+						hi = mid
+				found.append("%.2f" % ((lo + hi) * 0.5))
+			print("CUTCAL \"%s\": slow [%s]" % [Game.TRACKS[ti].id, ", ".join(found)])
 		get_tree().quit()
 		return
 	if a.has("cuttest"):
@@ -225,6 +228,7 @@ func _ready() -> void:
 		menu.visible = false
 		Game.settings.driver = 0         # Turbo Tonda, as when the slowdowns were measured (not saved)
 		_cut_checks()
+		Game.settings.diff = 1           # the race: Normal, whatever was saved (not saved)
 		Game.cmd_args["cut-always"] = "1"
 		_ai_track = 0
 		_start_ai_race()
@@ -819,13 +823,15 @@ func _show_fx(what: String) -> void:
 ## One drive through the stretch with the shortcut on track ti, alone:
 ## "road", "cut", "cut+turbo" or "cut+star"; slow > 0 overrides the
 ## shortcut's slowdown. Returns the time.
-func _cut_run(ti: int, how: String, slow: float) -> float:
+func _cut_run(ti: int, how: String, slow: float, diff: int) -> float:
 	Game.settings.track = ti
+	Game.settings.diff = diff            # not saved
+	seed(1234)                           # the same luck every time (from the start): comparable times
 	start_offline(1)
 	var r := race
 	r.paused = true
 	r._go()
-	seed(1234)                           # the same luck every time: comparable times
+	seed(1234)
 	var k: Kart = r.locals[0]
 	for o in r.karts:
 		if o != k:
@@ -838,9 +844,10 @@ func _cut_run(ti: int, how: String, slow: float) -> float:
 	var tr := r.track
 	if tr.cut.is_empty():
 		return INF
-	var keep: float = tr.cut.slow
+	tr.line_now()                        # the autopilot on the racing line from the first metre
+	var keep: float = tr.cut.slow[diff]
 	if slow > 0.0:
-		tr.cut.slow = slow
+		tr.cut.slow[diff] = slow
 	var a := int(tr.cut.a)
 	_put(k, a - 50, 0.0)
 	k.speed = k.max_speed() * 0.95
@@ -860,10 +867,10 @@ func _cut_run(ti: int, how: String, slow: float) -> float:
 			starred = true
 		r._step(Game.SIM_DT)
 		t += Game.SIM_DT
-	tr.cut.slow = keep
+	tr.cut.slow[diff] = keep
 	var used := k.cut_uses > 0
 	if (how == "road" and used) or (how != "road" and not used) or k.lap != 1:
-		_check("%s %s" % [tr.def.id, how], false, "(shortcut used %d times, lap %d)" % [k.cut_uses, k.lap])
+		_check("%s %s %s" % [tr.def.id, Game.DIFFS[diff].name, how], false, "(shortcut used %d times, lap %d)" % [k.cut_uses, k.lap])
 	return t
 
 
@@ -873,14 +880,16 @@ func _cut_checks() -> void:
 		if tr.cut.is_empty():
 			_check("%s has a shortcut" % tr.def.id, false)
 			continue
-		var times := {}
-		for how in ["road", "cut", "cut+turbo", "cut+star"]:
-			times[how] = _cut_run(ti, how, 0.0)
-		print("CUT %s: road %.2f s, shortcut %.2f s, with a turbo %.2f s, with the star %.2f s" % [
-			tr.def.id, times.road, times.cut, times["cut+turbo"], times["cut+star"]])
-		_check("%s: the shortcut alone does not pay" % tr.def.id, times.cut > times.road * 0.97)
-		_check("%s: with a turbo it does" % tr.def.id, times["cut+turbo"] < times.road)
-		_check("%s: with the star it does" % tr.def.id, times["cut+star"] < times.road)
+		for d in Game.DIFFS.size():      # every difficulty: the karts' speed changes the balance
+			var times := {}
+			for how in ["road", "cut", "cut+turbo", "cut+star"]:
+				times[how] = _cut_run(ti, how, 0.0, d)
+			var id := "%s %s" % [tr.def.id, Game.DIFFS[d].name]
+			print("CUT %s: road %.2f s, shortcut %.2f s, with a turbo %.2f s, with the star %.2f s" % [
+				id, times.road, times.cut, times["cut+turbo"], times["cut+star"]])
+			_check("%s: the shortcut alone does not pay" % id, times.cut > times.road * 0.97)
+			_check("%s: with a turbo it does" % id, times["cut+turbo"] < times.road)
+			_check("%s: with the star it does" % id, times["cut+star"] < times.road)
 
 
 ## --cuttest, second part: a race on each track with everybody on the shortcut every lap.

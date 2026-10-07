@@ -764,9 +764,12 @@ func _build_cut(pts: PackedVector2Array, a: int, b: int, sa: float, sb: float, k
 		var pj := project(cx_[k], cz_[k], a if cs[k] < total * 0.5 else b)
 		if absf(float(pj[1])) > Game.HW + Game.KERB:
 			off_m += cs[k] - cs[k - 1]
-	var slow := clampf(off_m / maxf(1.1 * span_m - (total - off_m), 1.0), 0.3, 0.75)
+	# one per difficulty (Easy / Normal / Hard): the faster the karts, the more
+	# the path's tight bends and poor grip cost, so one number cannot fit all
+	var guess := clampf(off_m / maxf(1.1 * span_m - (total - off_m), 1.0), 0.3, 0.75)
+	var slow: Array = [guess, guess, guess]
 	if def.get("cut", {}).has("slow"):
-		slow = float(def.cut.slow)       # measured by --cutcal (entry, bends and all)
+		slow = (def.cut.slow as Array).duplicate()   # measured by --cutcal (entry, bends and all)
 	cut = {"a": a, "b": b, "sa": sa, "sb": sb, "m": m, "x": cx_, "z": cz_, "tx": ctx, "tz": ctz, "y": cy, "s": cs,
 		"len": total, "arc_a": a * step, "arc_span": span_m, "kind": kind,
 		"slow": slow, "grip": float(kd.grip), "color": kd.color}

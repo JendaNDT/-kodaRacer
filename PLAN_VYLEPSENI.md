@@ -168,7 +168,8 @@ dnes (měřeno časy kol v testech) a mistrovství i Wi-Fi projdou.
 > **Výsledek:** každá trať má jednu zkratku. Místo pro ni najde nástroj `--trackinfo --findcuts`: úsek silnice
 > 180 m až skoro půl kola, ne přes start a cíl, rampu ani otazníky, cesta 45–72 % délky úseku, aspoň 3 m od cizích
 > bariér, bez zatáček ostřejších než poloměr 15 m. Výsledek je uložený v `Game.TRACKS` (`cut`), hra ho jen postaví.
-> Zpomalení na každé zkratce změřil `--cutcal` tak, aby bez turba prohrála asi o 6 %. Motokára na zkratce má
+> Zpomalení na každé zkratce změřil `--cutcal` pro každou obtížnost zvlášť tak, aby bez turba prohrála asi o 6 %
+> (na Lehké jezdí motokáry pomaleji, zatáčky silnice je tolik nebrzdí, a zkratka proto musí brzdit víc). Motokára na zkratce má
 > vlastní stav (`on_cut`), její místo v kole se přepočítá na přeskočený úsek, takže pořadí i kola sedí. U silnice
 > leží zkratka na povrchu silnice, takže najetí ani sjetí nevyhodí motokáru do vzduchu. Počítač zkratku vezme jen
 > s turbem nebo hvězdou (Lehká 25 %, Střední 60 %, Těžká 90 %) a turbo pustí, až je na ní srovnaný.

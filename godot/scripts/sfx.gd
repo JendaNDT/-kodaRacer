@@ -186,11 +186,14 @@ func _noise(b: PackedFloat32Array, start: float, dur: float, kind: int, f0: floa
 	var n := int(dur * RATE)
 	var low := 0.0
 	var band := 0.0
+	# its own dice: the music is built on another thread and must not move
+	# the race's random numbers (the same luck every time in tests)
+	var rng := RandomNumberGenerator.new()
 	for i in n:
 		var t := float(i) / n
 		var fc := f0 if f1 <= 0.0 else f0 * pow(f1 / f0, t)
 		var k := 2.0 * sin(PI * minf(fc, RATE * 0.24) / RATE)
-		var x := randf() * 2.0 - 1.0
+		var x := rng.randf() * 2.0 - 1.0
 		low += k * band
 		var high := x - low - 1.0 * band
 		band += k * high
