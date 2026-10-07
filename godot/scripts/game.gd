@@ -145,7 +145,7 @@ var TRACKS := [
 		"boxes": [0.12, 0.36, 0.6, 0.84],
 		# the shortcut, found by --trackinfo --findcuts: road samples a → b, sides, bow, curve handles;
 		# slow: top speed on it (× normal) measured by --cutcal so it loses ~6 % without a turbo
-		"cut": {"a": 309, "b": 612, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": [0.29, 0.31, 0.33]},
+		"cut": {"a": 309, "b": 612, "sa": -1, "sb": -1, "bow": 0, "hand": 0.38, "slow": [0.33, 0.37, 0.40]},
 		"hills": {"amp": 6.0, "jump_hill": 3.0, "land": 1.5},
 		"theme": {"ground": Color("4b515d"), "ground2": Color("434955"), "ground3": Color("59606c"),
 			"road": Color("2d3037"), "kerb_a": Color("e63946"), "kerb_b": Color("eef0f4"),

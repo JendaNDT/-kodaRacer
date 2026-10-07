@@ -173,9 +173,9 @@ dnes (měřeno časy kol v testech) a mistrovství i Wi-Fi projdou.
 > vlastní stav (`on_cut`), její místo v kole se přepočítá na přeskočený úsek, takže pořadí i kola sedí. U silnice
 > leží zkratka na povrchu silnice, takže najetí ani sjetí nevyhodí motokáru do vzduchu. Počítač zkratku vezme jen
 > s turbem nebo hvězdou (Lehká 25 %, Střední 60 %, Těžká 90 %) a turbo pustí, až je na ní srovnaný.
-> **Test `--cuttest` (úsek se zkratkou, Turbo Tonda):** bez turba 3–6 % pomaleji než silnice, s turbem
-> o 4–19 % rychleji, s hvězdou o 19–47 % rychleji. Závod se zkratkou každé kolo počítá kola správně na všech tratích,
-> po Wi-Fi klient zkratku vidí.
+> **Test `--cuttest` (úsek se zkratkou, Turbo Tonda, všechny tři obtížnosti):** bez turba 5–7 % pomaleji než silnice,
+> s turbem o 4–20 % rychleji, s hvězdou o 15–53 % rychleji. Na žádné zkratce plnou rychlostí s hvězdou motokára
+> nevyletí. Závod se zkratkou každé kolo počítá kola správně na všech tratích, po Wi-Fi klient zkratku vidí.
 
 
 **Nápad:** na každé trati jedna zkratka. Mezera v bariéře, za ní prašná cesta přes trávu, písek nebo sníh a dál zpátky
