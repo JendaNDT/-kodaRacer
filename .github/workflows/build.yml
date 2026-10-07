@@ -154,6 +154,23 @@ jobs:
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log
 
+      - name: Test – balloon battle over Wi-Fi with 120 ms delay each way (the client sees the host's battle, a third player leaves in the middle)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --nettest=host --battle --arena=0 --wait-players=3 --timeout=280 > bhost.log 2>&1 &
+          sleep 3
+          ~/godot-bin/godot --headless --path godot -- --nettest=client --fake-lag=120 --fake-jitter=20 --leave-at=20 --timeout=280 > bleaver.log 2>&1 &
+          ~/godot-bin/godot --headless --path godot -- --nettest=client --fake-lag=120 --fake-jitter=20 --timeout=280 > bclient.log 2>&1 || true
+          wait || true
+          grep -h "TEST\|PREDICTION\|CLIENT SAW\|CLIENT FELT\|BATTLE STATE\|HOST\|LEAVES" bhost.log bleaver.log bclient.log
+          if grep -hE "SCRIPT ERROR|Parse Error" bhost.log bleaver.log bclient.log; then exit 1; fi
+          grep -q "BATTLE STATE" bhost.log
+          [ "$(grep 'BATTLE STATE' bhost.log)" = "$(grep 'BATTLE STATE' bclient.log)" ] || { echo "the client saw a different battle than the host"; exit 1; }
+          grep -q "HOST TAKEOVER.*: ok" bhost.log
+          grep "CLIENT FELT" bclient.log | grep -q '"finish": 2' || { echo "the client's player never felt the end of the battle"; exit 1; }
+          grep -q "TEST PASS" bhost.log
+          grep -q "TEST PASS" bleaver.log
+          grep -q "TEST PASS.*back in the lobby" bclient.log
+
       - name: Test – finding games on the network
         run: |
           ~/godot-bin/godot --headless --path godot -- --nettest=host --timeout=20 > disc-host.log 2>&1 &

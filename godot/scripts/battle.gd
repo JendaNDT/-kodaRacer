@@ -17,6 +17,7 @@ var over := false
 var end_time := 0.0
 var outs: Array = []           # karts that lost their last balloon, first one out first
 var pops: Array = []           # every balloon lost: [time, victim, by] (tests, results)
+var seen_pop := 0              # Wi-Fi client: the last pop (its number) the host sent
 var fast_music := false
 
 const AHEAD := [0.0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.45, -1.45, 1.95, -1.95, 2.6, -2.6]
@@ -103,8 +104,12 @@ func _end() -> void:
 
 
 ## Best first: those still in by balloons, then balloons popped; then those
-## out, the last one out first.
+## out, the last one out first. A Wi-Fi client keeps the host's order.
 func standings() -> Array:
+	if race.mode == Race.Mode.CLIENT:
+		var arr: Array = race.karts.duplicate()
+		arr.sort_custom(func(a: Kart, b: Kart) -> bool: return a.rank < b.rank)
+		return arr
 	var still := alive()
 	still.sort_custom(func(a: Kart, b: Kart) -> bool:
 		if a.balloons != b.balloons:

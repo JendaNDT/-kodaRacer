@@ -5,7 +5,7 @@ extends Node3D
 ## it follows hills and banked corners, flies off the ramp (never off a
 ## crest) and can do a trick in the air for a turbo on landing.
 
-const SNAP_FIELDS := 36
+const SNAP_FIELDS := 41
 const CORR_RATE := 9.0       # how fast a predicted kart eases into the host's position (1/s)
 const CORR_SNAP := 4.0       # a bigger difference (m) is not eased, the kart moves there at once
 const TRICK_TIME := 0.42    # one barrel roll
@@ -864,23 +864,26 @@ func ground_y() -> float:
 
 
 # ================================================================== network
-func pack(out: PackedFloat32Array, o: int) -> void:
-	out[o] = x; out[o + 1] = z; out[o + 2] = heading; out[o + 3] = speed
-	out[o + 4] = slip; out[o + 5] = steer; out[o + 6] = spin; out[o + 7] = spin_total
-	out[o + 8] = hop; out[o + 9] = hop_max; out[o + 10] = hop_h; out[o + 11] = boost
-	out[o + 12] = star
-	out[o + 13] = drift_dir * (drift_level + 1) if drift_active else 0.0
-	out[o + 14] = lap; out[o + 15] = s; out[o + 16] = rank; out[o + 17] = 1.0 if finished else 0.0
-	out[o + 18] = finish_time; out[o + 19] = item * 10 + item_n; out[o + 20] = roulette
-	out[o + 21] = last_lap; out[o + 22] = wrong_t
-	out[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0) + (8 if on_cut else 0)
-	out[o + 24] = y; out[o + 25] = trick
+func pack(buf: PackedFloat32Array, o: int) -> void:
+	buf[o] = x; buf[o + 1] = z; buf[o + 2] = heading; buf[o + 3] = speed
+	buf[o + 4] = slip; buf[o + 5] = steer; buf[o + 6] = spin; buf[o + 7] = spin_total
+	buf[o + 8] = hop; buf[o + 9] = hop_max; buf[o + 10] = hop_h; buf[o + 11] = boost
+	buf[o + 12] = star
+	buf[o + 13] = drift_dir * (drift_level + 1) if drift_active else 0.0
+	buf[o + 14] = lap; buf[o + 15] = s; buf[o + 16] = rank; buf[o + 17] = 1.0 if finished else 0.0
+	buf[o + 18] = finish_time; buf[o + 19] = item * 10 + item_n; buf[o + 20] = roulette
+	buf[o + 21] = last_lap; buf[o + 22] = wrong_t
+	buf[o + 23] = (1 if offroad else 0) + (2 if braking else 0) + (4 if air else 0) + (8 if on_cut else 0) + (16 if out else 0)
+	buf[o + 24] = y; buf[o + 25] = trick
 	# the rest lets a Wi-Fi client carry on simulating its own kart from here
-	out[o + 26] = vy; out[o + 27] = drift_charge; out[o + 28] = boost_mul; out[o + 29] = air_t
-	out[o + 30] = invuln; out[o + 31] = bump_cd
-	out[o + 32] = (1 if drift_prev else 0) + (2 if tricked else 0)
-	out[o + 33] = ack
-	out[o + 34] = shield; out[o + 35] = shrink
+	buf[o + 26] = vy; buf[o + 27] = drift_charge; buf[o + 28] = boost_mul; buf[o + 29] = air_t
+	buf[o + 30] = invuln; buf[o + 31] = bump_cd
+	buf[o + 32] = (1 if drift_prev else 0) + (2 if tricked else 0)
+	buf[o + 33] = ack
+	buf[o + 34] = shield; buf[o + 35] = shrink
+	# the balloon battle (Etapa I): the host alone decides these
+	buf[o + 36] = balloons; buf[o + 37] = pops
+	buf[o + 38] = out_at.x; buf[o + 39] = out_at.y; buf[o + 40] = out_at.z
 
 
 func unpack(d: PackedFloat32Array, o: int) -> void:
@@ -912,6 +915,9 @@ func unpack(d: PackedFloat32Array, o: int) -> void:
 	tricked = f2 & 2 != 0
 	ack = int(d[o + 33])
 	shield = d[o + 34]; shrink = d[o + 35]
+	balloons = int(d[o + 36]); pops = int(d[o + 37])
+	out = fl & 16 != 0
+	out_at = Vector3(d[o + 38], d[o + 39], d[o + 40])
 	last_s = s
 	if race.arena != null:
 		return
