@@ -531,7 +531,9 @@ func load_settings() -> void:
 	# -1 = not chosen yet: phones start on Střední, computers on Vysoká
 	if int(settings.quality) < 0:
 		settings.quality = 1 if is_mobile() else 2
-	settings.quality = clampi(int(settings.quality), 0, Gfx.NAMES.size() - 1)
+	if int(settings.quality) > 2:
+		settings.quality = 1             # a test level of 1.16.0's trial build: back to Střední
+	settings.quality = clampi(int(settings.quality), 0, 2)
 	settings.show_fps = bool(settings.show_fps)
 	if typeof(settings.records) != TYPE_DICTIONARY:
 		settings.records = {}

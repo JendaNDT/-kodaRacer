@@ -115,7 +115,7 @@ static func thumb(d: int, p := 0) -> Texture2D:
 		return _thumbs[key]
 	if _thumb_root == null or not is_instance_valid(_thumb_root):
 		return null
-	var vp := _viewport(Vector2i(220, 140), Viewport.MSAA_4X)
+	var vp := _viewport(Vector2i(220, 140), Viewport.MSAA_DISABLED if Game.is_mobile() else Viewport.MSAA_4X)
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var cam := Camera3D.new()
 	cam.fov = 34.0

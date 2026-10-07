@@ -7,7 +7,7 @@ extends RefCounted
 
 enum { LOW, MEDIUM, HIGH }
 
-const NAMES := ["Nízká", "Střední", "Vysoká", "Test: bez vyhlazení", "Test: bez stínů", "Test: bez záře"]
+const NAMES := ["Nízká", "Střední", "Vysoká"]
 
 const LEVELS := [
 	{	# Nízká – slower phones
@@ -17,22 +17,18 @@ const LEVELS := [
 		"shadow_dist": 0.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.0,
 	},
 	{	# Střední – default on phones
-		"msaa": Viewport.MSAA_2X, "scale_pc": 1.0, "scale_mobile": 0.75,
+		"msaa": Viewport.MSAA_2X, "scale_pc": 1.0, "scale_mobile": 0.85,
 		"particles": 0.75, "foliage": 0.75, "skids": 360, "kart_lod": 16.0, "crowd": 0.65,
 		"shadows": true, "glow": true, "ssao": false, "weather": 0.6,
 		"shadow_dist": 55.0, "shadow_splits": 2, "shadow_size": 2048, "shadow_filter": 0, "boost": 1.8,
 	},
 	{	# Vysoká – default on computers
-		"msaa": Viewport.MSAA_4X, "scale_pc": 1.0, "scale_mobile": 0.9,
+		"msaa": Viewport.MSAA_4X, "scale_pc": 1.0, "scale_mobile": 1.0,
 		"particles": 1.0, "foliage": 1.0, "skids": 700, "kart_lod": 32.0, "crowd": 1.0,
 		"shadows": true, "glow": true, "ssao": true, "weather": 1.0,
 		"shadow_dist": 85.0, "shadow_splits": 4, "shadow_size": 4096, "shadow_filter": 4, "boost": 1.8,
 	},
 ]
-
-## DOČASNĚ (hledání chyby, kdy na telefonu na Střední po prvním závodě
-## zmizí 3D grafika): Střední s jednou věcí vypnutou. Po opravě pryč.
-const TESTS := [{"msaa": Viewport.MSAA_DISABLED}, {"shadows": false}, {"glow": false}]
 
 
 static func default_level() -> int:
@@ -40,7 +36,7 @@ static func default_level() -> int:
 
 
 static func level() -> int:
-	return clampi(int(Game.settings.quality), LOW, NAMES.size() - 1)
+	return clampi(int(Game.settings.quality), LOW, HIGH)
 
 
 static func level_name() -> String:
@@ -48,10 +44,7 @@ static func level_name() -> String:
 
 
 static func _val(key: String) -> Variant:
-	var l := level()
-	if l >= LEVELS.size():
-		return TESTS[l - LEVELS.size()].get(key, LEVELS[MEDIUM][key])
-	return LEVELS[l][key]
+	return LEVELS[level()][key]
 
 
 ## Cycles Nízká → Střední → Vysoká → Nízká and saves the choice.
@@ -62,11 +55,13 @@ static func cycle() -> int:
 
 
 static func msaa() -> Viewport.MSAA:
-	var m: Viewport.MSAA = _val("msaa")
-	# 4× MSAA is too heavy for phones even on the top level
-	if Game.is_mobile() and m == Viewport.MSAA_4X:
-		return Viewport.MSAA_2X
-	return m
+	# Never on phones: with MSAA, once a race's 3D view was freed and a new
+	# one made, phones (Samsung and others, from 1.16.0 found by Jenda)
+	# drew the next views black or as noise. Without it they stay fine;
+	# the higher render scale on phones makes up for the edges.
+	if Game.is_mobile():
+		return Viewport.MSAA_DISABLED
+	return _val("msaa")
 
 
 ## Fraction of the screen resolution the 3D view is rendered at.
