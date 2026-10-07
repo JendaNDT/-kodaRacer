@@ -264,6 +264,12 @@ func _build_sounds() -> void:
 		_tone(b, i * 0.05, 0.09, mtof(76 + steps[i]), 0, W.SQUARE, 0.16)
 	sounds.star = _to_stream(b)
 	b = _buf(0.4); _tone(b, 0, 0.12, 784, 0, W.SQUARE, 0.28); _tone(b, 0.12, 0.22, 1047, 0, W.SQUARE, 0.28); sounds.lap = _to_stream(b)
+	# a reward won (Etapa F): a rising fanfare
+	b = _buf(0.95)
+	for i in 4:
+		_tone(b, i * 0.11, 0.5 - i * 0.06, [523, 659, 784, 1047][i], 0, W.SQUARE, 0.2)
+	_tone(b, 0.44, 0.48, 1568, 0, W.TRI, 0.22)
+	sounds.unlock = _to_stream(b)
 	b = _buf(0.7)
 	var fl := [67, 72, 76, 79, 84]
 	for i in fl.size():

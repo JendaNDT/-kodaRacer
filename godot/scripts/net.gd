@@ -24,8 +24,9 @@ signal peer_left(id: int)
 var version := String(ProjectSettings.get_setting("application/config/version", "1.0.0"))
 var active := false
 var is_host := false
-var players := {}      # peer id -> {"name": String, "driver": int}
-var track := 0
+var players := {}      # peer id -> {"name": String, "driver": int, "paint": int}
+var track := 0         # 0..5; with `mirror` the race runs on its mirrored version
+var mirror := false
 var diff := 1
 var cup_mode := false  # the lobby is set to a championship over all tracks
 var cup := {}          # host: the championship being driven {round, points, roster, diff}
@@ -67,7 +68,7 @@ func my_id() -> int:
 
 
 # ---------------------------------------------------------------- session
-func host(name: String, driver: int) -> Error:
+func host(name: String, driver: int, paint := 0) -> Error:
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(PORT, MAX_PLAYERS - 1)
@@ -79,9 +80,10 @@ func host(name: String, driver: int) -> Error:
 	active = true
 	is_host = true
 	in_race = false
-	players = {1: {"name": name, "driver": driver}}
+	players = {1: {"name": name, "driver": driver, "paint": paint}}
 	track = int(Game.settings.track)
 	diff = int(Game.settings.diff)
+	mirror = bool(Game.settings.mirror)
 	_udp = PacketPeerUDP.new()
 	_udp.set_broadcast_enabled(true)
 	_bcast_t = 0.0
@@ -89,7 +91,7 @@ func host(name: String, driver: int) -> Error:
 	return OK
 
 
-func join(ip: String, name: String, driver: int) -> Error:
+func join(ip: String, name: String, driver: int, paint := 0) -> Error:
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(ip.strip_edges(), PORT)
@@ -100,7 +102,7 @@ func join(ip: String, name: String, driver: int) -> Error:
 	multiplayer.multiplayer_peer = peer
 	active = true
 	is_host = false
-	_pending = {"name": name, "driver": driver}
+	_pending = {"name": name, "driver": driver, "paint": paint}
 	return OK
 
 
@@ -266,7 +268,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 
 func _on_connected() -> void:
-	_register.rpc_id(1, String(_pending.get("name", "Hráč")), int(_pending.get("driver", 0)))
+	_register.rpc_id(1, String(_pending.get("name", "Hráč")), int(_pending.get("driver", 0)), int(_pending.get("paint", 0)))
 	joined.emit()
 
 
@@ -281,14 +283,15 @@ func _on_server_gone() -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _register(pname: String, driver: int) -> void:
+func _register(pname: String, driver: int, paint: int) -> void:
 	if not is_host:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if players.size() >= MAX_PLAYERS or in_race:
 		_rejected.rpc_id(id, "Hra je plná nebo už závod běží.")
 		return
-	players[id] = {"name": pname.substr(0, 16), "driver": _free_driver(driver, id)}
+	var d := _free_driver(driver, id)
+	players[id] = {"name": pname.substr(0, 16), "driver": d, "paint": paint if d == driver else 0}
 	_sync_lobby()
 
 
@@ -299,28 +302,35 @@ func _rejected(reason: String) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func _request_driver(driver: int) -> void:
+func _request_driver(driver: int, paint: int) -> void:
 	if not is_host:
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if players.has(id):
-		players[id].driver = _free_driver(driver, id)
-		_sync_lobby()
+		_set_driver(id, driver, paint)
 
 
-func set_my_driver(d: int) -> void:
+func _set_driver(id: int, driver: int, paint: int) -> void:
+	var d := _free_driver(driver, id)
+	players[id].driver = d
+	players[id].paint = paint if d == driver else 0
+	_sync_lobby()
+
+
+## Driver and paint come from the player's own game (what they have won).
+func set_my_driver(d: int, paint := 0) -> void:
 	if is_host:
-		players[1].driver = _free_driver(d, 1)
-		_sync_lobby()
+		_set_driver(1, d, paint)
 	elif active:
-		_request_driver.rpc_id(1, d)
+		_request_driver.rpc_id(1, d, paint)
 
 
-func set_track(t: int, d: int) -> void:
+func set_track(t: int, d: int, m := mirror) -> void:
 	if not is_host:
 		return
 	track = t
 	diff = d
+	mirror = m
 	_sync_lobby()
 
 
@@ -338,24 +348,22 @@ func _free_driver(want: int, id: int) -> int:
 			taken[int(players[pid].driver)] = true
 	if not taken.has(want):
 		return want
-	for i in Game.CHARS.size():
-		if not taken.has(i):
-			return i
-	return want
+	return Game.free_driver(taken.keys())
 
 
 func _sync_lobby() -> void:
 	lobby_changed.emit()
 	if is_host and active:
-		_lobby.rpc(players, track, diff, cup_mode)
+		_lobby.rpc(players, track, diff, cup_mode, mirror)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _lobby(p: Dictionary, t: int, d: int, cm: bool) -> void:
+func _lobby(p: Dictionary, t: int, d: int, cm: bool, m: bool) -> void:
 	players = p
 	track = t
 	diff = d
 	cup_mode = cm
+	mirror = m
 	lobby_changed.emit()
 
 
@@ -369,11 +377,12 @@ func start_race() -> void:
 		for r in first:
 			pts[int(r.driver)] = 0
 		cup = {"round": clampi(int(Game.cmd_args.get("cup-start", "0")), 0, Game.TRACKS.size() - 1), "points": pts,
-			"roster": first, "diff": diff}
+			"roster": first, "diff": diff, "mirror": mirror}
 	if not cup.is_empty():
-		_launch(int(cup.round), int(cup.diff), cup.roster, {"round": cup.round, "points": cup.points, "diff": cup.diff})
+		_launch(Game.race_track(int(cup.round), bool(cup.mirror)), int(cup.diff), cup.roster,
+			{"round": cup.round, "points": cup.points, "diff": cup.diff, "mirror": cup.mirror})
 	else:
-		_launch(track, diff, _new_roster(), {})
+		_launch(Game.race_track(track, mirror), diff, _new_roster(), {})
 
 
 ## Host, after a championship race: add the points, then the next track
@@ -428,11 +437,12 @@ func _new_roster() -> Array:
 	var used := {}
 	for pid in players.keys():
 		var pl: Dictionary = players[pid]
-		humans.append({"driver": int(pl.driver), "human": true, "peer": int(pid), "name": String(pl.name)})
+		humans.append({"driver": int(pl.driver), "paint": int(pl.get("paint", 0)), "human": true, "peer": int(pid),
+			"name": String(pl.name)})
 		used[int(pl.driver)] = true
 	humans.shuffle()
 	var ai: Array = []
-	for i in Game.CHARS.size():
+	for i in Game.open_drivers():     # the computer drivers: what the host has won
 		if not used.has(i):
 			ai.append({"driver": i, "human": false, "peer": 0, "name": ""})
 	ai.shuffle()

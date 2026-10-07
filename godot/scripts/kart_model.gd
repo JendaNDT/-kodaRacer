@@ -1,6 +1,6 @@
 class_name KartModel
 extends RefCounted
-## The six karts, one per driver, generated from rounded shapes (MeshKit).
+## The seven karts, one per driver (each in up to three paints), generated from rounded shapes (MeshKit).
 ## Only the look differs: every kart drives exactly as before.
 ##
 ## Kart space: +Z forward, +Y up, origin on the ground in the middle.
@@ -28,31 +28,34 @@ const AFT := Vector3(0, 0, -1)
 static var _cache := {}
 
 
-static func get_model(driver: int) -> Dictionary:
-	if not _cache.has(driver):
-		var m := _build(driver, 1.0)
-		var lo := _build(driver, 0.5)
+static func get_model(driver: int, paint := 0) -> Dictionary:
+	var key := driver * 10 + paint
+	if not _cache.has(key):
+		var m := _build(driver, paint, 1.0)
+		var lo := _build(driver, paint, 0.5)
 		m.body_low = lo.body
 		m.front_low = lo.front_mesh
 		m.rear_low = lo.rear_mesh
-		_cache[driver] = m
-	return _cache[driver]
+		_cache[key] = m
+	return _cache[key]
 
 
 ## detail < 1 builds the simpler version shown on karts far from the camera.
-static func _build(d: int, detail: float) -> Dictionary:
-	var ch: Dictionary = Game.CHARS[d]
+static func _build(d: int, paint: float, detail: float) -> Dictionary:
+	var ch: Dictionary = Game.look(d, int(paint))
 	var kit := MeshKit.new()
 	kit.detail = detail
+	kit.shiny = ch.get("shiny", false)
 	var num := d + 1
 	var m: Dictionary
-	match d % 6:
+	match d:
 		0: m = _formula(kit, ch, num)
 		1: m = _bubble(kit, ch, num)
 		2: m = _sports(kit, ch, num)
 		3: m = _buggy(kit, ch, num)
 		4: m = _tractor(kit, ch, num)
-		_: m = _arrow(kit, ch, num)
+		5: m = _arrow(kit, ch, num)
+		_: m = _roadster(kit, ch, num)
 	# steering column from the wheel down into the dashboard
 	var w: Vector3 = m.wheel
 	var axis := Vector3(0.0, -sin(float(m.tilt)), cos(float(m.tilt)))
@@ -507,3 +510,54 @@ static func _arrow(kit: MeshKit, ch: Dictionary, num: int) -> Dictionary:
 	_loft_numbers(kit, dart, 2.3, 0.1, 0.45, num, 0.15)
 	return {"front": front, "rear": rear, "seat": seat, "wheel": seat + Vector3(0, 0.4, 0.55), "tilt": 0.66,
 		"exhaust": ex, "size": Vector2(2.6, 4.4), "top": 2.05}
+
+
+# ================================================================== 7: Profesor Píst – vintage roadster (secret)
+static func _roadster(kit: MeshKit, ch: Dictionary, num: int) -> Dictionary:
+	var c: Color = ch.color
+	var a: Color = ch.accent
+	var front := _axle(0.96, 1.3, 0.44, 0.26, "whitewall", SHINE, a)
+	var rear := _axle(1.0, -1.0, 0.48, 0.3, "whitewall", SHINE, a)
+	var seat := Vector3(0, 0.66, -0.5)
+	# long bonnet, open cockpit and a boat tail, an accent line along the top
+	var stripe := func(ang: float, _z: float, _p: Vector3) -> Color:
+		return a if absf(ang - PI / 2.0) < 0.16 else c
+	var hull := [[-2.05, 0.74, 0.04, 0.04, 0.04], [-1.75, 0.74, 0.36, 0.26, 0.24], [-1.1, 0.72, 0.56, 0.32, 0.3],
+		[-0.3, 0.7, 0.6, 0.3, 0.3], [0.5, 0.76, 0.5, 0.3, 0.3], [1.3, 0.8, 0.44, 0.3, 0.28], [1.82, 0.8, 0.4, 0.28, 0.27]]
+	kit.loft(I, hull, stripe, MeshKit.GLOSS, 2.7, 20)
+	# chrome grille with dark slats, round lamps on a bar
+	kit.rbox(_t(Vector3(0, 0.8, 1.86)), Vector3(0.74, 0.58, 0.08), 0.05, SHINE, MeshKit.CHROME, 1)
+	for k in 5:
+		kit.rbox(_t(Vector3(-0.24 + 0.12 * k, 0.8, 1.905)), Vector3(0.05, 0.46, 0.02), 0.01, INK, MeshKit.MATTE, 0)
+	kit.tube(I, Vector3(-0.62, 0.98, 1.72), Vector3(0.62, 0.98, 1.72), 0.025, SHINE, MeshKit.CHROME, 6)
+	for sx in [-1.0, 1.0]:
+		kit.sphere(_t(Vector3(0.64 * sx, 1.0, 1.7)), Vector3(0.15, 0.15, 0.13), SHINE, MeshKit.CHROME, 12, 6)
+		_lamp(kit, Vector3(0.64 * sx, 1.0, 1.825), FWD, 0.11)
+	# bonnet louvres
+	for sx in [-1.0, 1.0]:
+		for k in 4:
+			kit.rbox(_t(Vector3(0.43 * sx, 0.84, 0.7 + 0.16 * k)), Vector3(0.02, 0.14, 0.06), 0.01, a, MeshKit.GLOSS, 0)
+	# cycle fenders over all four wheels, a running board between them
+	for ax in [front, rear]:
+		for sx in [-1.0, 1.0]:
+			kit.arch(_t(Vector3(float(ax.x) * sx, float(ax.r), float(ax.z))), float(ax.r) + 0.05, float(ax.r) + 0.12,
+				float(ax.w) + 0.12, 0.25, PI - 0.15, c, MeshKit.GLOSS, 12)
+	for sx in [-1.0, 1.0]:
+		kit.rbox(_t(Vector3(0.78 * sx, 0.36, 0.15)), Vector3(0.3, 0.05, 1.5), 0.02, DARK, MeshKit.MATTE, 1)
+	# little windscreen in a chrome frame, padded rim round the cockpit
+	kit.rbox(_t(Vector3(0, 1.17, 0.12), Vector3(-0.25, 0, 0)), Vector3(0.82, 0.3, 0.025), 0.02, Color("9cc4ea"), MeshKit.CHROME, 1)
+	kit.tube(I, Vector3(-0.42, 1.03, 0.16), Vector3(-0.42, 1.31, 0.08), 0.02, SHINE, MeshKit.CHROME, 5)
+	kit.tube(I, Vector3(0.42, 1.03, 0.16), Vector3(0.42, 1.31, 0.08), 0.02, SHINE, MeshKit.CHROME, 5)
+	kit.tube(I, Vector3(-0.42, 1.31, 0.08), Vector3(0.42, 1.31, 0.08), 0.02, SHINE, MeshKit.CHROME, 5)
+	kit.rbox(_t(Vector3(0, 1.0, -0.98)), Vector3(0.7, 0.1, 0.12), 0.05, Color("5a2a1a"), MeshKit.SATIN, 1)
+	# side exhaust running back along the right flank
+	kit.tube(I, Vector3(0.62, 0.68, 1.0), Vector3(0.68, 0.5, 0.6), 0.06, SHINE, MeshKit.CHROME, 8)
+	kit.tube(I, Vector3(0.68, 0.5, 0.6), Vector3(0.68, 0.5, -1.4), 0.065, SHINE, MeshKit.CHROME, 8)
+	var ex := Vector3(0.3, 0.55, -2.0)
+	_pipes(kit, -1.7, ex, 0.06)
+	for sx in [-1.0, 1.0]:
+		_lamp(kit, Vector3(0.3 * sx, 0.86, -1.86), AFT, 0.06, TAIL)
+	_side_numbers(kit, Vector3(0.6, 0.78, -1.05), num, 0.2)
+	_roundel(kit, MeshKit.decal(Vector3(0, 1.075, -1.5), Vector3(0, 1.0, -0.2), AFT), num, 0.15)
+	return {"front": front, "rear": rear, "seat": seat, "wheel": seat + Vector3(0, 0.46, 0.5), "tilt": 0.72,
+		"exhaust": ex, "size": Vector2(2.5, 4.5), "top": 2.0}

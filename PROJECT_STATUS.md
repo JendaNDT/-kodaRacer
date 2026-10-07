@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 06. 10. 2026 (verze 1.15.0)*
+*Naposled aktualizováno: 07. 10. 2026 (verze 1.16.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.15.0 (zkratky), pak poslední etapa F z `PLAN_VYLEPSENI.md`: odemykání (verze 1.16.0).** Etapy A–E jsou hotové.
+**Vyzkoušet verzi 1.16.0 (odemykání) na telefonu a na Windows.** Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -34,6 +34,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Etapa C (verze 1.13.0):** čtyři nové předměty: modrá raketa (letí k vedoucímu), olej (louže na 20 s), blesk (ostatní se na 6 s zmenší a dají se přejet) a štít (bublina pohltí jeden zásah). Nové ikony v hracím automatu, zvuky a efekty, nová tabulka šancí podle pořadí, počítačoví soupeři je používají a vyhýbají se louži. Fungují i po Wi-Fi. Test `--itemtest`.
 - **Etapa D (verze 1.14.0):** chytřejší soupeři: ideální stopa každé trati, rychlost podle zatáček před sebou, předjíždění, drift v dlouhých zatáčkách s turbem, povahy jezdců (Zuzka vráží, Pepa pozdě brzdí, Máňa startuje, Karel šetří předměty, Bára driftuje), taktika s předměty a jemnější dohánění na Těžké. Na Těžké jsou soupeři bez otazníků o 4,8 % rychlejší. První turbo z driftu teď stačí po kratším driftu (pro všechny). Test `--aitest`.
 - **Etapa E (verze 1.15.0):** zkratka na každé trati (hlína, písek, led, štěrk) s cedulí, kolíky po okrajích, mezerou v bariéře a čárkovaně na minimapě. Bez turba se nevyplatí, s turbem nebo hvězdou ano. Počítač ji bere s turbem nebo hvězdou. Kola, pořadí i Wi-Fi fungují. Test `--cuttest`.
+- **Etapa F (verze 1.16.0):** obrazovka Sbírka (poháry pro každou obtížnost, odměny odemčené i zamčené s návodem), oznámení „ODEMČENO!“ s fanfárou po mistrovství a časovce. Odměny: druhý a zlatý lak pro každého jezdce, zrcadlové tratě (zlatý pohár na Střední), tajný 7. jezdec Profesor Píst s retro roadsterem (zlatý pohár na Těžké, pak jede 6 ze 7 jezdců), duch vývojáře v časovce (časovka pod limitem na všech tratích). Lak a zrcadlové tratě fungují i po Wi-Fi. Test `--unlocktest`, test vzletů i na zrcadlových tratích.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -43,6 +44,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 ### Backlog (později)
 - Hra přes internet (ne jen stejná Wi-Fi): server nebo relay
 - Rozdělená obrazovka i v síťové hře (2 hráči na jednom zařízení + další přes Wi-Fi)
+- Další odměny do Sbírky (třeba nové tratě nebo předměty za poháry ze zrcadlových tratí)
 - Vlastní podpisový klíč a verze pro Google Play
 
 ## 🐛 Známé bugy
@@ -84,6 +86,10 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Povahy soupeřů jsou data (`Game.PERSONA`)**, ne zvláštní kód: rychlost v zatáčkách a na rovinkách, chuť driftovat, vrážení, starty, trpělivost s předměty a jak moc se drží stopy. Pozor: při přidání jezdce (etapa F) je potřeba přidat i jeho povahu.
 - **Měření soupeřů:** `--aitest --diff=2 --no-items` projede všechny tratě jen s počítačem a vypíše průměrné kolo, turba z driftu a zaseknutí. Bez otazníků, protože předměty dělají v časech velkou náhodu.
 - **Zkratka je druhá cesta, ne díra v trati (od verze 1.15.0):** motokára je buď na silnici, nebo na zkratce (`Kart.on_cut`). Na zkratce se její místo v kole přepočítá úměrně na přeskočený úsek silnice (`Track.cut_arc`), takže kola, pořadí, minimapa i počítač fungují beze změny. Bariéry, stromy a okolí se zkratce vyhnou samy, protože `Track.near` zkratku počítá jako cestu.
+- **Zrcadlová trať je jen jiné číslo trati (od verze 1.16.0):** tratě 0–5 jsou normální, 6–11 tytéž zrcadlově (`Game.track_def` otočí body a strany zkratky, zbytek se dopočítá sám). Číslo trati proto stačí pro závod, Wi-Fi, rekordy i duchy a nic dalšího se posílat nemusí. Výšky, rampa i zkratka vycházejí přesně zrcadlově (`--unlocktest` to kontroluje bod po bodu). Jen okolí trati (stromy, kopce v dálce) se generuje znovu, takže vypadá trochu jinak.
+- **Laky jsou „vzhled“ jezdce:** `Game.look(jezdec, lak)` vrátí jezdce s jinými barvami a modely motokár, jezdců i obrázky v menu se ukládají zvlášť pro každý lak. Zlatý lak dělá lesklé díly lesklé jako kov (`MeshKit.shiny`). Jízdní vlastnosti se nemění.
+- **Co kdo vyhrál, si pamatuje každé zařízení samo** (`settings.unlocks`). Po Wi-Fi se posílá jen jezdec, lak a zrcadlové tratě hostitele. Počítačoví soupeři se vybírají z jezdců, které má odemčené hostitel.
+- **Duch vývojáře je nahraný předem:** `--devghosts` nechá autopilota s nejvyšší dovedností projet časovku na každé trati a obtížnosti a uloží to komprimovaně do `godot/ghosts/` (asi 400 kB). Limit pro odemčení je jeho čas + 10 %. Na zrcadlové trati se duch zrcadlí. Export soubory přibalí (`include_filter`). Při změně tratí nebo jízdy je potřeba ho nahrát znovu.
 - **Zkratky se hledají jen jednou, nástrojem:** `--trackinfo --findcuts` projde tisíce kandidátů (asi 5 s). Výsledek se uloží do `Game.TRACKS` a hra ho jen postaví, takže telefon při startu nečeká. `--cutcal` pak změří zpomalení každé zkratky, a to pro každou obtížnost zvlášť (`"slow": [Lehká, Střední, Těžká]`): čím rychlejší motokáry, tím víc je brzdí ostré zatáčky a horší přilnavost zkratky, takže jedno číslo nesedí na všechny. Při změně tvaru trati nebo rychlostí je potřeba obojí spustit znovu.
 - **Povrch zkratky musí být plynulý:** u silnice leží zkratka na jejím (klopeném) povrchu přesně pod motokárou. Dřív se to dělalo jen na prvních a posledních 40 bodech cesty, a kde cesta vedla u silnice déle, vznikl zlom, na kterém motokára s hvězdou vyletěla (město). Teď má každý bod cesty uložený nejbližší kus silnice (`cut.road_at`). `--cuttest` projede každou zkratku po celé šířce plnou rychlostí s hvězdou stejně jako `Kart._vertical` a hlídá, aby země nikde neklesla víc než o 60 % hranice pro vzlet.
 - **Testy s časy musí mít vždy stejnou „náhodu“:** `--cuttest` nastaví obtížnost i jezdce sám (nezáleží na tom, co je v počítači uložené) a před startem zavolá `seed(1234)`. Hudba se skládá ve vlákně a šum pro bicí si proto bere vlastní generátor náhody (`RandomNumberGenerator`), jinak by na pozadí přeházela náhodu závodu.

@@ -57,6 +57,31 @@ class Bar:
 		draw_rect(Rect2(Vector2.ZERO, Vector2(size.x * value, size.y)), color)
 
 
+## A little trophy: gold, silver or bronze when won, a dim outline when not.
+class CupIcon:
+	extends Control
+	var color := Color.WHITE
+	var won := false
+	func _init(c: Color, w: bool) -> void:
+		color = c
+		won = w
+		custom_minimum_size = Vector2(34, 40)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var c := color if won else Color(1, 1, 1, 0.13)
+		var w := size.x
+		var h := size.y
+		var bowl := PackedVector2Array([Vector2(w * 0.18, h * 0.08), Vector2(w * 0.82, h * 0.08), Vector2(w * 0.74, h * 0.4),
+			Vector2(w * 0.58, h * 0.55), Vector2(w * 0.42, h * 0.55), Vector2(w * 0.26, h * 0.4)])
+		draw_colored_polygon(bowl, c)
+		draw_arc(Vector2(w * 0.17, h * 0.24), w * 0.13, PI * 0.5, PI * 1.5, 10, c, 2.5)
+		draw_arc(Vector2(w * 0.83, h * 0.24), w * 0.13, -PI * 0.5, PI * 0.5, 10, c, 2.5)
+		draw_rect(Rect2(w * 0.45, h * 0.55, w * 0.1, h * 0.22), c)
+		draw_rect(Rect2(w * 0.26, h * 0.77, w * 0.48, h * 0.15), c)
+		if won:
+			draw_line(Vector2(w * 0.32, h * 0.14), Vector2(w * 0.38, h * 0.36), Color(1, 1, 1, 0.55), 2.0)
+
+
 class TrackThumb:
 	extends Control
 	var idx := 0
@@ -149,6 +174,7 @@ func show_screen(name: String) -> void:
 		"setup": _setup()
 		"wifi": _wifi()
 		"lobby": _lobby()
+		"collection": _collection()
 	scroll.scroll_vertical = keep_scroll
 	_place_cursor.call_deferred(keep, keep_scroll)
 
@@ -183,7 +209,7 @@ func _buttons(n: Node, out: Array[Button] = []) -> Array[Button]:
 ## Android back button / Escape in the menu.
 func back() -> bool:
 	match screen:
-		"setup", "wifi":
+		"setup", "wifi", "collection":
 			show_screen("home")
 			return true
 		"lobby":
@@ -223,11 +249,12 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 	for i in Game.CHARS.size():
 		var ch: Dictionary = Game.CHARS[i]
 		var sel := i == selected
+		var locked := not Game.driver_open(i)
 		var b := Button.new()
 		b.toggle_mode = true
 		b.button_group = group
 		b.button_pressed = sel
-		b.disabled = i in taken
+		b.disabled = i in taken or locked
 		b.custom_minimum_size = Vector2(120, 186)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var v := UI.vbox(3)
@@ -238,12 +265,13 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 		v.offset_right = -10
 		v.offset_bottom = -9
 		b.add_child(v)
-		v.add_child(_kart_picture(i, 64.0))
+		v.add_child(_kart_picture(i, 64.0, Game.paint_of(i)))
 		var nl := UI.label(ch.name, 17, UI.on_tile(sel, UI.PAPER), UI.bold_font)
 		nl.clip_text = true
 		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		v.add_child(nl)
-		var tl := UI.label(ch.tag if not (i in taken) else "obsazeno", 14, UI.on_tile(sel, UI.MUTED))
+		var tl := UI.label("zamčený" if locked else (ch.tag if not (i in taken) else "obsazeno"), 14,
+			UI.GOLD if locked else UI.on_tile(sel, UI.MUTED))
 		tl.clip_text = true
 		v.add_child(tl)
 		for st in [["RYCH", ch.speed], ["ZRYCH", ch.accel], ["OVL", ch.handling]]:
@@ -261,10 +289,10 @@ func _driver_grid(selected: int, taken: Array, on_pick: Callable) -> GridContain
 
 
 ## The kart's 3D picture (a colour dot where nothing can be rendered).
-func _kart_picture(d: int, height: float) -> Control:
-	var tex := KartStage.thumb(d)
+func _kart_picture(d: int, height: float, paint := 0) -> Control:
+	var tex := KartStage.thumb(d, paint)
 	if tex == null:
-		var ch: Dictionary = Game.CHARS[d]
+		var ch: Dictionary = Game.look(d, paint)
 		return Swatch.new(ch.color, ch.helmet)
 	var tr := TextureRect.new()
 	tr.texture = tex
@@ -275,7 +303,7 @@ func _kart_picture(d: int, height: float) -> Control:
 	return tr
 
 
-func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false) -> GridContainer:
+func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false, mirror := false) -> GridContainer:
 	var g := UI.grid(3, 8)
 	var group := ButtonGroup.new()
 	for i in Game.TRACKS.size():
@@ -296,16 +324,17 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false
 		v.offset_right = -8
 		v.offset_bottom = -8
 		b.add_child(v)
-		v.add_child(TrackThumb.new(i, i == selected))
+		var rt := Game.race_track(i, mirror)
+		v.add_child(TrackThumb.new(rt, i == selected))
 		var tn := UI.label(td.name, 16, UI.on_tile(sel, UI.PAPER), UI.bold_font)
 		tn.clip_text = true
 		tn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		v.add_child(tn)
-		var rec: Dictionary = Game.settings.records.get(Game.record_key(i, int(Game.settings.diff)), {})
+		var rec: Dictionary = Game.settings.records.get(Game.record_key(rt, int(Game.settings.diff)), {})
 		var info := UI.label("Rekord " + Game.fmt_time(rec.total) if rec.has("total") else td.desc, 13,
 			UI.on_tile(sel, UI.GOLD if rec.has("total") else UI.MUTED))
 		if trial:
-			var tt := Game.trial_best(i, int(Game.settings.diff))
+			var tt := Game.trial_best(rt, int(Game.settings.diff))
 			info = UI.label("Časovka " + Game.fmt_time(tt) if tt > 0.0 else "Zatím bez času", 13,
 				UI.on_tile(sel, UI.GO if tt > 0.0 else UI.MUTED))
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -338,6 +367,61 @@ func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer
 	return h
 
 
+## Paints of one driver: the own colours, the second paint (any cup with
+## this driver) and gold (a gold cup on Hard); not yet won ones are locked.
+func _paint_row(d: int, selected: int, on_pick: Callable) -> HBoxContainer:
+	var h := UI.hbox(8)
+	var group := ButtonGroup.new()
+	for p in Game.PAINT_NAMES.size():
+		var open := Game.paint_open(d, p)
+		var look := Game.look(d, p)
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = p == selected
+		b.disabled = not open
+		b.custom_minimum_size = Vector2(0, 58)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var row := UI.hbox(8)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		row.offset_left = 10
+		row.offset_right = -8
+		b.add_child(row)
+		var sw := Swatch.new(look.color, look.accent)
+		sw.custom_minimum_size = Vector2(26, 26)
+		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(sw)
+		var l := UI.label(Game.PAINT_NAMES[p] + ("" if open else "\nzamčený"), 14,
+			UI.on_tile(p == selected, UI.PAPER if open else UI.MUTED), UI.bold_font)
+		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(l)
+		if open:
+			b.pressed.connect(func(): on_pick.call(p))
+			b.pressed.connect(func(): Sfx.play("ui", 0.6))
+		h.add_child(b)
+	return h
+
+
+## Normal or mirrored tracks (once won with a gold cup on Normal).
+func _mirror_row(on: bool, enabled: bool, on_pick: Callable) -> HBoxContainer:
+	var h := UI.hbox(8)
+	var group := ButtonGroup.new()
+	for m in 2:
+		var b := Button.new()
+		b.text = ["Normální", "Zrcadlové"][m]
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = on == (m == 1)
+		b.disabled = not enabled and on != (m == 1)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if enabled:
+			b.pressed.connect(func(): on_pick.call(m == 1))
+			b.pressed.connect(func(): Sfx.play("ui", 0.6))
+		h.add_child(b)
+	return h
+
+
 func _wide(b: Button) -> Button:
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_child(b)
@@ -354,6 +438,7 @@ func _home() -> void:
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
 	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
+	_wide(UI.button("Sbírka: poháry a odměny", show_screen.bind("collection")))
 	var row := UI.hbox(8)
 	content.add_child(row)
 	var mute := _small_button(_mute_text())
@@ -409,14 +494,16 @@ func _setup() -> void:
 			show_screen("setup"))
 		modes.add_child(mb)
 	if players == 2 and int(Game.settings.driver2) == int(Game.settings.driver):
-		Game.settings.driver2 = (int(Game.settings.driver) + 1) % Game.CHARS.size()
+		Game.settings.driver2 = Game.free_driver([int(Game.settings.driver)])
 	for p in players:
 		var key := "driver" if p == 0 else "driver2"
 		var other := "driver2" if p == 0 else "driver"
 		var sec := _section("Jezdec" if players == 1 else "Hráč %d – jezdec" % (p + 1))
 		var taken: Array = [int(Game.settings[other])] if players == 2 else []
-		sec.add_child(KartStage.new(int(Game.settings[key]), 170.0 if players == 2 else 200.0))
-		sec.add_child(_driver_grid(int(Game.settings[key]), taken, _pick_driver.bind(key)))
+		var d := int(Game.settings[key])
+		sec.add_child(KartStage.new(d, 170.0 if players == 2 else 200.0, Game.paint_of(d)))
+		sec.add_child(_driver_grid(d, taken, _pick_driver.bind(key)))
+		sec.add_child(_paint_row(d, Game.paint_of(d), _pick_paint.bind(d)))
 	if setup_mode == "cup":
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
 		cs.add_child(_cup_tracks())
@@ -427,13 +514,17 @@ func _setup() -> void:
 		cs.add_child(info)
 	else:
 		var ts := _section("Trať")
-		ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track, setup_mode == "trial"))
+		ts.add_child(_track_grid(int(Game.settings.track), true, _pick_track, setup_mode == "trial",
+			bool(Game.settings.mirror)))
 		if setup_mode == "trial":
 			var info := UI.label("Jedeš sám, bez soupeřů a otazníků, se třemi turby. Proti tobě jede průhledný duch tvé nejlepší jízdy.",
 				16, UI.MUTED)
 			info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			info.custom_minimum_size = Vector2(300, 0)
 			ts.add_child(info)
+	if Game.unlocked("mirror"):
+		var mrs := _section("Tratě")
+		mrs.add_child(_mirror_row(bool(Game.settings.mirror), true, _pick_mirror))
 	var ds := _section("Obtížnost")
 	ds.add_child(_diff_row(int(Game.settings.diff), true, _pick_diff))
 	if setup_mode == "cup":
@@ -451,6 +542,101 @@ func _setup() -> void:
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(go)
 	row.add_child(UI.button("Zpět", show_screen.bind("home")))
+
+
+## Sbírka: the cups won on each difficulty and every reward, won or still
+## locked with what it takes.
+func _collection() -> void:
+	_brand(true)
+	var head := UI.hbox(10)
+	var hl := UI.label("Sbírka", 26, UI.PAPER, UI.bold_font)
+	hl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hl)
+	head.add_child(UI.button("Zpět", show_screen.bind("home")))
+	content.add_child(head)
+	var cs := _section("Poháry v mistrovství")
+	var names := ["Zlatý", "Stříbrný", "Bronzový"]
+	for d in Game.DIFFS.size():
+		var best := Game.cup_best(d)
+		var h := UI.hbox(10)
+		var dl := UI.label("%s · %s" % [Game.DIFFS[d].name, Game.DIFFS[d].cc], 18, UI.PAPER, UI.bold_font)
+		dl.custom_minimum_size = Vector2(170, 0)
+		h.add_child(dl)
+		for place in [3, 2, 1]:
+			h.add_child(CupIcon.new(UI.place_color(place), best > 0 and best <= place))
+		var txt := "zatím bez poháru" if best == 0 or best > 3 else "%s pohár" % names[best - 1]
+		var tl := UI.label(txt, 16, UI.place_color(best) if best > 0 and best <= 3 else UI.MUTED)
+		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(tl)
+		cs.add_child(h)
+	var rs := _section("Odměny")
+	var secret_open := Game.unlocked("secret")
+	_reward(rs, Game.unlocked("mirror"), "Zrcadlové tratě", "Zlatý pohár na Střední nebo Těžké.",
+		"Všech šest tratí otočených zrcadlově. Zapínají se u výběru trati.")
+	_reward(rs, secret_open, Game.unlock_name("secret") if secret_open else "Tajný jezdec", "Zlatý pohár na Těžké.",
+		"Sedmý jezdec s vlastní motokárou. Do závodu jich jede šest.", Game.SECRET if secret_open else -1)
+	var dev_txt := "Časovka pod limitem na všech tratích (na jakékoli obtížnosti)."
+	_reward(rs, Game.unlocked("dev"), Game.unlock_name("dev"), dev_txt,
+		"V časovce jede s tebou rychlý duch vývojáře.")
+	var lim := UI.grid(2, 4)
+	for t in Game.TRACKS.size():
+		var ok := Game.dev_done(t)
+		var d := int(Game.settings.diff)
+		var l := Game.dev_limit(t, d)
+		var tl := UI.label("%s · %s %s" % [Game.TRACKS[t].name, "splněno" if ok else "limit",
+			"" if ok else (Game.fmt_time(l) if l > 0.0 else "–")], 14, UI.GO if ok else UI.MUTED)
+		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		lim.add_child(tl)
+	rs.add_child(lim)
+	var ps := _section("Laky motokár")
+	_text("Druhý lak: jakýkoli pohár s tímto jezdcem. Zlatý lak: zlatý pohár na Těžké s tímto jezdcem.", 15)
+	var g := UI.grid(2, 8)
+	ps.add_child(g)
+	for d in Game.CHARS.size():
+		if not Game.driver_open(d):
+			continue
+		var h := UI.hbox(6)
+		h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(_kart_picture(d, 36.0, Game.paint_of(d)))
+		var v := UI.vbox(0)
+		v.add_child(UI.label(Game.CHARS[d].name, 15, UI.PAPER, UI.bold_font))
+		var row := UI.hbox(6)
+		for p in [1, 2]:
+			var lk := Game.look(d, p)
+			var sw := Swatch.new(lk.color, lk.accent) if Game.paint_open(d, p) else Swatch.new(Color(1, 1, 1, 0.12),
+				Color(1, 1, 1, 0.08))
+			sw.custom_minimum_size = Vector2(20, 20)
+			row.add_child(sw)
+		v.add_child(row)
+		h.add_child(v)
+		g.add_child(h)
+	_wide(UI.button("Zpět", show_screen.bind("home")))
+
+
+## One reward row: name and state, what it takes, what it gives.
+func _reward(parent: Control, open: bool, title: String, how: String, what: String, kart := -1) -> void:
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UI.box(Color(UI.GOLD, 0.12) if open else Color(1, 1, 1, 0.04), 12, 12,
+		Color(UI.GOLD, 0.6) if open else Color(1, 1, 1, 0.08)))
+	var h := UI.hbox(10)
+	box.add_child(UI.margin(h, 14, 10, 14, 10))
+	if kart >= 0:
+		h.add_child(_kart_picture(kart, 46.0, Game.paint_of(kart)))
+	var v := UI.vbox(2)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(v)
+	var top := UI.hbox(8)
+	var tl := UI.label(title, 18, UI.PAPER if open else UI.MUTED, UI.bold_font)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(tl)
+	top.add_child(UI.label("ODEMČENO" if open else "ZAMČENO", 13, UI.GOLD if open else UI.MUTED, UI.bold_font))
+	v.add_child(top)
+	for t in ([what] if open else [how, what]):
+		var l := UI.label(t, 14, UI.MUTED)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(260, 0)
+		v.add_child(l)
+	parent.add_child(box)
 
 
 func _start_setup() -> void:
@@ -528,6 +714,21 @@ func _pick_driver(i: int, key: String) -> void:
 	show_screen(screen)
 
 
+func _pick_paint(p: int, d: int) -> void:
+	Game.set_paint(d, p)
+	if screen == "lobby":
+		Net.set_my_driver(d, p)
+	show_screen(screen)
+
+
+func _pick_mirror(on: bool) -> void:
+	Game.settings.mirror = on
+	Game.save_settings()
+	if screen == "lobby":
+		Net.set_track(Net.track, Net.diff, on)
+	show_screen(screen)
+
+
 func _pick_track(i: int) -> void:
 	Game.settings.track = i
 	Game.save_settings()
@@ -558,8 +759,10 @@ func _wifi() -> void:
 	name_edit.text_changed.connect(_name_changed)
 	ns.add_child(name_edit)
 	var dsec := _section("Jezdec")
-	dsec.add_child(KartStage.new(int(Game.settings.driver), 180.0))
-	dsec.add_child(_driver_grid(int(Game.settings.driver), [], _pick_driver.bind("driver")))
+	var d := int(Game.settings.driver)
+	dsec.add_child(KartStage.new(d, 180.0, Game.paint_of(d)))
+	dsec.add_child(_driver_grid(d, [], _pick_driver.bind("driver")))
+	dsec.add_child(_paint_row(d, Game.paint_of(d), _pick_paint.bind(d)))
 	_wide(UI.button("Založit hru", _host, true))
 	var hs := _section("Hry v síti")
 	_hosts_box = UI.vbox(6)
@@ -606,7 +809,8 @@ func _fill_hosts() -> void:
 
 
 func _host() -> void:
-	var err := Net.host(Game.player_name(), int(Game.settings.driver))
+	var d := int(Game.settings.driver)
+	var err := Net.host(Game.player_name(), d, Game.paint_of(d))
 	if err != OK:
 		set_status("Hru se nepodařilo založit (chyba %d). Zavři jinou běžící kopii hry a zkus to znovu." % err)
 		return
@@ -622,7 +826,8 @@ func _join(ip: String) -> void:
 	Game.settings.host_ip = ip
 	Game.save_settings()
 	set_status("Připojuji se k %s…" % ip)
-	if Net.join(ip, Game.player_name(), int(Game.settings.driver)) != OK:
+	var d := int(Game.settings.driver)
+	if Net.join(ip, Game.player_name(), d, Game.paint_of(d)) != OK:
 		set_status("Připojení se nepodařilo spustit.")
 
 
@@ -647,7 +852,7 @@ func _lobby() -> void:
 		var pl: Dictionary = Net.players[pid]
 		var ch: Dictionary = Game.CHARS[int(pl.driver)]
 		var h := UI.hbox(10)
-		h.add_child(_kart_picture(int(pl.driver), 34.0))
+		h.add_child(_kart_picture(int(pl.driver), 34.0, int(pl.get("paint", 0))))
 		var me := int(pid) == Net.my_id()
 		var nl := UI.label("%s%s" % [pl.name, " (hostitel)" if int(pid) == 1 else ""], 19, UI.GOLD if me else UI.PAPER, UI.bold_font)
 		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -660,8 +865,10 @@ func _lobby() -> void:
 		if int(pid) != Net.my_id():
 			taken.append(int(Net.players[pid].driver))
 	var dsec := _section("Tvůj jezdec")
-	dsec.add_child(KartStage.new(int(mine.get("driver", Game.settings.driver)), 180.0))
-	dsec.add_child(_driver_grid(int(mine.get("driver", Game.settings.driver)), taken, _lobby_driver))
+	var md := int(mine.get("driver", Game.settings.driver))
+	dsec.add_child(KartStage.new(md, 180.0, int(mine.get("paint", 0))))
+	dsec.add_child(_driver_grid(md, taken, _lobby_driver))
+	dsec.add_child(_paint_row(md, int(mine.get("paint", 0)), _pick_paint.bind(md)))
 	# one race or the championship over all tracks (the host decides)
 	var ms := _section("Režim")
 	var modes := UI.hbox(8)
@@ -685,7 +892,11 @@ func _lobby() -> void:
 		cs.add_child(_cup_tracks())
 	else:
 		var ts := _section("Trať")
-		ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track))
+		ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track, false, Net.mirror))
+	# mirrored tracks: the host's choice, if the host has won them
+	if Net.mirror or (Net.is_host and Game.unlocked("mirror")):
+		var mrs := _section("Tratě")
+		mrs.add_child(_mirror_row(Net.mirror, Net.is_host, _pick_mirror))
 	var ds := _section("Obtížnost")
 	ds.add_child(_diff_row(Net.diff, Net.is_host, _lobby_diff))
 	var row := UI.hbox(10)
@@ -704,7 +915,7 @@ func _lobby() -> void:
 func _lobby_driver(i: int) -> void:
 	Game.settings.driver = i
 	Game.save_settings()
-	Net.set_my_driver(i)
+	Net.set_my_driver(i, Game.paint_of(i))
 
 
 func _lobby_track(i: int) -> void:

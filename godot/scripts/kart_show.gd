@@ -4,6 +4,7 @@ extends Node3D
 ## the race, steering idly from side to side, waving while `cheering`.
 
 var driver := 0
+var paint := 0
 var rig: DriverRig
 var front: Array = []
 var cheering := false
@@ -12,15 +13,16 @@ var _wave_left := 0.0
 var _t := 0.0
 
 
-func setup(p_driver: int, blob := true) -> void:
+func setup(p_driver: int, blob := true, p_paint := 0) -> void:
 	driver = p_driver
-	var m := KartModel.get_model(driver)
-	var paint := MeshKit.body_material()
+	paint = p_paint
+	var m := KartModel.get_model(driver, paint)
+	var mat := MeshKit.body_material()
 	var chassis := Node3D.new()
 	add_child(chassis)
 	var shell := MeshInstance3D.new()
 	shell.mesh = m.body
-	shell.set_surface_override_material(0, paint)
+	shell.set_surface_override_material(0, mat)
 	chassis.add_child(shell)
 	var fw: Dictionary = m.front
 	var rw: Dictionary = m.rear
@@ -42,7 +44,7 @@ func setup(p_driver: int, blob := true) -> void:
 	rig = DriverRig.new()
 	rig.position = seat
 	chassis.add_child(rig)
-	rig.setup(driver, wheel - seat, float(m.tilt), paint, 1000.0)
+	rig.setup(driver, wheel - seat, float(m.tilt), mat, 1000.0, paint)
 	if blob:
 		var size: Vector2 = m.size
 		var b := MeshInstance3D.new()

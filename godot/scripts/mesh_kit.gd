@@ -15,6 +15,8 @@ const GLOWS := [1.0, 1.0, 0.0, 0.0, 0.0]
 ## Below 1 every curved shape gets fewer segments and small boxes lose
 ## their rounding: used for the far-away (LOD) version of a kart.
 var detail := 1.0
+## Gold paint: every glossy part shines like polished metal.
+var shiny := false
 
 var _bv := PackedVector3Array()
 var _bn := PackedVector3Array()
@@ -135,6 +137,8 @@ func _tri(t: Transform3D, nb: Basis, fin: int, col: Color, a: Vector3, b: Vector
 		_ln.append(qa); _ln.append(qb); _ln.append(qc)
 		_lc.append(col); _lc.append(col); _lc.append(col)
 		return
+	if shiny and fin == GLOSS:
+		fin = CHROME
 	var uv := Vector2((fin + 0.5) / ROUGH.size(), 0.5)
 	_bv.append(pa); _bv.append(pb); _bv.append(pc)
 	_bn.append(qa); _bn.append(qb); _bn.append(qc)

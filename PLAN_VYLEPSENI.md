@@ -11,7 +11,7 @@ a je v `main`. Mezi etapami se dá zastavit, vyzkoušet hru na telefonu a změni
 | C ✅ | 5 | 1.13.0 | střední | čtyři nové předměty |
 | D ✅ | 7 | 1.14.0 | střední | chytřejší soupeři s vlastní povahou |
 | E ✅ | 8 | 1.15.0 | velká | zkratka na každé trati |
-| F | 6 | 1.16.0 | střední | poháry, odemykání barev, tajný jezdec, zrcadlové tratě |
+| F ✅ | 6 | 1.16.0 | střední | poháry, odemykání barev, tajný jezdec, zrcadlové tratě |
 
 Odemykání (F) je schválně na konci: může pak odemykat i věci z etap C–E.
 
@@ -211,7 +211,22 @@ a čas je s turbem kratší než bez zkratky.
 
 ---
 
-## Etapa F – Odemykání (bod 6)
+## Etapa F – Odemykání (bod 6)  ✅ hotovo (verze 1.16.0)
+
+> **Výsledek:** v menu je nová obrazovka **Sbírka** (poháry pro každou obtížnost, odměny odemčené i zamčené s tím,
+> jak je získat). Po mistrovství nebo časovce, která něco odemkne, se ukáže zlatý rámeček „ODEMČENO!“ s fanfárou.
+> Laky: každý jezdec má druhý lak (jakýkoli pohár s ním) a zlatý lesklý lak (zlatý pohár na Těžké s ním), vybírají
+> se pod jezdci v menu i v lobby a po Wi-Fi je vidí všichni. Tajný 7. jezdec **Profesor Píst** s retro roadsterem
+> z 30. let (chromovaná maska, bílé pneumatiky, lodní záď) a vlastní povahou. Do závodu jede 6 ze 7 jezdců,
+> zamčeného ostatní vidí, ale nevyberou. Zrcadlové tratě jsou tratě číslo 6–11 (všechno zrcadlově, včetně
+> zkratky a rampy), mají vlastní rekordy i duchy a po Wi-Fi je zapíná hostitel. Duch vývojáře: nahrané jízdy
+> autopilota s nejvyšší dovedností pro všech 18 kombinací trati a obtížnosti (`--devghosts`, `godot/ghosts/`),
+> limit pro odemčení je jeho čas + 10 %. V časovce jede jako zlatý průhledný duch, na zrcadlové trati zrcadlově.
+> **Test `--unlocktest`:** 65 kontrol. Vymyšlené poháry odemknou správné věci (a nic navíc), sestava je vždy
+> 6 různých jezdců, zrcadlové tratě sedí bod po bodu na originál (silnice, výšky, zkratka, rampa) a zkratky
+> na nich nevyhazují do vzduchu. Duchové vývojáře jsou na všech tratích a obtížnostech, časovky pod limitem
+> odemknou ducha až na všech šesti tratích. Závod na zrcadlové trati s tajným jezdcem ve zlatém laku jede.
+> Test vzletů projde i na zrcadlových tratích. Wi-Fi test jede na zrcadlové trati a klient vidí zrcadlo i lak hostitele.
 
 **Cíl:** aby mělo smysl vyhrávat poháry a jezdit časovky znovu.
 

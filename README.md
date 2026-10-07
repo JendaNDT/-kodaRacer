@@ -37,8 +37,27 @@ Každý jezdec má vlastní motokáru. Liší se jen vzhledem, jízdní vlastnos
 | 4 | Máňa Motor | buggy s velkými koly a rámem | Akcelerace |
 | 5 | Karel Kolo | traktůrek s komínem | Tahoun |
 | 6 | Bára Brzda | nízká futuristická střela | Zatáčky |
+| 7 | Profesor Píst *(tajný)* | retro roadster z 30. let s chromovanou maskou | Tajný |
+
+Profesor Píst je zamčený, dokud nevyhraješ zlatý pohár na Těžké. Pak je jezdců sedm a do závodu jich jede šest (počítač si vybírá i jeho).
 
 Když jezdce řídí počítač, má každý svou povahu: **Turbo Tonda** jede vyrovnaně, **Zuzka Zběsilá** vráží do soupeřů a předměty použije hned, **Pepa Plyn** brzdí pozdě a na rovinkách je nejrychlejší, **Máňa Motor** má skoro vždy raketový start, **Karel Kolo** jezdí opatrně a předměty si šetří, **Bára Brzda** nejlíp driftuje. Počítač jezdí po ideální stopě (do zatáčky zvenku, vrchol u vnitřní strany, ven zase vně), v dlouhých zatáčkách driftuje pro turbo a předměty používá s rozmyslem: banán a olej si nechá jako ochranu, raketu pošle, až je soupeř blízko. Na Těžké skoro nedohání ani nečeká, výhra tam něco znamená.
+
+## Sbírka a odměny
+
+V hlavním menu je obrazovka **Sbírka**. Ukazuje poháry z mistrovství (bronz, stříbro, zlato) pro každou obtížnost a všechny odměny: co už máš a co je ještě zamčené, i s tím, jak to získat. Když odměnu získáš, ukáže se po závodě zlatý rámeček **ODEMČENO!** s fanfárou.
+
+| Odměna | Jak ji získat |
+| --- | --- |
+| Druhý lak motokáry (pro každého jezdce zvlášť) | jakýkoli pohár v mistrovství s tímto jezdcem |
+| Zlatý lak motokáry (pro každého jezdce zvlášť) | zlatý pohár na Těžké s tímto jezdcem |
+| **Zrcadlové tratě** (všech šest otočených zrcadlově) | zlatý pohár na Střední nebo Těžké |
+| **Tajný jezdec Profesor Píst** | zlatý pohár na Těžké |
+| **Duch vývojáře** v časovce (zlatý průhledný soupeř) | časovka pod limitem na všech šesti tratích (limit je o 10 % pomalejší než duch, najdeš ho ve Sbírce) |
+
+- **Lak** si vybereš pod jezdci při nastavení závodu i v lobby po Wi-Fi. Ostatní hráči tvůj lak uvidí.
+- **Zrcadlové tratě** zapneš přepínačem *Tratě: Normální / Zrcadlové* u výběru trati. Platí pro závod, mistrovství i časovku a po Wi-Fi je zapíná hostitel. Rekordy a duchové se pro zrcadlové tratě ukládají zvlášť.
+- **Tajného jezdce** vidí v lobby i hráči, kteří ho ještě nemají, ale vybrat si ho nemůžou.
 
 ## Tratě
 
@@ -120,7 +139,7 @@ V hlavním menu i v pauze jsou tři tlačítka:
 1. Všichni musí být připojení ke **stejné Wi-Fi**.
 2. Jeden hráč dá **Hra po Wi-Fi → Založit hru**. Na obrazovce uvidí svou adresu, třeba `192.168.1.23`.
 3. Ostatní dají **Hra po Wi-Fi** a hru buď uvidí v seznamu, nebo zadají adresu ručně.
-4. Hostitel vybere trať a obtížnost a spustí závod.
+4. Hostitel vybere trať a obtížnost (a jestli jsou zrcadlové, když je má odemčené) a spustí závod.
 
 Svou motokáru máš pod kontrolou okamžitě, i když je Wi-Fi pomalejší: tvoje zařízení ji počítá samo a hostitel ji jen průběžně neznatelně dorovnává. Srážky, předměty, zásahy, pořadí a cíl dál rozhoduje hostitel, takže po zásahu raketou nebo po banánu se motokára může kousek přesunout.
 
@@ -131,6 +150,7 @@ Na Windows se při prvním založení hry objeví dotaz brány firewall. Povol p
 ## Složky
 
 - `godot/` – hra v Godotu (skripty v `godot/scripts/`, nastavení exportu v `godot/export_presets.cfg`)
+- `godot/ghosts/` – nahrané jízdy ducha vývojáře pro časovku (vyrobí je `--devghosts`)
 - `web/` – původní webový prototyp (`web/index.html`), dá se otevřít v prohlížeči
 - `build/debug.keystore` – testovací podpisový klíč pro APK (heslo `android`). Pro Google Play je potřeba vlastní tajný klíč.
 - `.github/workflows/build.yml` – automatické testy a sestavení APK + EXE

@@ -25,7 +25,25 @@ var CHARS := [
 		"speed": 1.03, "accel": 0.95, "handling": 0.99, "weight": 1.07},
 	{"name": "Bára Brzda", "tag": "Zatáčky", "color": Color("8e5cf6"), "accent": Color("9ef0ff"), "helmet": Color("e0d4ff"),
 		"speed": 1.00, "accel": 1.02, "handling": 1.10, "weight": 0.97},
+	# the secret one (Etapa F): only after a gold cup on Hard
+	{"name": "Profesor Píst", "tag": "Tajný", "color": Color("c3cad6"), "accent": Color("d62839"), "helmet": Color("1d3557"),
+		"speed": 1.03, "accel": 1.03, "handling": 1.03, "weight": 1.02, "secret": true},
 ]
+
+## The second paint of each driver (body, accent, helmet), won with any cup;
+## the gold one is the same for everybody and needs a gold cup on Hard.
+var PAINT2 := [
+	[Color("1f2329"), Color("e63946"), Color("e63946")],
+	[Color("2ec4a6"), Color("ffffff"), Color("c6fff1")],
+	[Color("ff7a1a"), Color("1b2a49"), Color("ffffff")],
+	[Color("1a9fb5"), Color("ffd166"), Color("0b3c49")],
+	[Color("c62828"), Color("f1faee"), Color("ffd166")],
+	[Color("f4f4f8"), Color("8e5cf6"), Color("2b2d42")],
+	[Color("16181d"), Color("ffd166"), Color("c3cad6")],
+]
+const GOLD_PAINT := [Color("e2b13c"), Color("3a2a10"), Color("fff1c1")]
+const PAINT_NAMES := ["Původní lak", "Druhý lak", "Zlatý lak"]
+const SECRET := 6
 
 ## How each driver races when the computer drives (fits the tag in the menu):
 ## corner: speed through bends (late braking > 1), straight: top speed on
@@ -40,6 +58,7 @@ var PERSONA := [
 	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.1, "start": 0.4, "patience": 1.0, "wander": 0.10},    # Máňa Motor: great starts
 	{"corner": 0.97, "straight": 1.00, "drift": 0.85, "aggr": 0.0, "start": 0.0, "patience": 2.0, "wander": 0.03},    # Karel Kolo: careful
 	{"corner": 1.03, "straight": 1.00, "drift": 1.3, "aggr": 0.1, "start": 0.0, "patience": 1.0, "wander": 0.08},     # Bára Brzda: queen of corners
+	{"corner": 1.04, "straight": 1.01, "drift": 1.15, "aggr": 0.3, "start": 0.2, "patience": 1.5, "wander": 0.04},   # Profesor Píst: knows every line
 ]
 
 var DIFFS := [
@@ -238,6 +257,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 var settings := {
 	"driver": 0, "driver2": 1, "track": 0, "diff": 1, "muted": false, "name": "", "host_ip": "", "records": {}, "cups": {}, "trials": {},
 	"quality": -1, "show_fps": false,
+	# Etapa F: what has been won ({key: true}), the paint chosen per driver, mirrored tracks on/off
+	"unlocks": {}, "paints": {}, "mirror": false,
 }
 
 # ---------------------------------------------------------------- input state
@@ -302,7 +323,193 @@ static func fmt_time(t: float) -> String:
 
 
 func record_key(track: int, diff: int) -> String:
-	return "%s_%d" % [TRACKS[track].id, diff]
+	return "%s%s_%d" % [TRACKS[base_track(track)].id, "_z" if is_mirror(track) else "", diff]
+
+
+# ---------------------------------------------------------------- tracks
+## Track numbers: 0..5 the tracks, 6..11 the same ones mirrored (Etapa F).
+## Everything that names a track (races, records, ghosts, Wi-Fi) uses them.
+func track_count() -> int:
+	return TRACKS.size() * 2
+
+
+func base_track(t: int) -> int:
+	return t % TRACKS.size()
+
+
+func is_mirror(t: int) -> bool:
+	return t >= TRACKS.size()
+
+
+## The track to race: the setting's track, mirrored when that is switched on.
+func race_track(base: int, mirror: bool) -> int:
+	return base + (TRACKS.size() if mirror else 0)
+
+
+## The definition a Track is built from; a mirrored one has every point and
+## the shortcut's sides flipped left to right (the rest follows by itself).
+func track_def(t: int) -> Dictionary:
+	var d: Dictionary = TRACKS[base_track(t)]
+	if not is_mirror(t):
+		return d
+	var m := d.duplicate(true)
+	var pts: Array = []
+	for p in d.pts:
+		pts.append(Vector2(-p.x, p.y))
+	m.pts = pts
+	if m.has("cut"):
+		for k in ["sa", "sb", "bow"]:
+			m.cut[k] = -float(m.cut[k])
+	m.name = String(d.name) + " · zrcadlově"
+	m.mirror = true
+	return m
+
+
+# ---------------------------------------------------------------- unlocks (Etapa F)
+func unlocked(key: String) -> bool:
+	return bool(settings.unlocks.get(key, false))
+
+
+## The secret driver can be picked only once won (others still see him).
+func driver_open(d: int) -> bool:
+	return d >= 0 and d < CHARS.size() and (not CHARS[d].get("secret", false) or unlocked("secret"))
+
+
+## The first driver that can be picked and is not in `taken`.
+func free_driver(taken: Array) -> int:
+	for i in CHARS.size():
+		if driver_open(i) and not (i in taken):
+			return i
+	return 0
+
+
+## Drivers the computer may race with: everybody won so far.
+func open_drivers() -> Array:
+	var out: Array = []
+	for i in CHARS.size():
+		if driver_open(i):
+			out.append(i)
+	return out
+
+
+func paint_open(d: int, p: int) -> bool:
+	return p == 0 or unlocked("paint%d_%d" % [p, d])
+
+
+## The paint this player has chosen for driver d (back to the first if not won).
+func paint_of(d: int) -> int:
+	var p := int(settings.paints.get(str(d), 0))
+	return p if p >= 0 and p < PAINT_NAMES.size() and paint_open(d, p) else 0
+
+
+func set_paint(d: int, p: int) -> void:
+	settings.paints[str(d)] = p
+	save_settings()
+
+
+## A driver's colours in a paint: the driver itself with body, accent and
+## helmet swapped (gold also shines like metal: "shiny").
+func look(d: int, p: int) -> Dictionary:
+	var ch: Dictionary = CHARS[d]
+	if p <= 0:
+		return ch
+	var c: Array = PAINT2[d] if p == 1 else GOLD_PAINT
+	var out := ch.duplicate()
+	out.color = c[0]
+	out.accent = c[1]
+	out.helmet = c[2]
+	out.shiny = p == 2
+	return out
+
+
+## What each reward is called (the Collection and "Odemčeno: …").
+func unlock_name(key: String) -> String:
+	if key.begins_with("paint"):
+		var p := int(key.substr(5, 1))
+		var d := int(key.substr(7))
+		return "%s – %s" % [CHARS[d].name, "druhý lak" if p == 1 else "zlatý lak"]
+	match key:
+		"mirror": return "Zrcadlové tratě"
+		"secret": return "Tajný jezdec %s" % CHARS[SECRET].name
+		"dev": return "Duch vývojáře v časovce"
+	return key
+
+
+func _unlock(key: String, out: Array) -> void:
+	if not unlocked(key):
+		settings.unlocks[key] = true
+		out.append(key)
+
+
+## A finished championship: `drivers` are the local players' drivers, place
+## the best of them. Returns what was won just now (saved at once).
+## Any cup: second paint. Gold on Normal or Hard: mirrored tracks. Gold on
+## Hard: the gold paint and the secret driver.
+func award_cup(drivers: Array, diff: int, place: int) -> Array:
+	var out: Array = []
+	save_cup(diff, place)
+	if place <= 3:
+		for d in drivers:
+			_unlock("paint1_%d" % int(d), out)
+	if place == 1 and diff >= 1:
+		_unlock("mirror", out)
+	if place == 1 and diff >= 2:
+		for d in drivers:
+			_unlock("paint2_%d" % int(d), out)
+		_unlock("secret", out)
+	if not out.is_empty():
+		save_settings()
+	return out
+
+
+## The developer's ghost: a fast drive on each track and difficulty, kept
+## with the game (made by --devghosts). On a mirrored track it is mirrored.
+func dev_ghost(t: int, diff: int) -> Dictionary:
+	var path := "res://ghosts/dev_%s_%d.dat" % [TRACKS[base_track(t)].id, diff]
+	if not FileAccess.file_exists(path):
+		return {}
+	var f := FileAccess.open_compressed(path, FileAccess.READ, FileAccess.COMPRESSION_ZSTD)
+	if f == null:
+		return {}
+	var g = f.get_var()
+	if typeof(g) != TYPE_DICTIONARY or not g.has("data"):
+		return {}
+	if is_mirror(t):
+		var d: PackedFloat32Array = (g.data as PackedFloat32Array).duplicate()
+		for i in range(0, d.size(), 6):
+			d[i + 1] = -d[i + 1]          # x
+			d[i + 4] = -d[i + 4]          # heading
+		g.data = d
+	return g
+
+
+## The time trial limit for the developer's ghost: 10 % slower than him
+## (rounded up to half a second); 0 = no ghost for this track.
+func dev_limit(t: int, diff: int) -> float:
+	var g := dev_ghost(base_track(t), diff)
+	return ceilf(float(g.t) * 1.1 * 2.0) / 2.0 if not g.is_empty() else 0.0
+
+
+## Tracks where a time trial (any difficulty) beat the limit.
+func dev_done(t: int) -> bool:
+	for d in DIFFS.size():
+		var lim := dev_limit(t, d)
+		var best := trial_best(t, d)
+		if lim > 0.0 and best > 0.0 and best <= lim:
+			return true
+	return false
+
+
+## After a time trial: all tracks under the limit wins the developer's ghost.
+func award_trial() -> Array:
+	var out: Array = []
+	for t in TRACKS.size():
+		if not dev_done(t):
+			return out
+	_unlock("dev", out)
+	if not out.is_empty():
+		save_settings()
+	return out
 
 
 func player_name() -> String:
@@ -331,9 +538,22 @@ func load_settings() -> void:
 		settings.cups = {}
 	if typeof(settings.trials) != TYPE_DICTIONARY:
 		settings.trials = {}
+	for k in ["unlocks", "paints"]:
+		if typeof(settings[k]) != TYPE_DICTIONARY:
+			settings[k] = {}
+	settings.mirror = bool(settings.mirror) and unlocked("mirror")
+	if not driver_open(int(settings.driver)):
+		settings.driver = 0
+	if not driver_open(int(settings.driver2)) or int(settings.driver2) == int(settings.driver):
+		settings.driver2 = free_driver([int(settings.driver)])
+
+
+var save_off := false      # tests that make up results do not write them down
 
 
 func save_settings() -> void:
+	if save_off:
+		return
 	var cf := ConfigFile.new()
 	for k in settings.keys():
 		cf.set_value("game", k, settings[k])
