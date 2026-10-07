@@ -230,6 +230,13 @@ func _ready() -> void:
 			print("CUTCAL \"%s\": slow [%s]" % [Game.TRACKS[ti].id, ", ".join(found)])
 		get_tree().quit()
 		return
+	if a.has("soaktest"):
+		# race → results → menu again and again (as a player would), the
+		# memory used after each round: it must not keep growing
+		_test_mode = "soak"
+		menu.visible = false
+		_soak_race()
+		return
 	if a.has("unlocktest"):
 		# rewards from made-up championships and time trials, the secret
 		# driver and paints in a race, every mirrored track checked against
@@ -629,8 +636,73 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # ---------------------------------------------------------------- test modes
+var _soak_n := 0
+var _soak_phase := ""
+var _soak_t := 0.0
+var _soak_log: Array = []
+
+
+func _soak_race() -> void:
+	_soak_phase = "race"
+	_soak_t = 0.0
+	if _soak_n % 2 == 1 and race != null:
+		_restart()                       # "Jet znovu" from the results
+	else:
+		start_offline(1)
+	race.fast = int(Game.cmd_args.get("fast", "8"))
+	for k in race.locals:
+		k.autopilot = true
+
+
+func _soak_mem(tag: String) -> void:
+	var vm := Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0
+	var tm := Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0
+	var bm := Performance.get_monitor(Performance.RENDER_BUFFER_MEM_USED) / 1048576.0
+	var row := "SOAK %d %-6s video %.1f MB, textures %.1f MB, buffers %.1f MB, objects %d, nodes %d, resources %d, orphans %d" % [
+		_soak_n, tag, vm, tm, bm, Performance.get_monitor(Performance.OBJECT_COUNT),
+		Performance.get_monitor(Performance.OBJECT_NODE_COUNT), Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT),
+		Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)]
+	print(row)
+	_soak_log.append([tag, vm])
+
+
+func _soak_tick(delta: float) -> void:
+	_soak_t += delta
+	match _soak_phase:
+		"race":
+			if race != null and race.results_shown and _soak_t > 3.0:
+				_soak_mem("race")
+				_soak_t = 0.0
+				if _soak_n % 2 == 1:
+					_soak_phase = "menu"
+					_on_race_menu()
+				else:
+					_soak_n += 1
+					_soak_race()
+			elif _soak_t > 240.0:
+				_finish_test(false, "race %d did not finish" % _soak_n)
+		"menu":
+			if _soak_t > 3.0:
+				_soak_mem("menu")
+				_soak_n += 1
+				if _soak_n >= int(Game.cmd_args.get("rounds", "8")):
+					var first := 0.0
+					var last := 0.0
+					for r in _soak_log:
+						if r[0] == "menu":
+							if first == 0.0:
+								first = r[1]
+							last = r[1]
+					_finish_test(last - first < 40.0, "video memory in the menu %.0f → %.0f MB" % [first, last])
+				else:
+					menu.visible = false
+					_soak_race()
+
+
 func _process(delta: float) -> void:
 	_update_fps(delta)
+	if _test_mode == "soak":
+		_soak_tick(delta)
 	if Game.cmd_args.has("pause-at") and race != null and _test_t < float(Game.cmd_args["pause-at"]) and _test_t + delta >= float(Game.cmd_args["pause-at"]):
 		race.toggle_pause()   # screenshots of the pause menu
 	if Game.cmd_args.has("fx") and race != null and _test_t < float(Game.cmd_args.get("fx-at", "6")) and _test_t + delta >= float(Game.cmd_args.get("fx-at", "6")):
