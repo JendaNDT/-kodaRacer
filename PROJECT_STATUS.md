@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 07. 10. 2026 (verze 1.16.1)*
+*Naposled aktualizováno: 07. 10. 2026 (verze 1.18.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.16.1 na telefonu: několik závodů za sebou na Střední (oprava černé obrazovky), pak odemykání.** Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
+**Vyzkoušet verzi 1.18.0: bitvu s balónky na telefonu i ve dvou na počítači (obě arény, všechny obtížnosti) a k tomu z etapy G naklánění a vibrace na telefonu. Pak etapa I – bitva po Wi-Fi (`PLAN_VYLEPSENI_2.md`).** Etapy G a H jsou hotové a otestované v cloudu; jestli je bitva zábavná (délka, síla soupeřů, velikost arén), ukáže až hraní.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -36,6 +36,8 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Etapa E (verze 1.15.0):** zkratka na každé trati (hlína, písek, led, štěrk) s cedulí, kolíky po okrajích, mezerou v bariéře a čárkovaně na minimapě. Bez turba se nevyplatí, s turbem nebo hvězdou ano. Počítač ji bere s turbem nebo hvězdou. Kola, pořadí i Wi-Fi fungují. Test `--cuttest`.
 - **Etapa F (verze 1.16.0):** obrazovka Sbírka (poháry pro každou obtížnost, odměny odemčené i zamčené s návodem), oznámení „ODEMČENO!“ s fanfárou po mistrovství a časovce. Odměny: druhý a zlatý lak pro každého jezdce, zrcadlové tratě (zlatý pohár na Střední), tajný 7. jezdec Profesor Píst s retro roadsterem (zlatý pohár na Těžké, pak jede 6 ze 7 jezdců), duch vývojáře v časovce (časovka pod limitem na všech tratích). Lak a zrcadlové tratě fungují i po Wi-Fi. Test `--unlocktest`, test vzletů i na zrcadlových tratích.
 - **Oprava 1.16.1:** na telefonech (Samsung i jiné) se na Střední po prvním závodě 3D grafika rozbila: v menu šum, v závodě černo. Zkušební sestavení s volbami „bez vyhlazení / bez stínů / bez záře“ ukázalo, že za to může vyhlazování hran (MSAA). Na telefonu je teď vypnuté a 3D obraz se kreslí ve vyšším rozlišení (Střední 85 %, Vysoká 100 %). Nový test paměti `--soaktest` (závod → výsledky → menu dokola) a přepínač `--mobile` (počítač se chová jako telefon).
+- **Etapa G (verze 1.17.0):** zatáčení nakláněním telefonu (Ovládání: volant / naklánění, citlivost Jemná / Střední / Ostrá, mrtvá zóna 3°, vyhlazení, vyrovnání na konci odpočtu a tlačítkem Vyrovnat v pauze, správný směr i po otočení telefonu na druhou stranu), malý volantík místo dotykového volantu. Vibrace telefonu nebo herního ovladače při nárazu, zásahu, dopadu, turbu, změně jisker driftu a v cíli, nejvýš 10× za vteřinu, tlačítko Vibrace v menu i v pauze, fungují i po Wi-Fi. Testy `--tilttest` a `--hapticstest` (i pro dva hráče).
+- **Etapa H (verze 1.18.0):** bitva s balónky. Dvě nové arény postavené kódem: Náměstí (kašna, květináče se stromy, nízké zídky, čtyři rampy, domy s radnicí, diváci u zdi) a Ledový stadion (kluzký led uprostřed, sněhové valy, tři rampy, tribuny s diváky, stožáry světel, sněžení). Motokáry v aréně jezdí volně po ploše. Tři balónky nad každou motokárou, zásah stojí balónek, pak aspoň 2 s ochrana (balónky blikají), kdo nemá balónky, vypadne a sleduje ostatní, konec po 3 minutách nebo když zbyde jeden. Vlastní šance na předměty, raketa k nejbližšímu soupeři vpředu, modrá k tomu s nejvíc balónky. Počítačoví soupeři v aréně (cíl, pronásledování, otazníky, opatrnost s posledním balónkem, povahy jezdců). HUD s balónky, časem a soupeři, minimapa arény, výsledky a stupně vítězů za zdí arény. V menu „Bitva s balónky“ (1 nebo 2 hráči), ve Sbírce bitevní lak za vítězství na Těžké. Test `--battletest`.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -107,6 +109,15 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Stopy smyku bez per-frame práce:** pevný kruh pásů (MultiMesh), mizení počítá grafická karta. Počet podle kvality v `gfx.gd`.
 - **Fyzika s pevným krokem 1/120 s**: stejné chování na rychlém PC i pomalém telefonu.
 - **Na mobilu plyn automaticky**: palcem se nedá zároveň držet plyn a driftovat.
+- **Naklánění = otočení volantu (od verze 1.17.0):** úhel se počítá jako otočení telefonu kolem osy displeje (`Tilt.wheel`), část gravitace kolmo do displeje má váhu jen 0,5. Držený normálně (nakloněný dozadu 30–60°) tak telefon zatáčí skoro přesně podle otočení, a když ho někdo drží naplocho, řídí se tím, jak moc klesá pravý okraj, a nezačne cukat. Čistě „o kolik klesá pravý okraj“ by u telefonu nakloněného dozadu o 45° chtělo otočit telefonem o 40 % víc.
+- **Otočený telefon řeší hra, ne Godot:** Godot 4.7.1 přepočítá osy senzoru jen při změně nastavení Androidu, a otočení o 180° žádnou změnu neohlásí. Displej se ale vždy otočí spodkem k zemi, takže gravitace v něm vždy míří dolů. Když míří jasně nahoru (víc než 3 m/s²), jsou osy o půl otáčky pozadu a `Tilt` si je otočí.
+- **Senzory jsou zapnuté pořád** (`input_devices/sensors/enable_gravity` a `enable_accelerometer` v `project.godot`): Godot je na Androidu registruje jen při startu, za běhu zapnout nejdou. Spotřeba proti 3D hře je zanedbatelná.
+- **Aréna je jeden „tvar“ (od verze 1.18.0):** všechno pevné v aréně (okraj, kašna, květináče, zídky, sněhové valy, vysoké boky ramp) popisuje jedna funkce `Arena.space(x, z)`, jak daleko je to k nejbližší pevné věci. Z ní se drží motokáry uvnitř (klouzají po stěně jako po bariérách na trati, se stejným nárazem), z ní počítač „vidí“ před sebe, rozmísťují se otazníky a banány a z ní se pozná, kdy raketa narazí. Nízké věci mají výšku, takže motokára ve vzduchu nad nimi přeletí. Zem je rovná kromě ramp: klín, který stoupá k hraně a za ní spadne, takže se z ramp vzlétá stejně jako na trati (schod 25 cm).
+- **Bitva je závod v aréně, ne nová hra:** `Race` dál řídí motokáry, předměty, kamery, HUD a výsledky; `race.arena` je místo `race.track` a `race.battle` (`battle.gd`) přidává pravidla, pořadí, cíle raket a počítačové soupeře. Kde se bitva liší, ptá se závod `battle`. Každý zásah jde přes `Race.hit_kart` (kdo, čím, kdo to způsobil), takže balónek se bere na jednom místě a test může ověřit, že každý zásah stál právě jeden.
+- **Vypadlá motokára odjede z arény:** schová se a zaparkuje daleko mimo (5 km), takže do ní nic nenarazí a žádný předmět ji netrefí, a nemusely se kvůli tomu měnit všechny smyčky přes motokáry. Kde vypadla, si pamatuje kvůli efektu.
+- **Rakety v aréně míří hůř než na trati:** sledují jen soupeře do 38 m, kterého mají před sebou, a otáčejí se pomaleji (2,6 místo 4,5 rad/s); otazníky se v aréně obnovují za 6 s (na trati 2,5 s). Bitva šesti počítačů pak trvá 40–100 s (dřív 40–80 s); s hráčem, který se brání, déle. Další ladění až podle hraní.
+- **Počítač v aréně se rozhlíží jen každých 0,08 s:** 13 směrů × vzorky po 1,5 m pro 6 motokár v každém kroku fyziky (120× za vteřinu) bylo tak drahé, že test běžel přes 5 minut. Mezi rozhlédnutími drží stejnou odchylku od cíle.
+- **Vibrace podle herního času:** limit 0,1 s mezi vibracemi měří `Haptics` ve stejném čase jako závod, takže test s `--fast=8` kontroluje totéž co skutečná hra. Po průjezdu cílem nevibruje nic kromě samotného cíle (motokáru řídí autopilot).
 
 ## 📁 Stav souborů
 - `godot/project.godot` – Godot projekt (otevřít přes Import)
@@ -125,6 +136,12 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky
 - `godot/scripts/focus_ring.gd` – kurzor v menu pro klávesnici a ovladač
 - `godot/scripts/gfx.gd` – úrovně kvality grafiky (co která zapíná)
+- `godot/scripts/tilt.gd` – zatáčení nakláněním (úhel, mrtvá zóna, vyhlazení, vyrovnání, otočený telefon)
+- `godot/scripts/haptics.gd` – vibrace telefonu a herních ovladačů (autoload `Haptics`, limit 10× za vteřinu)
+- `godot/scripts/arena.gd` – tvar arény: okraj a pevné věci (`space`), zem a rampy, led, starty, otazníky
+- `godot/scripts/arena_world.gd` – jak arény vypadají (podlaha, zdi, kašna, led, valy, rampy, domy, tribuny, stupně vítězů)
+- `godot/scripts/battle.gd` – bitva s balónky: pravidla, pořadí, cíle raket, počítačoví soupeři v aréně
+- `godot/scripts/balloon_icons.gd` – balónky v HUD a ve výsledcích
 - `godot/scripts/effects.gd` – jednorázové efekty: výbuch, střepy krabic, konfety, hvězdičky po zásahu
 - `godot/scripts/skid_marks.gd`, `speed_lines.gd` – stopy smyku a rychlostní čáry
 - `godot/export_presets.cfg` – export Android + Windows

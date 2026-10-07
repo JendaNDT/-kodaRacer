@@ -8,6 +8,7 @@ extends RefCounted
 const GROUND := 3600.0
 const AUTUMN := ["e8862a", "d4522a", "e8b830", "c0392b", "f0a030", "9a8a2a", "b5651d"]
 const BUILDING := ["5d6475", "6b5f5a", "7a7f8c", "4f5666", "8a8278", "5a6a7a", "6e6a80"]
+static var _box_mesh: BoxMesh
 
 ## Item boxes: rainbow glass with a gleam sweeping across them.
 const BOX_SHADER := """
@@ -182,6 +183,27 @@ static func build(tr: Track) -> Dictionary:
 
 	# --- item boxes
 	var boxes: Array = []
+	var box_mat := box_material()
+	atm.box_mat = box_mat
+	for f in tr.def.boxes:
+		var i := int(float(f) * tr.n)
+		var k := 0
+		for lane in [-0.6, -0.2, 0.2, 0.6]:
+			var bx: float = tr.x[i] + tr.nx[i] * lane * Game.HW
+			var bz: float = tr.z[i] + tr.nz[i] * lane * Game.HW
+			var by: float = tr.road_y(i, lane * Game.HW, 0.0) + 1.4
+			boxes.append(item_box(root, Vector3(bx, by, bz), box_mat, k * 0.7 + float(f) * 10.0))
+			k += 1
+
+	# --- scenery, stands, boards, landmarks
+	_scenery(root, tr, th, rng)
+	var ts := Trackside.build(root, tr, th, rng)
+	return {"root": root, "boxes": boxes, "atm": atm, "trackside": ts}
+
+
+# ------------------------------------------------------------------ pieces
+## The rainbow material of the "?" item boxes (tracks and arenas).
+static func box_material() -> ShaderMaterial:
 	var bimg := Image.create_empty(32, 32, false, Image.FORMAT_RGBA8)
 	var rainbow := [Color("ff4d6d"), Color("ffb703"), Color("8ac926"), Color("1982c4"), Color("9b5de5")]
 	for yy in 32:
@@ -198,45 +220,36 @@ static func build(tr: Track) -> Dictionary:
 	var box_mat := ShaderMaterial.new()
 	box_mat.shader = box_shader
 	box_mat.set_shader_parameter("tex", ImageTexture.create_from_image(bimg))
-	atm.box_mat = box_mat
-	var box_mesh := BoxMesh.new()
-	box_mesh.size = Vector3(1.7, 1.7, 1.7)
-	for f in tr.def.boxes:
-		var i := int(float(f) * tr.n)
-		var k := 0
-		for lane in [-0.6, -0.2, 0.2, 0.6]:
-			var bx: float = tr.x[i] + tr.nx[i] * lane * Game.HW
-			var bz: float = tr.z[i] + tr.nz[i] * lane * Game.HW
-			var by: float = tr.road_y(i, lane * Game.HW, 0.0) + 1.4
-			var node := Node3D.new()
-			node.position = Vector3(bx, by, bz)
-			var mi := MeshInstance3D.new()
-			mi.mesh = box_mesh
-			mi.material_override = box_mat
-			node.add_child(mi)
-			var q := Label3D.new()
-			q.text = "?"
-			q.font = UI.display_font
-			q.font_size = 96
-			q.pixel_size = 0.011
-			q.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			q.outline_size = 22
-			q.outline_modulate = Color(0.08, 0.08, 0.16, 0.9)
-			q.alpha_cut = Label3D.ALPHA_CUT_DISCARD
-			q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			node.add_child(q)
-			root.add_child(node)
-			boxes.append({"x": bx, "y": by, "z": bz, "node": node, "mesh": mi, "active": true, "respawn": 0.0,
-				"phase": k * 0.7 + float(f) * 10.0, "scale": 1.0})
-			k += 1
-
-	# --- scenery, stands, boards, landmarks
-	_scenery(root, tr, th, rng)
-	var ts := Trackside.build(root, tr, th, rng)
-	return {"root": root, "boxes": boxes, "atm": atm, "trackside": ts}
+	return box_mat
 
 
-# ------------------------------------------------------------------ pieces
+## One "?" item box at pos; the race keeps the returned record (active, respawn…).
+static func item_box(root: Node3D, pos: Vector3, mat: Material, phase: float) -> Dictionary:
+	if _box_mesh == null:
+		_box_mesh = BoxMesh.new()
+		_box_mesh.size = Vector3(1.7, 1.7, 1.7)
+	var node := Node3D.new()
+	node.position = pos
+	var mi := MeshInstance3D.new()
+	mi.mesh = _box_mesh
+	mi.material_override = mat
+	node.add_child(mi)
+	var q := Label3D.new()
+	q.text = "?"
+	q.font = UI.display_font
+	q.font_size = 96
+	q.pixel_size = 0.011
+	q.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	q.outline_size = 22
+	q.outline_modulate = Color(0.08, 0.08, 0.16, 0.9)
+	q.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+	q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(q)
+	root.add_child(node)
+	return {"x": pos.x, "y": pos.y, "z": pos.z, "node": node, "mesh": mi, "active": true, "respawn": 0.0,
+		"phase": phase, "scale": 1.0}
+
+
 ## The shortcut: a dirt (sand, ice, gravel) path with tracks worn into it,
 ## low posts along its edges away from the road, a sign before it leaves
 ## the road. The gap in the tyre barrier and the clear ground around it

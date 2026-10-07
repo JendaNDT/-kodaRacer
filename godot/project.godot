@@ -12,7 +12,7 @@ config_version=5
 
 config/name="Škoda Racer"
 config/description="3D motokárové závody pro Android a Windows s crossplay přes Wi-Fi a rozdělenou obrazovkou."
-config/version="1.16.1"
+config/version="1.18.0"
 run/main_scene="res://main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "GL Compatibility")
@@ -25,6 +25,7 @@ config/icon="res://icon.png"
 Game="*res://scripts/game.gd"
 Sfx="*res://scripts/sfx.gd"
 Net="*res://scripts/net.gd"
+Haptics="*res://scripts/haptics.gd"
 
 [display]
 
@@ -33,6 +34,11 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
+
+[input_devices]
+
+sensors/enable_accelerometer=true
+sensors/enable_gravity=true
 
 [physics]
 

@@ -1,6 +1,8 @@
 extends Node
 ## Global game data, settings and player input (keyboard, gamepads, touch).
 
+signal tilt_found           # the tilt sensor gave its first reading: the menu offers tilting
+
 const LAPS := 3
 const HW := 11.0          # half road width
 const KERB := 1.6         # kerb width
@@ -42,7 +44,9 @@ var PAINT2 := [
 	[Color("16181d"), Color("ffd166"), Color("c3cad6")],
 ]
 const GOLD_PAINT := [Color("e2b13c"), Color("3a2a10"), Color("fff1c1")]
-const PAINT_NAMES := ["Původní lak", "Druhý lak", "Zlatý lak"]
+## The battle paint (Etapa H): a win in the balloon battle on Hard with that driver.
+const BATTLE_PAINT := [Color("20232d"), Color("3dffa8"), Color("ff4fa3")]
+const PAINT_NAMES := ["Původní lak", "Druhý lak", "Zlatý lak", "Bitevní lak"]
 const SECRET := 6
 
 ## How each driver races when the computer drives (fits the tag in the menu):
@@ -50,15 +54,17 @@ const SECRET := 6
 ## straights, drift: how often and how well they drift, aggr: barges into
 ## rivals beside them, start: extra chance of a rocket start, patience: how
 ## long items are kept for the right moment (0 = at once), wander: how far
-## they stray from the racing line.
+## they stray from the racing line. In the balloon battle (Etapa H): hunt,
+## how keen they are to go after someone (more = closer, braver), aim, how
+## well they line up a shot.
 var PERSONA := [
-	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.0, "start": 0.0, "patience": 1.0, "wander": 0.10},   # Turbo Tonda: balanced
-	{"corner": 1.00, "straight": 1.00, "drift": 0.95, "aggr": 0.9, "start": 0.05, "patience": 0.0, "wander": 0.16},   # Zuzka Zběsilá: wild
-	{"corner": 1.05, "straight": 1.025, "drift": 0.85, "aggr": 0.2, "start": 0.0, "patience": 1.0, "wander": 0.10},   # Pepa Plyn: brakes late
-	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.1, "start": 0.4, "patience": 1.0, "wander": 0.10},    # Máňa Motor: great starts
-	{"corner": 0.97, "straight": 1.00, "drift": 0.85, "aggr": 0.0, "start": 0.0, "patience": 2.0, "wander": 0.03},    # Karel Kolo: careful
-	{"corner": 1.03, "straight": 1.00, "drift": 1.3, "aggr": 0.1, "start": 0.0, "patience": 1.0, "wander": 0.08},     # Bára Brzda: queen of corners
-	{"corner": 1.04, "straight": 1.01, "drift": 1.15, "aggr": 0.3, "start": 0.2, "patience": 1.5, "wander": 0.04},   # Profesor Píst: knows every line
+	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.0, "start": 0.0, "patience": 1.0, "wander": 0.10, "hunt": 1.0, "aim": 1.0},   # Turbo Tonda: balanced
+	{"corner": 1.00, "straight": 1.00, "drift": 0.95, "aggr": 0.9, "start": 0.05, "patience": 0.0, "wander": 0.16, "hunt": 1.5, "aim": 0.9},   # Zuzka Zběsilá: wild
+	{"corner": 1.05, "straight": 1.025, "drift": 0.85, "aggr": 0.2, "start": 0.0, "patience": 1.0, "wander": 0.10, "hunt": 1.1, "aim": 1.0},   # Pepa Plyn: brakes late
+	{"corner": 1.00, "straight": 1.00, "drift": 1.00, "aggr": 0.1, "start": 0.4, "patience": 1.0, "wander": 0.10, "hunt": 1.0, "aim": 1.0},    # Máňa Motor: great starts
+	{"corner": 0.97, "straight": 1.00, "drift": 0.85, "aggr": 0.0, "start": 0.0, "patience": 2.0, "wander": 0.03, "hunt": 0.6, "aim": 1.0},    # Karel Kolo: careful
+	{"corner": 1.03, "straight": 1.00, "drift": 1.3, "aggr": 0.1, "start": 0.0, "patience": 1.0, "wander": 0.08, "hunt": 1.0, "aim": 1.0},     # Bára Brzda: queen of corners
+	{"corner": 1.04, "straight": 1.01, "drift": 1.15, "aggr": 0.3, "start": 0.2, "patience": 1.5, "wander": 0.04, "hunt": 1.1, "aim": 1.4},   # Profesor Píst: knows every line
 ]
 
 var DIFFS := [
@@ -203,6 +209,38 @@ var TRACKS := [
 ## Championship: every track once, in this order of points for places 1–6.
 const CUP_POINTS := [10, 8, 6, 4, 2, 1]
 
+# ---------------------------------------------------------------- balloon battle (Etapa H)
+const BALLOONS := 3            # each kart starts with this many
+const BATTLE_TIME := 180.0     # seconds, then the most balloons win
+const BATTLE_GUARD := 2.0      # seconds a kart cannot lose another balloon after losing one
+
+## Arenas: built by code like the tracks (Arena: the floor and the solid
+## parts, ArenaWorld: how it looks), played only in the battle.
+var ARENAS := [
+	{
+		"id": "namesti", "name": "Náměstí", "desc": "Kašna, zídky a rampy u okrajů", "seed": 53,
+		"theme": {"ground": Color("8a9a5b"), "ground2": Color("7c8c50"), "ground3": Color("98a867"),
+			"floor": Color("b8ab95"), "floor2": Color("a3967f"), "road": Color("b8ab95"), "wall": Color("d9cbb2"), "trim": Color("8d4a36"),
+			"kerb_a": Color("e63946"), "kerb_b": Color("f4f4f4"), "dust": Color("b8ab95"), "surface": "paving",
+			"mood": {"sky_top": Color("2a74d4"), "horizon": Color("d6e9ff"), "sun_elev": 46.0, "sun_azim": -40.0,
+				"sun_color": Color("fff1da"), "sun_energy": 1.3, "disk_energy": 6.0, "sun_halo": 16.0,
+				"ambient": Color("dde9ff"), "ambient_energy": 0.62, "exposure": 1.15,
+				"fog": Color("d6e9ff"), "fog_begin": 160.0, "fog_end": 900.0,
+				"cloud": Color("ffffff"), "cloud_y": 110.0, "clouds": 14}},
+	},
+	{
+		"id": "stadion", "name": "Ledový stadion", "desc": "Kluzký led uprostřed a sněhové valy", "seed": 67,
+		"theme": {"ground": Color("e4ebf4"), "ground2": Color("d5dfec"), "ground3": Color("f4f7fb"),
+			"floor": Color("eef3f9"), "floor2": Color("dde6f1"), "road": Color("eef3f9"), "wall": Color("f7fbff"), "trim": Color("2a7de1"),
+			"kerb_a": Color("2a7de1"), "kerb_b": Color("f7fbff"), "dust": Color("ffffff"), "surface": "snow",
+			"mood": {"sky_top": Color("6f86b4"), "horizon": Color("e1e8f3"), "sun_elev": 22.0, "sun_azim": -150.0,
+				"sun_color": Color("dbe7ff"), "sun_energy": 1.05, "disk_energy": 2.0, "sun_halo": 26.0,
+				"ambient": Color("ccdaf0"), "ambient_energy": 0.7, "exposure": 1.1, "shadow_opacity": 0.85,
+				"fog": Color("dbe4ef"), "fog_begin": 90.0, "fog_end": 650.0,
+				"cloud": Color("e3e9f2"), "cloud_y": 70.0, "clouds": 22, "weather": "snow"}},
+	},
+]
+
 
 ## Best place reached in a championship on this difficulty (0 = none yet).
 func cup_best(diff: int) -> int:
@@ -259,6 +297,10 @@ var settings := {
 	"quality": -1, "show_fps": false,
 	# Etapa F: what has been won ({key: true}), the paint chosen per driver, mirrored tracks on/off
 	"unlocks": {}, "paints": {}, "mirror": false,
+	# Etapa G: steering on the phone (0 = the wheel on the screen, 1 = tilting), its sensitivity, vibrations
+	"steer": 0, "tilt_sens": 1, "vibrate": true,
+	# Etapa H: the arena chosen for the balloon battle, battles won per difficulty
+	"arena": 0, "battles": {},
 }
 
 # ---------------------------------------------------------------- input state
@@ -267,6 +309,8 @@ var item_queue := [false, false]
 var pause_queue := false
 var touch := {"active": false, "steer": 0.0, "drift": false, "brake": false, "item": false}
 var _trigger_prev := {}
+var tilt := Tilt.new()      # the phone's tilt (Etapa G), read every frame
+var fake_gravity := Vector3.ZERO   # tests and screenshots: a made-up sensor
 
 const K_LSHIFT := -1
 const K_RSHIFT := -2
@@ -300,6 +344,33 @@ func _ready() -> void:
 			var kv := s.substr(2).split("=", true, 1)
 			cmd_args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	load_settings()
+	if cmd_args.has("fake-gravity"):     # --fake-gravity=x,y,z: a computer pretends to be a tilted phone
+		var v := String(cmd_args["fake-gravity"]).split_floats(",")
+		if v.size() == 3:
+			fake_gravity = Vector3(v[0], v[1], v[2])
+
+
+func _process(delta: float) -> void:
+	var had := tilt.have
+	tilt.feed(gravity(), delta)
+	if tilt.have and not had:
+		tilt_found.emit()
+
+
+## The gravity sensor (the accelerometer where a phone has none), in the
+## screen's frame; zero on computers.
+func gravity() -> Vector3:
+	if fake_gravity != Vector3.ZERO:
+		return fake_gravity
+	var g := Input.get_gravity()
+	if g.length_squared() < 1.0:
+		g = Input.get_accelerometer()
+	return g
+
+
+## The phone is steered by tilting: chosen, and the phone has the sensor.
+func tilting() -> bool:
+	return int(settings.steer) == 1 and tilt.have
 
 
 func is_mobile() -> bool:
@@ -414,7 +485,7 @@ func look(d: int, p: int) -> Dictionary:
 	var ch: Dictionary = CHARS[d]
 	if p <= 0:
 		return ch
-	var c: Array = PAINT2[d] if p == 1 else GOLD_PAINT
+	var c: Array = PAINT2[d] if p == 1 else (GOLD_PAINT if p == 2 else BATTLE_PAINT)
 	var out := ch.duplicate()
 	out.color = c[0]
 	out.accent = c[1]
@@ -428,7 +499,7 @@ func unlock_name(key: String) -> String:
 	if key.begins_with("paint"):
 		var p := int(key.substr(5, 1))
 		var d := int(key.substr(7))
-		return "%s – %s" % [CHARS[d].name, "druhý lak" if p == 1 else "zlatý lak"]
+		return "%s – %s" % [CHARS[d].name, ["", "druhý lak", "zlatý lak", "bitevní lak"][clampi(p, 0, 3)]]
 	match key:
 		"mirror": return "Zrcadlové tratě"
 		"secret": return "Tajný jezdec %s" % CHARS[SECRET].name
@@ -501,6 +572,18 @@ func dev_done(t: int) -> bool:
 	return false
 
 
+## After a balloon battle: a win on Hard gives each winning local player's
+## driver the battle paint. `drivers`: the local players' drivers who won.
+func award_battle(drivers: Array, diff: int) -> Array:
+	var out: Array = []
+	settings.battles[str(diff)] = int(settings.battles.get(str(diff), 0)) + drivers.size()
+	if diff >= 2:
+		for d in drivers:
+			_unlock("paint3_%d" % int(d), out)
+	save_settings()
+	return out
+
+
 ## After a time trial: all tracks under the limit wins the developer's ghost.
 func award_trial() -> Array:
 	var out: Array = []
@@ -535,13 +618,17 @@ func load_settings() -> void:
 		settings.quality = 1             # a test level of 1.16.0's trial build: back to Střední
 	settings.quality = clampi(int(settings.quality), 0, 2)
 	settings.show_fps = bool(settings.show_fps)
+	settings.steer = clampi(int(settings.steer), 0, 1)
+	settings.tilt_sens = clampi(int(settings.tilt_sens), 0, Tilt.NAMES.size() - 1)
+	settings.vibrate = bool(settings.vibrate)
 	if typeof(settings.records) != TYPE_DICTIONARY:
 		settings.records = {}
 	if typeof(settings.cups) != TYPE_DICTIONARY:
 		settings.cups = {}
 	if typeof(settings.trials) != TYPE_DICTIONARY:
 		settings.trials = {}
-	for k in ["unlocks", "paints"]:
+	settings.arena = clampi(int(settings.arena), 0, ARENAS.size() - 1)
+	for k in ["unlocks", "paints", "battles"]:
 		if typeof(settings[k]) != TYPE_DICTIONARY:
 			settings[k] = {}
 	settings.mirror = bool(settings.mirror) and unlocked("mirror")
@@ -670,6 +757,10 @@ func read_input(slot: int) -> Dictionary:
 	if slot == 0 and touch.active:
 		if absf(touch.steer) > 0.0:
 			steer = touch.steer
+		if tilting():
+			var ts := tilt.steer(int(settings.tilt_sens))
+			if absf(ts) > 0.0:
+				steer = ts
 		brake = brake or touch.brake
 		gas = gas or not brake
 		drift = drift or touch.drift

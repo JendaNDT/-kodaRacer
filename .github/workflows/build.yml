@@ -117,14 +117,39 @@ jobs:
           if grep "ITEM CHECK.*FAIL" unlock-test.log; then exit 1; fi
           grep -q "TEST PASS: unlocks work" unlock-test.log
 
+      - name: Test – steering by tilting the phone (made-up sensor readings, levelling at the start)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --tilttest --timeout=60 2>&1 | tee tilt-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" tilt-test.log; then exit 1; fi
+          if grep "TILT CHECK.*FAIL" tilt-test.log; then exit 1; fi
+          grep -q "TEST PASS: tilting steers" tilt-test.log
+
+      - name: Test – vibrations (every event, never more than 10 a second, nothing when off; also for two players)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --hapticstest --fast=8 --timeout=300 2>&1 | tee haptics-test.log
+          ~/godot-bin/godot --headless --path godot -- --hapticstest --players=2 --fast=8 --timeout=300 2>&1 | tee haptics2-test.log
+          grep -h "^HAPTIC" haptics-test.log haptics2-test.log
+          if grep -hE "SCRIPT ERROR|Parse Error" haptics-test.log haptics2-test.log; then exit 1; fi
+          grep -q "TEST PASS: every event buzzes" haptics-test.log
+          grep -q "TEST PASS: every event buzzes" haptics2-test.log
+
+      - name: Test – balloon battle (the rules, then both arenas on every difficulty with only the computer driving)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --battletest --fast=8 2>&1 | tee battle-test.log
+          grep "^BATTLE" battle-test.log
+          if grep -E "SCRIPT ERROR|Parse Error" battle-test.log; then exit 1; fi
+          if grep "BATTLE CHECK.*FAIL" battle-test.log; then exit 1; fi
+          grep -q "TEST PASS: battles end with a winner" battle-test.log
+
       - name: Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint
         run: |
           ~/godot-bin/godot --headless --path godot -- --nettest=host --item-cycle --cut-always --mirror --unlock=mirror,paint2_0 --paint=2 --timeout=260 > host.log 2>&1 &
           sleep 3
           ~/godot-bin/godot --headless --path godot -- --nettest=client --cut-always --fake-lag=120 --fake-jitter=20 --timeout=260 > client.log 2>&1 || true
           wait || true
-          grep -h "TEST\|PREDICTION\|CLIENT SAW" host.log client.log
+          grep -h "TEST\|PREDICTION\|CLIENT SAW\|CLIENT FELT" host.log client.log
           for w in "modrá raketa" olej štít blesk zkratka zrcadlo lak; do grep "CLIENT SAW" client.log | grep -q "$w" || { echo "client never saw: $w"; exit 1; }; done
+          grep "CLIENT FELT" client.log | grep -q '"finish": 2' || { echo "the client's player never felt the finish"; exit 1; }
           if grep -hE "SCRIPT ERROR|Parse Error" host.log client.log; then exit 1; fi
           grep -q "TEST PASS" host.log
           grep -q "TEST PASS" client.log

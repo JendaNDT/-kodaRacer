@@ -1,7 +1,8 @@
 class_name Hud
 extends Control
 ## Race HUD for one local player: position, lap, time, item, speed, minimap,
-## countdown and short messages. Smaller when the screen is split.
+## countdown and short messages. Smaller when the screen is split. In the
+## balloon battle: own balloons, the time left, rivals and their balloons.
 ## Animated: the item is drawn on a slot-machine reel, the position jumps
 ## and shows +1 / −1 when it changes, each new lap slides in on a banner.
 
@@ -36,6 +37,9 @@ var banner: PanelContainer
 var banner_l: Label
 var banner_sub: Label
 var _banner_tween: Tween
+var balloons_i: BalloonIcons     # battle: own balloons
+var rivals: Array = []           # battle: [kart, row, icons]
+var watch_l: Label
 
 
 func setup(p_race: Race, p_kart: Kart, p_compact: bool) -> void:
@@ -63,6 +67,8 @@ func setup(p_race: Race, p_kart: Kart, p_compact: bool) -> void:
 	tl.add_child(lap_l)
 	time_l = _shadowed(UI.label("0:00.00", int(22 * k), UI.PAPER, UI.bold_font))
 	tl.add_child(time_l)
+	if race.battle != null:
+		_battle_setup(tl, k)
 	if race.trial:
 		# time trial: no places, the record to beat instead
 		pos_row.visible = false
@@ -168,6 +174,60 @@ func setup(p_race: Race, p_kart: Kart, p_compact: bool) -> void:
 	wrong_l.visible = false
 
 
+## Battle: own balloons instead of the place, the time left instead of the
+## lap, a list of the rivals with their balloons under it.
+func _battle_setup(tl: VBoxContainer, k: float) -> void:
+	pos_l.get_parent().visible = false
+	lap_l.visible = false
+	balloons_i = BalloonIcons.new(kart.ch.color, 44.0 * k)
+	tl.add_child(balloons_i)
+	tl.move_child(balloons_i, 1 if compact else 0)
+	time_l.add_theme_font_size_override("font_size", int(34 * k))
+	time_l.add_theme_font_override("font", UI.display_font)
+	tl.move_child(time_l, tl.get_children().find(balloons_i) + 1)
+	var list := UI.vbox(0)
+	tl.add_child(list)
+	for o in race.karts:
+		if o == kart:
+			continue
+		var row := UI.hbox(6)
+		var nl := _shadowed(UI.label(race.display_name(o), int(15 * k), (o.ch.color as Color).lightened(0.35), UI.bold_font))
+		nl.custom_minimum_size = Vector2(118 * k, 0)
+		nl.clip_text = true
+		row.add_child(nl)
+		var ic := BalloonIcons.new(o.ch.color, 13.0 * k)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+		list.add_child(row)
+		rivals.append([o, row, ic])
+	watch_l = _shadowed(UI.label("", int(17 * k), UI.GOLD, UI.bold_font))
+	tl.add_child(watch_l)
+
+
+func _battle_refresh() -> void:
+	var b := race.battle
+	balloons_i.set_count(kart.balloons)
+	var left := ceili(b.time_left())
+	_set_text("time", time_l, "%d:%02d" % [left / 60, left % 60])
+	time_l.add_theme_color_override("font_color", UI.KERB if left <= 30 and race.state == "race" else UI.PAPER)
+	for r in rivals:
+		var o: Kart = r[0]
+		(r[2] as BalloonIcons).set_count(o.balloons)
+		(r[1] as Control).modulate.a = 0.35 if o.out else 1.0
+	var w := ""
+	if kart.out and not b.over:
+		var p: Kart = null
+		for o in b.standings():
+			if not o.out:
+				p = o
+				break
+		for pane in race.panes:
+			if pane.kart == kart and pane.get("watch") != null:
+				p = pane.watch
+		w = "Vypadl jsi · sleduješ: %s" % race.display_name(p) if p != null else "Vypadl jsi"
+	_set_text("watch", watch_l, w)
+
+
 func _shadowed(l: Label) -> Label:
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.45))
 	l.add_theme_constant_override("shadow_offset_x", 0)
@@ -196,6 +256,16 @@ func _set_text(name_key: String, l: Label, text: String) -> void:
 
 func refresh() -> void:
 	var k := kart
+	if race.battle != null:
+		_battle_refresh()
+		var now_b := Time.get_ticks_msec() / 1000.0
+		var dt_b := 0.0 if race.paused else clampf(now_b - _last_t, 0.0, 0.1)
+		_last_t = now_b
+		_reel(k, dt_b)
+		_set_text("speed", speed_l, "%d km/h" % int(round(absf(k.speed) * 3.2)))
+		wrong_l.visible = false
+		minimap.queue_redraw()
+		return
 	_set_text("pos", pos_l, "%d." % k.rank)
 	pos_l.add_theme_color_override("font_color", UI.place_color(k.rank))
 	_set_text("lap", lap_l, "KOLO %d/%d" % [clampi(k.lap, 1, Game.LAPS), Game.LAPS])

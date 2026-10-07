@@ -1,7 +1,9 @@
 class_name TouchControls
 extends Control
 ## On-screen controls for phones: steering pad on the left, drift / item /
-## brake on the right. Gas is automatic. Multi-touch aware.
+## brake on the right. Gas is automatic. Multi-touch aware. When the phone
+## is steered by tilting, the pad gives way to a small wheel that only shows
+## the steering.
 
 var touches := {}   # touch index -> zone name
 var knob := 0.0
@@ -25,8 +27,13 @@ func _buttons() -> Dictionary:
 	}
 
 
+func _process(_delta: float) -> void:
+	if Game.tilting():
+		queue_redraw()
+
+
 func _zone_at(p: Vector2) -> String:
-	if _pad_rect().grow(18).has_point(p):
+	if not Game.tilting() and _pad_rect().grow(18).has_point(p):
 		return "pad"
 	var b := _buttons()
 	for k in b.keys():
@@ -80,21 +87,24 @@ func _sync() -> void:
 	Game.touch.brake = held.has("brake")
 
 
+## Switching between the pad and tilting mid-race (pause menu).
+func steer_mode_changed() -> void:
+	for i in touches.keys():
+		if touches[i] == "pad":
+			touches.erase(i)
+	Game.touch.steer = 0.0
+	knob = 0.0
+	queue_redraw()
+
+
 func _draw() -> void:
 	var font := UI.bold_font
 	var line := Color(0.93, 0.95, 0.98, 0.45)
 	var fill := Color(0.05, 0.07, 0.1, 0.38)
-	var r := _pad_rect()
-	var sb := UI.box(fill, int(r.size.y * 0.5), 2, line)
-	draw_style_box(sb, r)
-	var cy := r.get_center().y
-	var lx := r.position.x + 26
-	var rx := r.end.x - 26
-	draw_colored_polygon(PackedVector2Array([Vector2(lx, cy), Vector2(lx + 18, cy - 13), Vector2(lx + 18, cy + 13)]), line)
-	draw_colored_polygon(PackedVector2Array([Vector2(rx, cy), Vector2(rx - 18, cy - 13), Vector2(rx - 18, cy + 13)]), line)
-	var kc := r.get_center() + Vector2(knob * (r.size.x * 0.5 - 36), 0)
-	draw_circle(kc, 32, Color(0.93, 0.95, 0.98, 0.25))
-	draw_arc(kc, 32, 0, TAU, 32, Color(0.93, 0.95, 0.98, 0.6), 2.0, true)
+	if Game.tilting():
+		_draw_tilt(line, fill)
+	else:
+		_draw_pad(line, fill)
 	var held := {}
 	for z in touches.values():
 		held[z] = true
@@ -107,3 +117,33 @@ func _draw() -> void:
 		draw_arc(c, rad, 0, TAU, 40, UI.GOLD if on else line.lightened(0.2), 2.0, true)
 		var fs := 18 if k == "drift" else 12
 		draw_string(font, c + Vector2(-rad, fs * 0.35), b[k][2], HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0, fs, UI.PAPER)
+
+
+func _draw_pad(line: Color, fill: Color) -> void:
+	var r := _pad_rect()
+	var sb := UI.box(fill, int(r.size.y * 0.5), 2, line)
+	draw_style_box(sb, r)
+	var cy := r.get_center().y
+	var lx := r.position.x + 26
+	var rx := r.end.x - 26
+	draw_colored_polygon(PackedVector2Array([Vector2(lx, cy), Vector2(lx + 18, cy - 13), Vector2(lx + 18, cy + 13)]), line)
+	draw_colored_polygon(PackedVector2Array([Vector2(rx, cy), Vector2(rx - 18, cy - 13), Vector2(rx - 18, cy + 13)]), line)
+	var kc := r.get_center() + Vector2(knob * (r.size.x * 0.5 - 36), 0)
+	draw_circle(kc, 32, Color(0.93, 0.95, 0.98, 0.25))
+	draw_arc(kc, 32, 0, TAU, 32, Color(0.93, 0.95, 0.98, 0.6), 2.0, true)
+
+
+## Tilting: a small wheel turned as far as the kart steers (gold at full lock).
+func _draw_tilt(line: Color, fill: Color) -> void:
+	var st := Game.tilt.steer(int(Game.settings.tilt_sens))
+	var c := Vector2(64, size.y - 64)
+	var rad := 34.0
+	var col := UI.GOLD if absf(st) >= 1.0 else Color(0.93, 0.95, 0.98, 0.7)
+	draw_circle(c, rad, fill)
+	draw_arc(c, rad, 0, TAU, 40, line, 2.0, true)
+	var a := st * deg_to_rad(90.0)
+	draw_arc(c, rad - 5.0, 0, TAU, 40, col, 5.0, true)
+	for spoke in [0.0, PI, PI * 0.5]:
+		var d := Vector2.from_angle(spoke + a)
+		draw_line(c, c + d * (rad - 5.0), col, 4.0, true)
+	draw_circle(c, 6.0, col)

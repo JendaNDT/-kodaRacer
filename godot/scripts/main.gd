@@ -26,6 +26,7 @@ var _bench_prims := 0
 # the championship being driven: {players, diff, round, roster, points}; empty = none
 var cup := {}
 var trial := false      # the last race started was a time trial
+var battle := false     # the last race started was a balloon battle
 var _trial_runs := 0
 var _jump_track := 0
 var _items_phase := 0
@@ -35,6 +36,20 @@ var _ai_sum := {}
 var _ai_drifts := 0
 var _items_bad := 0
 var _jump_bad := 0
+var _tilt_phase := 0
+var _tilt_at := 0.0
+var _hap_phase := 0
+var _hap_at := 0.0
+var _hap_off := []       # [buzzes before vibrations went off, buzzes when they came on again]
+var _hap_asked_off := 0  # events while they were off
+var _bt_runs: Array = []      # --battletest: [arena, difficulty] still to drive
+var _bt_watch := {}           # kart -> {x, z, t, n}: where it was 5 s ago, windows without moving
+var _bt_left := {}            # karts seen outside the arena or inside something solid
+var _bt_stuck := {}           # karts stuck for 10 s
+var _bt_done_at := -1.0
+var _bt_air := {}             # kart -> was in the air (counting take-offs from the ramps)
+var _bt_jumps := 0
+var _bt_rows: Array = []
 
 
 func _ready() -> void:
@@ -49,6 +64,7 @@ func _ready() -> void:
 	menu.start_offline.connect(func(n: int): fade_to(start_offline.bind(n)))
 	menu.start_cup.connect(func(n: int): fade_to(start_cup.bind(n)))
 	menu.start_trial.connect(func(): fade_to(start_trial))
+	menu.start_battle.connect(func(n: int): fade_to(start_battle.bind(n)))
 	menu.quit_requested.connect(func(): get_tree().quit())
 	menu.track_changed.connect(_start_demo)
 	menu.quality_changed.connect(_start_demo)
@@ -288,6 +304,53 @@ func _ready() -> void:
 		for k in race.locals:
 			k.autopilot = true
 		return
+	if a.has("tilttest"):
+		# made-up sensor readings (straight, a little, a lot, past full lock,
+		# the phone turned over) must become the right steering, with the dead
+		# zone, smoothing and levelling; then a race on a "phone" held askew:
+		# straight after the countdown, steering right when tilted right
+		_test_mode = "tilt"
+		menu.visible = false
+		_tilt_checks()
+		Game.cmd_args["touch"] = "1"         # the phone's controls on a computer
+		Game.settings.steer = 1              # not saved
+		Game.settings.tilt_sens = 1
+		Game.tilt = Tilt.new()
+		Game.fake_gravity = _held(12.0, 40.0)
+		start_offline(1)
+		_test_t = 0.0
+		return
+	if a.has("battletest"):
+		# the battle's rules in set-up situations, then battles with only the
+		# computer driving, in both arenas on every difficulty: each must end
+		# with a winner within 3 minutes, nobody may leave the arena or get
+		# stuck, and every hit that lands costs exactly one balloon
+		_test_mode = "battle"
+		menu.visible = false
+		_battle_rule_checks()
+		for ai in Game.ARENAS.size():
+			for d in Game.DIFFS.size():
+				if (not a.has("arena") or int(a.arena) == ai) and (not a.has("diff") or int(a.diff) == d):
+					_bt_runs.append([ai, d])
+		_next_battle_run()
+		return
+	if a.has("hapticstest"):
+		# a whole race with the autopilot; the buzzes are written into a list
+		# instead of the phone. Every kind of event must buzz, never two within
+		# Haptics.GAP for the same player, and nothing while vibrations are
+		# off (the second lap)
+		_test_mode = "haptics"
+		menu.visible = false
+		Haptics.log_on = true
+		Game.settings.vibrate = true         # not saved
+		Game.settings.diff = 2               # Těžká: the computer drifts (not saved)
+		start_offline(int(a.get("players", "1")))
+		race.fast = int(a.get("fast", "8"))
+		for k in race.locals:
+			k.autopilot = true
+		Haptics.reset_log()
+		_test_t = 0.0
+		return
 	if a.has("jumptest"):
 		# one lap on every track, all six karts on autopilot with endless turbo
 		# or star: they may only take off from the ramp
@@ -319,6 +382,7 @@ func _ready() -> void:
 			Net.cup_mode = a.has("cup")   # --cup: a championship (--cup-start=4: only the last races)
 		else:
 			Net.join("127.0.0.1", "Klient", 1, Game.paint_of(1))
+			Haptics.log_on = true            # what the client's player felt, printed at the end
 		return
 	if a.has("showcase"):
 		return
@@ -332,6 +396,15 @@ func _ready() -> void:
 		race.fast = int(a.get("fast", "1"))
 		if a.has("autopilot"):
 			race.locals[0].autopilot = true
+	elif a.has("battle"):
+		# --battle --arena=N: screenshots and trying it out
+		if a.has("arena"):
+			Game.settings.arena = clampi(int(a.arena), 0, Game.ARENAS.size() - 1)
+		start_battle(int(a.get("players", "1")))
+		race.fast = int(a.get("fast", "1"))
+		if a.has("autopilot"):
+			for k in race.locals:
+				k.autopilot = true
 	elif a.has("race"):
 		start_offline(int(a.get("players", "1")))
 		race.fast = int(a.get("fast", "1"))
@@ -465,6 +538,7 @@ func _start_demo() -> void:
 func start_offline(players: int) -> void:
 	cup = {}
 	trial = false
+	battle = false
 	var roster := _offline_roster(players)
 	menu.visible = false
 	_new_race().start(Race.Mode.OFFLINE, Game.race_track(int(Game.settings.track), bool(Game.settings.mirror)),
@@ -475,6 +549,7 @@ func start_offline(players: int) -> void:
 ## after each race; the grid of the next race is the standings reversed.
 func start_cup(players: int) -> void:
 	trial = false
+	battle = false
 	var roster := _offline_roster(players)
 	var pts := {}
 	for r in roster:
@@ -499,6 +574,7 @@ func _start_cup_round() -> void:
 func start_trial() -> void:
 	cup = {}
 	trial = true
+	battle = false
 	last_players = 1
 	menu.visible = false
 	var d := int(Game.settings.driver)
@@ -511,10 +587,25 @@ func start_trial() -> void:
 		r.locals[0].autopilot = true
 
 
+## The balloon battle in the chosen arena: six karts, the local players
+## among them (Etapa H).
+func start_battle(players: int) -> void:
+	cup = {}
+	trial = false
+	battle = true
+	var roster := _offline_roster(players)
+	menu.visible = false
+	var r := _new_race()
+	r.battle_mode = true
+	r.start(Race.Mode.OFFLINE, int(Game.settings.arena), int(Game.settings.diff), roster)
+
+
 ## "Restart" from the pause menu or the results: the same race again, in a
 ## championship the same round; after its last race a new championship.
 func _restart() -> void:
-	if trial:
+	if battle:
+		start_battle(last_players)
+	elif trial:
 		start_trial()
 	elif cup.is_empty():
 		start_offline(last_players)
@@ -726,7 +817,7 @@ func _process(delta: float) -> void:
 		Showcase.hold(race)
 	# --shot-cut=0.8: once the first player has been on the shortcut that long;
 	# --shot-sign: as the first player comes up to the sign before it
-	if _shot_path != "" and race != null and not race.locals.is_empty() and not race.track.cut.is_empty():
+	if _shot_path != "" and race != null and not race.locals.is_empty() and race.track != null and not race.track.cut.is_empty():
 		var lk: Kart = race.locals[0]
 		if Game.cmd_args.has("shot-cut"):
 			_air_t = _air_t + delta if lk.on_cut else 0.0
@@ -829,6 +920,12 @@ func _process(delta: float) -> void:
 		_items_tick()
 	elif _test_mode == "jump" and race != null:
 		_jump_tick()
+	elif _test_mode == "battle" and race != null:
+		_battle_tick()
+	elif _test_mode == "tilt" and race != null:
+		_tilt_tick()
+	elif _test_mode == "haptics" and race != null:
+		_haptics_tick()
 	elif _test_mode == "autotest" and race != null:
 		if race.results_shown:
 			_finish_test(true, "results shown")
@@ -861,6 +958,10 @@ func _process(delta: float) -> void:
 			print("PREDICTION lag=%d ms: error avg %.2f p95 %.2f max %.2f m (%d), correction avg %.2f p95 %.2f max %.2f m" % [
 				int(Net.fake_lag), rep.err.avg, rep.err.p95, rep.err.max, rep.err.n, rep.corr.avg, rep.corr.p95, rep.corr.max])
 			print("CLIENT SAW: %s" % ", ".join(race.net_seen.keys()))
+			var felt := {}
+			for b in Haptics.buzzes:
+				felt[b[2]] = int(felt.get(b[2], 0)) + 1
+			print("CLIENT FELT: %s, events %s" % [str(felt), str(Haptics.asked)])
 			var pred_ok: bool = rep.err.n > 100 and rep.err.p95 <= float(Game.cmd_args.get("max-err", "1.0"))
 			if race.cup.is_empty():
 				_finish_test(me.finished and pred_ok, "client finished place %d, prediction %s" % [race._place_of(me), "ok" if pred_ok else "too far"])
@@ -1470,6 +1571,526 @@ func _jump_tick() -> void:
 	else:
 		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
 			else "%d problems" % _jump_bad)
+
+
+# ---------------------------------------------------------------- --battletest
+func _bt_check(name: String, ok: bool, info := "") -> void:
+	print("BATTLE CHECK %s: %s %s" % [name, "ok" if ok else "FAIL", info])
+	if not ok:
+		_items_bad += 1
+
+
+## A battle on Náměstí stopped at the start, every kart parked where the
+## check wants it.
+func _bt_setup() -> Race:
+	Game.settings.arena = 0
+	start_battle(1)
+	var r := race
+	r.paused = true
+	r.state = "race"
+	r.countdown = 0.0
+	# everybody out of the way first, on the far side
+	for i in r.karts.size():
+		(r.karts[i] as Kart).reset(35.0 + (i % 3) * 7.0, -10.0 + (i / 3) * 14.0, PI)
+	return r
+
+
+func _bt_steps(r: Race, k: Kart, secs: float) -> void:
+	var idle := {"steer": 0.0, "gas": false, "brake": false, "drift": false, "item": false}
+	for i in int(secs / Game.SIM_DT):
+		k.update(Game.SIM_DT, idle)
+
+
+func _battle_rule_checks() -> void:
+	var r := _bt_setup()
+	var K: Array = r.karts
+	var b: Battle = r.battle
+	var dt := Game.SIM_DT
+	var A: Kart = K[0]
+	var B: Kart = K[1]
+	var C: Kart = K[2]
+	var D: Kart = K[3]
+	var E: Kart = K[4]
+	var F: Kart = K[5]
+	_bt_check("everybody starts with %d balloons" % Game.BALLOONS, K.all(func(k): return k.balloons == Game.BALLOONS))
+	# a missile takes a balloon (the nearest rival in front is the target)
+	A.reset(-30.0, -25.0, 0.0)
+	B.reset(-30.0, 0.0, 0.0)
+	C.reset(-30.0, -40.0, 0.0)          # behind A: not the target
+	_bt_check("missile target: the nearest rival in front", b.missile_target(A) == B)
+	A.item = Game.Item.MISSILE
+	A.item_n = 1
+	r.use_item(A)
+	for i in 300:
+		r._update_items(dt)
+		if r.missiles.is_empty():
+			break
+	_bt_check("a missile takes a balloon", B.balloons == 2 and A.pops == 1 and r.hits_landed == 1,
+		"(B %d balloons, A popped %d)" % [B.balloons, A.pops])
+	# protection: nothing more for 2 s, then the next hit counts again
+	var node := r._banana_node()
+	r.fx.add_child(node)
+	r.bananas.append({"x": B.x, "y": B.y, "z": B.z, "node": node, "owner": C, "age": 1.0})
+	r._update_items(dt)
+	_bt_check("no balloon lost while protected", B.balloons == 2 and C.pops == 0, "(invuln %.2f s)" % B.invuln)
+	_bt_check("protected for at least %d s" % int(Game.BATTLE_GUARD), B.invuln >= Game.BATTLE_GUARD - 0.01)
+	_bt_steps(r, B, B.invuln + 0.05)
+	var node2 := r._banana_node()
+	r.fx.add_child(node2)
+	r.bananas.append({"x": B.x, "y": B.y, "z": B.z, "node": node2, "owner": C, "age": 1.0})
+	r._update_items(dt)
+	_bt_check("after the protection a banana takes one", B.balloons == 1 and C.pops == 1)
+	# the last balloon: out of the battle
+	_bt_steps(r, B, B.invuln + 0.05)
+	var at := Vector3(B.x, B.y, B.z)
+	r.hit_kart(B, 1.1, false, C)
+	_bt_check("the last balloon: out", B.out and B.finished and B.balloons == 0 and b.outs == [B] and C.pops == 2)
+	_bt_check("out of the arena", not r.arena.inside(B.x, B.z) and B.out_at.distance_to(at) < 0.01)
+	# the lightning only shrinks; running over a shrunk kart costs it a balloon
+	D.reset(30.0, 30.0, 0.0)
+	D.item = Game.Item.LIGHTNING
+	D.item_n = 1
+	var before := r.hits_landed
+	r.use_item(D)
+	_bt_check("the lightning takes no balloon", r.hits_landed == before and A.balloons == 3 and A.shrink > 0.0 and D.shrink <= 0.0)
+	A.reset(30.0, 30.0, PI)
+	A.shrink = Game.SHRINK_TIME
+	D.reset(30.0, 31.0, 0.0)
+	r._kart_collisions()
+	_bt_check("running over a shrunk kart costs it a balloon", A.balloons == 2 and D.pops == 1)
+	# a kart with the star pushes a balloon off
+	E.reset(-20.0, 40.0, 0.0)
+	F.reset(-20.0, 41.0, PI)
+	E.star = 5.0
+	r._kart_collisions()
+	_bt_check("the star pushes a balloon off", F.balloons == 2 and E.pops == 1)
+	# the blue missile goes for whoever has the most balloons
+	C.balloons = 3
+	D.balloons = 2
+	E.balloons = 2
+	_bt_check("blue missile: the most balloons", b.blue_target(E) == C, "(%s)" % (b.blue_target(E).ch.name if b.blue_target(E) != null else "nobody"))
+	_bt_check("every hit cost exactly one balloon", r.hits_landed == b.pops.size())
+	# time is up: most balloons first, then most popped, then those out (last out first)
+	A.balloons = 2; A.pops = 1
+	C.balloons = 3; C.pops = 0
+	D.balloons = 2; D.pops = 3
+	E.balloons = 1; E.pops = 4
+	F.balloons = 2; F.pops = 0
+	r.race_time = Game.BATTLE_TIME
+	b.tick()
+	var rows := b.standings()
+	_bt_check("3 minutes: the battle ends", b.over and b.winner() == C)
+	_bt_check("3 minutes: places by balloons, then by balloons popped", rows == [C, D, A, F, E, B],
+		"(%s)" % ", ".join(rows.map(func(k): return "%s %d/%d" % [k.ch.name, k.balloons, k.pops])))
+	# one kart left: it wins, the others by when they went out
+	r = _bt_setup()
+	K = r.karts
+	b = r.battle
+	for i in [3, 1, 4, 0, 2]:
+		var k: Kart = K[i]
+		k.balloons = 1
+		r.hit_kart(k, 1.1, false, K[5])
+	_bt_check("one left: it wins", b.over and b.winner() == K[5] and K[5].pops == 5)
+	_bt_check("one left: the last one out is second", b.standings() == [K[5], K[2], K[0], K[4], K[1], K[3]])
+	# a win on Hard gives the winning driver the battle paint (nothing saved)
+	var was_off := Game.save_off
+	Game.save_off = true
+	var keep: Dictionary = Game.settings.unlocks.duplicate()
+	var keep_b: Dictionary = Game.settings.battles.duplicate()
+	Game.settings.unlocks.erase("paint3_4")
+	var none := Game.award_battle([4], 1)
+	var got := Game.award_battle([4], 2)
+	_bt_check("a win on Hard: the battle paint", none.is_empty() and got == ["paint3_4"] and Game.paint_open(4, 3)
+		and Game.look(4, 3).color == Game.BATTLE_PAINT[0] and Game.unlock_name("paint3_4").ends_with("bitevní lak"))
+	Game.settings.unlocks = keep
+	Game.settings.battles = keep_b
+	Game.save_off = was_off
+	r.paused = false
+
+
+func _next_battle_run() -> void:
+	if _bt_runs.is_empty():
+		for row in _bt_rows:
+			print(row)
+		_finish_test(_items_bad == 0, "battles end with a winner, karts stay in, every hit costs one balloon" if _items_bad == 0
+			else "%d problems" % _items_bad)
+		return
+	var run: Array = _bt_runs.pop_front()
+	Game.settings.arena = int(run[0])
+	Game.settings.diff = int(run[1])          # not saved
+	start_battle(1)
+	race.fast = int(Game.cmd_args.get("fast", "8"))
+	for k in race.locals:
+		k.autopilot = true
+	_bt_watch = {}
+	_bt_left = {}
+	_bt_stuck = {}
+	_bt_air = {}
+	_bt_jumps = 0
+	_bt_done_at = -1.0
+	_test_t = 0.0
+
+
+func _battle_tick() -> void:
+	var r := race
+	var b: Battle = r.battle
+	if b == null:
+		return
+	if r.state == "race" and not b.over:
+		for k: Kart in r.karts:
+			if k.out:
+				continue
+			if k.air and not _bt_air.get(k, false):
+				_bt_jumps += 1
+			_bt_air[k] = k.air
+			var sp := r.arena.space(k.x, k.z, k.y - 0.3)      # the same as Arena.constrain
+			if (not r.arena.inside(k.x, k.z) or sp < Game.KART_R - 0.35) and not _bt_left.has(k):
+				_bt_left[k] = true
+				print("BATTLE LEFT %s at %.1f, %.1f (%.2f m from the nearest solid)" % [k.ch.name, k.x, k.z, sp])
+			var w: Dictionary = _bt_watch.get(k, {})
+			if w.is_empty() or r.race_time - float(w.t) >= 5.0:
+				var n := 0
+				if not w.is_empty():
+					var moved := Vector2(k.x - float(w.x), k.z - float(w.z)).length()
+					n = int(w.n) + 1 if moved < 3.0 else 0
+					if n >= 2 and not _bt_stuck.has(k):
+						_bt_stuck[k] = true
+						print("BATTLE STUCK %s at %.1f, %.1f" % [k.ch.name, k.x, k.z])
+				_bt_watch[k] = {"x": k.x, "z": k.z, "t": r.race_time, "n": n}
+	var lost := 0
+	for k: Kart in r.karts:
+		lost += Game.BALLOONS - k.balloons
+	if b.over and _bt_done_at < 0.0:
+		_bt_done_at = _test_t
+		var how := "one left" if b.alive().size() <= 1 else "time up"
+		var ok := b.winner() != null and b.end_time <= Game.BATTLE_TIME + 0.05 and _bt_left.is_empty() and _bt_stuck.is_empty() \
+			and lost == b.pops.size() and r.hits_landed == b.pops.size()
+		if not ok:
+			_items_bad += 1
+		var used := []
+		for it in range(1, Game.ITEM_COUNT + 1):
+			if int(r.item_uses.get(it, 0)) > 0:
+				used.append("%s %d" % [Game.ITEM_NAMES[it], int(r.item_uses[it])])
+		_bt_rows.append("BATTLE %s %s: %s after %.0f s, winner %s with %d, %d balloons popped (hits %d), left the arena %d, stuck %d, jumps %d %s; items: %s" % [
+			Game.ARENAS[int(Game.settings.arena)].id, Game.DIFFS[int(Game.settings.diff)].name, how, b.end_time,
+			b.winner().ch.name, b.winner().balloons, b.pops.size(), r.hits_landed, _bt_left.size(), _bt_stuck.size(),
+			_bt_jumps, "ok" if ok else "FAIL", ", ".join(used)])
+		print(_bt_rows[-1])
+	if _bt_done_at >= 0.0 and _test_t - _bt_done_at > 1.0:
+		_next_battle_run()
+	elif _test_t > float(Game.cmd_args.get("timeout", "90")):
+		_items_bad += 1
+		print("BATTLE TIMEOUT in %s %s at %.0f s" % [Game.ARENAS[int(Game.settings.arena)].id, Game.DIFFS[int(Game.settings.diff)].name, r.race_time])
+		_next_battle_run()
+
+
+## Gravity in the screen's frame (as Godot gives it) for a phone tilted back
+## `back` degrees from upright and turned `deg` degrees to the right like a wheel.
+static func _held(deg: float, back := 0.0) -> Vector3:
+	var along := 9.81 * cos(deg_to_rad(back))     # the part along the screen
+	var r := deg_to_rad(deg)
+	return Vector3(along * sin(r), -along * cos(r), -9.81 * sin(deg_to_rad(back)))
+
+
+static func _settle(t: Tilt, g: Vector3, secs := 1.0) -> void:
+	for i in int(secs * 60.0):
+		t.feed(g, 1.0 / 60.0)
+
+
+func _tilt_check(name: String, ok: bool, info := "") -> void:
+	print("TILT CHECK %s: %s %s" % [name, "ok" if ok else "FAIL", info])
+	if not ok:
+		_items_bad += 1
+
+
+func _tilt_checks() -> void:
+	var t := Tilt.new()
+	_tilt_check("no sensor: no steering", t.steer(1) == 0.0 and not t.have)
+	t.feed(Vector3.ZERO, 1.0 / 60.0)
+	_tilt_check("zero reading ignored", not t.have)
+	# held straight, tilted back as people hold a phone
+	t = Tilt.new()
+	_settle(t, _held(0.0, 40.0))
+	_tilt_check("straight", t.steer(1) == 0.0, "%.3f" % t.steer(1))
+	_settle(t, _held(Tilt.DEAD - 0.5, 0.0))
+	_tilt_check("dead zone", t.steer(1) == 0.0, "%.3f" % t.steer(1))
+	# upright the wheel angle is exact: full lock at FULL, half way between DEAD and FULL
+	for s in Tilt.FULL.size():
+		var full: float = Tilt.FULL[s]
+		_settle(t, _held(full, 0.0))
+		var at_full := t.steer(s)
+		_settle(t, _held((Tilt.DEAD + full) * 0.5, 0.0))
+		var half := t.steer(s)
+		_settle(t, _held(-full - 5.0, 0.0))
+		var past := t.steer(s)
+		_tilt_check("%s: full lock at %.0f°" % [Tilt.NAMES[s], full], at_full > 0.995 and absf(half - 0.5) < 0.02 and past == -1.0,
+			"full %.3f half %.3f past-left %.3f" % [at_full, half, past])
+	# held back 45°: a little, a lot, past full lock, both ways alike
+	var little := 0.0
+	var lot := 0.0
+	_settle(t, _held(8.0, 45.0))
+	little = t.steer(1)
+	_settle(t, _held(18.0, 45.0))
+	lot = t.steer(1)
+	_settle(t, _held(-18.0, 45.0))
+	var lot_left := t.steer(1)
+	_settle(t, _held(45.0, 45.0))
+	var over := t.steer(1)
+	_tilt_check("a little / a lot / past full lock", little > 0.05 and little < 0.4 and lot > 0.5 and lot < 0.9 and over == 1.0,
+		"8° %.3f, 18° %.3f, 45° %.3f" % [little, lot, over])
+	_tilt_check("left like right", absf(lot + lot_left) < 0.001, "%.3f / %.3f" % [lot, lot_left])
+	var sens: Array = []
+	for s in Tilt.FULL.size():
+		_settle(t, _held(15.0, 30.0))
+		sens.append(t.steer(s))
+	_tilt_check("Jemná < Střední < Ostrá", sens[0] < sens[1] and sens[1] < sens[2], str(sens))
+	# held nearly flat: the edge that dips still steers, no jump to full lock
+	t = Tilt.new()
+	_settle(t, _held(0.0, 88.0))
+	var flat0 := t.steer(1)
+	_settle(t, Vector3(9.81 * sin(deg_to_rad(6.0)), 0.0, -9.81 * cos(deg_to_rad(6.0))))
+	var flat6 := t.steer(1)
+	_tilt_check("nearly flat", flat0 == 0.0 and flat6 > 0.1 and flat6 < 0.8, "straight %.3f, right edge 6° down %.3f" % [flat0, flat6])
+	# the axes half a turn behind the display (phone turned over to the other
+	# landscape side without Android telling Godot): turned back here
+	var right := _held(15.0, 40.0)
+	var t_ok := Tilt.new()
+	_settle(t_ok, right)
+	t = Tilt.new()
+	_settle(t, Vector3(-right.x, -right.y, right.z))
+	var turned := t.steer(1)
+	_settle(t, right)                     # Godot caught up with the display again
+	var back_again := t.steer(1)
+	_tilt_check("phone turned over", absf(turned - t_ok.steer(1)) < 0.001 and absf(back_again - t_ok.steer(1)) < 0.001,
+		"right turn %.3f, stale axes %.3f, axes caught up %.3f" % [t_ok.steer(1), turned, back_again])
+	# smoothing: one shaky reading barely moves the wheel, a real turn gets there quickly
+	t = Tilt.new()
+	_settle(t, _held(0.0, 40.0))
+	t.feed(_held(25.0, 40.0), 1.0 / 60.0)
+	var shake := t.steer(1)
+	_settle(t, _held(0.0, 40.0), 0.5)
+	_settle(t, _held(20.0, 0.0), 0.2)
+	var quick := t.steer(1)
+	_settle(t, _held(20.0, 0.0))
+	var final := t.steer(1)
+	_tilt_check("smoothing", shake < 0.25 and quick > 0.9 * final, "one shaky frame %.3f, after 0.2 s %.3f of %.3f" % [shake, quick, final])
+	# levelling: held askew, then that is straight
+	t = Tilt.new()
+	_settle(t, _held(10.0, 40.0))
+	var askew := t.steer(1)
+	t.level()
+	_settle(t, _held(10.0, 40.0), Tilt.LEVEL_TIME + 0.1)
+	var leveled := t.steer(1)
+	_settle(t, _held(25.0, 40.0))
+	var more := t.steer(1)
+	_settle(t, _held(-5.0, 40.0))
+	var less := t.steer(1)
+	_tilt_check("levelling", askew > 0.2 and leveled == 0.0 and more > 0.3 and less < -0.3,
+		"askew %.3f, levelled %.3f, 15° more %.3f, 15° less %.3f" % [askew, leveled, more, less])
+	# the controls: tilting steers the first player only with the phone's controls on
+	Game.set_local_players(1)
+	Game.touch.active = true
+	Game.tilt = Tilt.new()
+	_settle(Game.tilt, _held(20.0, 0.0))
+	Game.settings.steer = 0
+	var wheel_mode := float(Game.read_input(0).steer)
+	Game.settings.steer = 1
+	var tilt_mode := float(Game.read_input(0).steer)
+	_tilt_check("controls", wheel_mode == 0.0 and absf(tilt_mode - Game.tilt.steer(int(Game.settings.tilt_sens))) < 0.001 and tilt_mode > 0.5,
+		"wheel chosen %.3f, tilting chosen %.3f" % [wheel_mode, tilt_mode])
+	Game.touch.active = false
+
+
+## --tilttest, the race: the phone held 12° askew is straight once the
+## countdown has levelled it, tilted 15° further right the kart turns right.
+func _tilt_tick() -> void:
+	var k: Kart = race.locals[0]
+	if _tilt_phase == 0 and race.state == "race" and race.race_time > 1.0 and not Game.tilt.levelling():
+		_tilt_phase = 1
+		var st := float(Game.read_input(0).steer)
+		_tilt_check("race: straight after the countdown", race.tilt_leveled and st == 0.0 and race.touch_ctl != null,
+			"steer %.3f (phone held %.1f° askew, straight at %.1f°)" % [st, Game.tilt.angle, Game.tilt.zero])
+		Game.fake_gravity = _held(27.0, 40.0)
+		_tilt_at = _test_t
+	elif _tilt_phase == 1 and _test_t - _tilt_at > 0.6:
+		_tilt_phase = 2
+		var st := float(Game.read_input(0).steer)
+		_tilt_check("race: tilted right steers right", st > 0.3 and k.steer > 0.2, "input %.3f, kart %.3f" % [st, k.steer])
+		_finish_test(_items_bad == 0, "tilting steers" if _items_bad == 0 else "%d problems" % _items_bad)
+	elif _test_t > float(Game.cmd_args.get("timeout", "60")):
+		_finish_test(false, "timeout")
+
+
+## --hapticstest: knocks the test sets up itself (a hit, the lightning, the
+## barrier, a drop from 6 m, a drift to purple sparks with the keys) and
+## whatever the race brings (turbos, other karts, the finish). Vibrations are
+## off for the whole second lap.
+func _haptics_tick() -> void:
+	var r := race
+	var lead: Kart = r.locals[0]
+	if r.results_shown:
+		if _hap_at <= 0.0:
+			_hap_at = _test_t
+		elif _test_t - _hap_at > 1.0:            # the second buzz of the finish
+			_haptics_checks()
+		return
+	if r.state != "race":
+		return
+	var t := r.race_time
+	if _hap_phase == 0 and t > 5.0:
+		var ok := true
+		for k in r.locals:
+			ok = (k.spin > 0.0 or k.hit(1.2, false)) and ok
+		if ok:
+			print("HAPTIC set up: a hit at %.1f s" % t)
+			_hap_phase = 1
+	elif _hap_phase == 1 and t > 10.0:
+		var other: Kart = null
+		for k in r.karts:
+			if k.local_slot < 0:
+				other = k
+		r._lightning(other)
+		print("HAPTIC set up: the lightning at %.1f s" % t)
+		_hap_phase = 2
+	elif _hap_phase == 2 and t > 16.0:
+		for k in r.locals:
+			_into_barrier(k)
+		print("HAPTIC set up: into the barrier at %.1f s" % t)
+		_hap_phase = 3
+	elif _hap_phase == 3 and t > 22.0:
+		var ok := true
+		for k in r.locals:
+			ok = not k.air and ok
+		if ok:
+			for k in r.locals:
+				k.air = true
+				k.air_t = 0.0
+				k.vy = 0.0
+				k.y += 6.0
+			print("HAPTIC set up: a drop from 6 m at %.1f s" % t)
+			_hap_phase = 4
+	elif _hap_phase == 4 and t > 27.0:
+		# a drift with the keys towards the wider side of the road, until the
+		# sparks change colour (a drift always turns, so soon after it would
+		# reach the barrier), then the turbo
+		_hap_keys(true)
+		_hap_at = t
+		for k in r.locals:
+			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f, %.1f m from the middle" % [t, k.speed, k.lat])
+		_hap_phase = 5
+	elif _hap_phase == 5:
+		var done := true
+		for k in r.locals:
+			done = done and k.drift_level >= 1
+		if done or t > _hap_at + 1.5:
+			for k in r.locals:
+				print("HAPTIC drift: sparks level %d after %.2f s" % [k.drift_level, t - _hap_at])
+			_hap_keys(false)
+			_hap_phase = 6
+	elif _hap_phase == 6 and lead.lap == 2:
+		_hap_off = [Haptics.buzzes.size()]
+		_hap_asked_off = -_asked_total()
+		Game.settings.vibrate = false
+		print("HAPTIC vibrations off at %.1f s" % t)
+		_hap_at = t
+		_hap_phase = 7
+	elif _hap_phase == 7 and t > _hap_at + 4.0:
+		for k in r.locals:
+			k.hit(1.0, false)
+		print("HAPTIC set up: a hit with vibrations off at %.1f s" % t)
+		_hap_phase = 8
+	elif _hap_phase == 8 and lead.lap == 3:
+		_hap_off.append(Haptics.buzzes.size())
+		_hap_asked_off += _asked_total()
+		Game.settings.vibrate = true
+		print("HAPTIC vibrations on again at %.1f s" % t)
+		_hap_at = 0.0
+		_hap_phase = 9
+	if _test_t > float(Game.cmd_args.get("timeout", "300")):
+		_finish_test(false, "timeout in phase %d" % _hap_phase)
+
+
+## The local players hold gas, drift and left or right (towards the wider
+## side of the road) on the keyboard (true), or let the autopilot drive
+## again (false).
+func _hap_keys(down: bool) -> void:
+	var maps: Array = [Game.KEYS_SOLO] if race.locals.size() == 1 else [Game.KEYS_P1, Game.KEYS_P2]
+	var tr := race.track
+	for i in race.locals.size():
+		var k: Kart = race.locals[i]
+		k.autopilot = not down
+		# steering right turns the heading down, so the kart's right is heading - 90°
+		var th := tr.heading(k.idx)
+		var plus_right := -cos(th) * tr.nx[k.idx] + sin(th) * tr.nz[k.idx] > 0.0
+		var side := "left" if (k.lat > 0.0) == plus_right else "right"
+		var other := "right" if side == "left" else "left"
+		Game.key_down[maps[i].gas[0]] = down
+		Game.key_down[maps[i].drift[0]] = down
+		Game.key_down[maps[i][side][0]] = down
+		Game.key_down[maps[i][other][0]] = false
+
+
+func _asked_total() -> int:
+	var n := 0
+	for kind in Haptics.asked:
+		n += int(Haptics.asked[kind])
+	return n
+
+
+## Puts kart k next to the barrier on its right, heading into it at 45°.
+func _into_barrier(k: Kart) -> void:
+	var tr := race.track
+	var i := k.idx
+	var lim := Game.BAR - Game.KART_R - 0.3
+	k.x = tr.x[i] + tr.nx[i] * lim
+	k.z = tr.z[i] + tr.nz[i] * lim
+	var th := tr.heading(i)
+	var f := Vector2(sin(th), cos(th)) + Vector2(tr.nx[i], tr.nz[i])
+	k.heading = atan2(f.x, f.y)
+	k.speed = maxf(k.speed, 20.0)
+	k.bump_cd = 0.0
+
+
+func _haptics_checks() -> void:
+	var B: Array = Haptics.buzzes
+	var kinds := {}
+	var gaps := [INF, INF]
+	var last := [-INF, -INF]
+	var land: Array = []
+	for i in B.size():
+		var b: Array = B[i]
+		var slot := int(b[1])
+		kinds["%s/%d" % [b[2], slot]] = int(kinds.get("%s/%d" % [b[2], slot], 0)) + 1
+		gaps[slot] = minf(gaps[slot], float(b[0]) - float(last[slot]))
+		last[slot] = float(b[0])
+		if b[2] == "land":
+			land.append("%.2f" % float(b[4]))
+	var asked: Array = []
+	for kind in Haptics.KINDS:
+		asked.append("%s %d" % [kind, int(Haptics.asked.get(kind, 0))])
+	print("HAPTIC events: ", ", ".join(asked))
+	print("HAPTIC buzzes: %d %s" % [B.size(), str(kinds)])
+	print("HAPTIC landings (strength): ", ", ".join(land))
+	var bad: Array = []
+	for slot in race.locals.size():
+		for kind in Haptics.KINDS:
+			var need := 2 if kind == "finish" else 1      # the finish buzzes twice
+			if int(kinds.get("%s/%d" % [kind, slot], 0)) < need:
+				bad.append("player %d never felt %s" % [slot + 1, kind])
+		if gaps[slot] < Haptics.GAP - 0.0001:
+			bad.append("player %d: two buzzes %.3f s apart" % [slot + 1, gaps[slot]])
+		print("HAPTIC player %d: shortest gap %.3f s" % [slot + 1, gaps[slot]])
+	if _hap_off.size() < 2:
+		bad.append("the second lap never came")
+	else:
+		print("HAPTIC with vibrations off: %d events, %d buzzes" % [_hap_asked_off, int(_hap_off[1]) - int(_hap_off[0])])
+		if int(_hap_off[1]) != int(_hap_off[0]):
+			bad.append("buzzed with vibrations off")
+		if _hap_asked_off < 3:
+			bad.append("too few events with vibrations off to tell")
+	for b in bad:
+		print("HAPTIC FAIL ", b)
+	_finish_test(bad.is_empty(), "every event buzzes, never too often, nothing when off" if bad.is_empty() else "%d problems" % bad.size())
 
 
 func _finish_test(ok: bool, why: String) -> void:

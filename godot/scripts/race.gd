@@ -1,7 +1,9 @@
 class_name Race
 extends Control
 ## One race (or the menu's demo race): world, karts, AI, items, cameras,
-## split-screen views, HUD, pause and results.
+## split-screen views, HUD, pause and results. A balloon battle (Etapa H) is
+## a race in an arena: `arena` instead of `track`, and `battle` holds the
+## rules and the computer drivers.
 ## Offline and host run the simulation; a network client only renders the
 ## snapshots it receives from the host and sends its controls back.
 
@@ -14,9 +16,13 @@ enum Mode { DEMO, OFFLINE, HOST, CLIENT }
 
 static var _tracks := {}
 static var _worlds := {}
+static var _arenas := {}
 
 var mode: int = Mode.DEMO
-var track: Track
+var track: Track                # null in a battle
+var arena: Arena                # the battle's arena (null in a race)
+var battle: Battle              # the battle's rules (null in a race)
+var battle_mode := false        # set before start(): the number passed is an arena
 var track_idx := 0
 var diff_idx := 1
 var diff: Dictionary
@@ -45,6 +51,10 @@ const BLUE_SPEED := 85.0
 const BLUE_BLAST := 7.0
 const DRIFT_IN := 0.24          # the computer starts a drift where the bend turns this fast (× turn rate)
 const DRIFT_ANGLE := 1.6        # and only in bends turning at least this far (rad): shorter ones give no turbo
+const ARENA_HOMING := 38.0      # an arena missile follows a rival only this close, and only one ahead of it
+const ARENA_TURN := 2.6         # and turns this fast (rad/s; 4.5 on a track)
+const BOX_BACK_ARENA := 6.0     # s before an arena's box is back
+const LAND_HARD := 22.0         # m/s falling speed that lands with the strongest buzz (the ramp's jump: about 13)
 const AI_YAW := 0.8             # how fast (× turn rate) the computer reckons a kart turns at speed         # the blue missile's blast hits everyone this close to the leader
 var explosions: Array = []
 var explosion_id := 0
@@ -77,11 +87,14 @@ var podium_t := -1.0
 var confetti_t := 0.0
 var split_bar: Control
 var music_fast := false
+var tilt_leveled := false       # the phone's hold taken as straight during this countdown (Etapa G)
+var battle_end_seen := false
+var hits_landed := 0            # battle: hits that got through (tests: each costs one balloon)
 
 var view_layer: Control
 var overlay: Control
 var panes: Array = []
-var touch_ctl: Control
+var touch_ctl: TouchControls
 var pause_panel: Control
 var results_panel: Control
 var results_body: VBoxContainer
@@ -131,6 +144,31 @@ static func get_world(i: int) -> Dictionary:
 	return _worlds[key]
 
 
+static func get_arena(i: int) -> Arena:
+	if not _arenas.has(i):
+		_arenas[i] = Arena.new(Game.ARENAS[i])
+	return _arenas[i]
+
+
+## An arena's world, cached like a track's (the same pool, so only the one
+## on screen is kept when another is built).
+static func get_arena_world(i: int) -> Dictionary:
+	var key := "a%d_%d" % [i, Gfx.level()]
+	if not _worlds.has(key):
+		for k in _worlds.keys():
+			var root: Node3D = _worlds[k].root
+			if root.get_parent() == null:
+				root.queue_free()
+				_worlds.erase(k)
+		_worlds[key] = ArenaWorld.build(get_arena(i))
+	return _worlds[key]
+
+
+## Colours, ground and weather of the track or the arena.
+func theme() -> Dictionary:
+	return arena.def.theme if arena != null else track.def.theme
+
+
 func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -159,8 +197,14 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 	track_idx = p_track
 	diff_idx = p_diff
 	diff = Game.DIFFS[p_diff]
-	track = get_track(p_track)
-	var w := get_world(p_track)
+	var w: Dictionary
+	if battle_mode:
+		arena = get_arena(p_track)
+		battle = Battle.new(self, arena)
+		w = get_arena_world(p_track)
+	else:
+		track = get_track(p_track)
+		w = get_world(p_track)
 	world = w.root
 	boxes = w.boxes
 	atm = w.atm
@@ -195,6 +239,8 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		k.ai = {"lane": (-1.0 if i % 2 == 1 else 1.0) * (0.12 + randf() * 0.33) * Game.HW, "phase": randf() * 10.0,
 			"t": 0.0, "rb": 1.0, "stuck": 0.0, "rev": 0.0, "item_t": 1.0, "last_seq": 0, "gas_at": -1.0, "dev": 0.0, "plan": {},
 			"skill": (0.93 if p_mode == Mode.DEMO else float(diff.ai)) + (randf() - 0.5) * 0.035}
+		if battle != null:
+			battle.setup_kart(k)
 		karts.append(k)
 	var loc: Array = []
 	for k in karts:
@@ -247,6 +293,8 @@ func dispose() -> void:
 
 
 func _grid_pos(slot: int) -> Vector3:
+	if arena != null:
+		return arena.starts[slot % arena.starts.size()]
 	var n := track.n
 	var row := slot / 2
 	var col := slot % 2
@@ -413,19 +461,27 @@ func _step(dt: float) -> void:
 	if state == "race":
 		race_time += dt
 	for k in karts:
+		if k.out:
+			continue
 		var inp: Dictionary
 		if k.human and not k.finished and not k.autopilot:
 			inp = _human_input(k)
+		elif battle != null:
+			inp = battle.ai_input(k, dt)
 		else:
 			inp = _ai_input(k, dt)
 		k.update(dt, inp)
 	_kart_collisions()
 	for k in karts:
-		k.constrain()
+		if not k.out:
+			k.constrain()
 	if trial and state == "race" and race_time >= rec_next and not locals[0].finished:
 		_record(locals[0])
 	_update_items(dt)
 	_compute_ranks()
+	if battle != null:
+		battle.tick()
+		return
 	for k in karts:
 		if k.human and not k.finished and state == "race":
 			var fwd := cos(Game.wrap_angle(k.heading - k.way_heading()))
@@ -488,15 +544,36 @@ func on_lap(k: Kart, dir: int) -> void:
 		k.autopilot = true
 
 
+## A vibration for a local player (Etapa G): only while they drive, not
+## once the autopilot has taken over after the finish.
+func _buzz(k: Kart, kind: String, strength := 1.0) -> void:
+	if k.local_slot >= 0 and mode != Mode.DEMO and (not k.finished or kind == "finish" or (battle != null and not battle.over)):
+		Haptics.buzz(k.local_slot, kind, strength)
+
+
+## Every hit by an item or another kart goes through here: in a battle a
+## hit that lands costs the kart a balloon (`by` popped it).
+func hit_kart(k: Kart, dur: float, big: bool, by: Kart) -> bool:
+	var ok := k.hit(dur, big)
+	if ok and battle != null:
+		hits_landed += 1
+		battle.pop(k, by)
+	return ok
+
+
 func on_bump(k: Kart, loss: float) -> void:
 	if replaying:
 		return
 	sound_at("bump", k.x, k.z, k.local_slot >= 0, clampf(loss * 1.5, 0.3, 1.0))
 	if k.local_slot >= 0:
 		shake(k.local_slot, 0.25 * loss)
+		_buzz(k, "bump", loss)
 
 
 func _compute_ranks() -> void:
+	if battle != null:
+		battle.compute_ranks()
+		return
 	var arr := karts.duplicate()
 	arr.sort_custom(_rank_cmp)
 	for i in arr.size():
@@ -533,13 +610,13 @@ func _kart_collisions() -> void:
 			b.x += nx * ov * (1.0 - wa)
 			b.z += nz * ov * (1.0 - wa)
 			if a.star > 0.0 and b.star <= 0.0:
-				b.hit(1.0, false)
+				hit_kart(b, 1.0, false, a)
 			elif b.star > 0.0 and a.star <= 0.0:
-				a.hit(1.0, false)
+				hit_kart(a, 1.0, false, b)
 			elif a.shrink > 0.0 and b.shrink <= 0.0:
-				a.hit(1.0, false)   # a kart made small by the lightning is run over
+				hit_kart(a, 1.0, false, b)   # a kart made small by the lightning is run over
 			elif b.shrink > 0.0 and a.shrink <= 0.0:
-				b.hit(1.0, false)
+				hit_kart(b, 1.0, false, a)
 			if sin(a.heading) * nx + cos(a.heading) * nz > 0.5:
 				a.speed *= 0.97
 			if -(sin(b.heading) * nx + cos(b.heading) * nz) > 0.5:
@@ -548,6 +625,8 @@ func _kart_collisions() -> void:
 				a.bump_cd = 0.35
 				b.bump_cd = 0.35
 				Sfx.play("bump", 0.5)
+				for kk in [a, b]:
+					_buzz(kk, "bump", 0.5)
 
 
 # ---------------------------------------------------------------- AI
@@ -875,6 +954,10 @@ func give_item(k: Kart) -> void:
 		k.item = 1 + _cycle % Game.ITEM_COUNT
 		k.item_n = 1
 		return
+	if battle != null:
+		battle.give_item(k)
+		k.ai.item_t = 0.5 + randf() * 1.5
+		return
 	var p := clampf((k.rank - 1.0) / (karts.size() - 1.0), 0.0, 1.0)
 	var mid := 1.0 - absf(2.0 * p - 1.0)
 	var last_two := k.rank >= karts.size() - 1 and karts.size() > 2
@@ -1018,14 +1101,21 @@ func _missile_node(blue := false) -> Node3D:
 func _drop_banana(k: Kart) -> void:
 	var px := k.x - sin(k.heading) * 2.9
 	var pz := k.z - cos(k.heading) * 2.9
-	var pj := track.project(px, pz, k.idx)
-	var la: float = pj[1]
-	if absf(la) > Game.BAR - 1.5 and track.cut_at(px, pz).is_empty():
-		var d := absf(la) - (Game.BAR - 1.5)
-		var sg := signf(la)
-		px -= track.nx[pj[0]] * sg * d
-		pz -= track.nz[pj[0]] * sg * d
-	var py := track.ground(px, pz, k.idx)
+	var py: float
+	if arena != null:
+		var q := _arena_spot(px, pz, 1.5)
+		px = q.x
+		pz = q.y
+		py = arena.ground(px, pz)
+	else:
+		var pj := track.project(px, pz, k.idx)
+		var la: float = pj[1]
+		if absf(la) > Game.BAR - 1.5 and track.cut_at(px, pz).is_empty():
+			var d := absf(la) - (Game.BAR - 1.5)
+			var sg := signf(la)
+			px -= track.nx[pj[0]] * sg * d
+			pz -= track.nz[pj[0]] * sg * d
+		py = track.ground(px, pz, k.idx)
 	var node := _banana_node()
 	node.position = Vector3(px, py + 0.25, pz)
 	node.rotation.y = randf() * TAU
@@ -1037,11 +1127,25 @@ func _drop_banana(k: Kart) -> void:
 	sound_at("drop", k.x, k.z, k.local_slot >= 0)
 
 
+## A spot near (px, pz) with `room` metres to anything solid in the arena.
+func _arena_spot(px: float, pz: float, room: float) -> Vector2:
+	for it in 3:
+		var d := arena.space(px, pz)
+		if d >= room:
+			break
+		var n := arena.away(px, pz)
+		px += n.x * (room - d)
+		pz += n.y * (room - d)
+	return Vector2(px, pz)
+
+
 func _fire_missile(k: Kart) -> void:
 	var target: Kart = order[k.rank - 2] if k.rank >= 2 else null
+	if battle != null:
+		target = battle.missile_target(k)
 	var px := k.x + sin(k.heading) * 2.8
 	var pz := k.z + cos(k.heading) * 2.8
-	var py := track.ground(px, pz, k.idx) + 0.9
+	var py := (arena.ground(px, pz) if arena != null else track.ground(px, pz, k.idx)) + 0.9
 	var node := _missile_node()
 	node.position = Vector3(px, py, pz)
 	fx.add_child(node)
@@ -1065,12 +1169,17 @@ func _threatened(k: Kart) -> bool:
 ## over them, catching the karts close by too.
 func _fire_blue(k: Kart) -> void:
 	var target: Kart = order[0] if order[0] != k else (order[1] if order.size() > 1 else null)
+	if battle != null:
+		target = battle.blue_target(k)
 	var node := _missile_node(true)
 	fx.add_child(node)
 	var b := {"x": k.x, "y": k.y + 1.5, "z": k.z, "h": k.heading, "prog": k.progress() + 3.0, "owner": k,
 		"target": target, "life": 30.0, "dive": 0.0, "node": node}
 	blues.append(b)
-	_place_blue(b)
+	if arena != null:
+		b.y = k.y + 4.0
+	else:
+		_place_blue(b)
 	sound_at("blue", k.x, k.z, k.local_slot >= 0)
 
 
@@ -1093,6 +1202,18 @@ func _place_blue(b: Dictionary) -> void:
 func _drop_oil(k: Kart) -> void:
 	var px := k.x - sin(k.heading) * 4.2
 	var pz := k.z - cos(k.heading) * 4.2
+	if arena != null:
+		var q := _arena_spot(px, pz, OIL_R)
+		var on := _oil_node()
+		fx.add_child(on)
+		var ao := {"x": q.x, "y": 0.0, "z": q.y, "node": on, "owner": k, "age": 0.0}
+		_place_oil(ao, [])
+		oils.append(ao)
+		if oils.size() > 8:
+			var old0: Dictionary = oils.pop_front()
+			old0.node.queue_free()
+		sound_at("oil", k.x, k.z, k.local_slot >= 0)
+		return
 	var pj := track.project(px, pz, k.idx)
 	var la: float = pj[1]
 	if absf(la) > Game.HW and track.cut_at(px, pz).is_empty():
@@ -1114,6 +1235,13 @@ func _drop_oil(k: Kart) -> void:
 
 ## Lies flat on the road, tilted with its slope and bank.
 func _place_oil(o: Dictionary, pj: Array) -> void:
+	if arena != null:
+		o.y = arena.ground(o.x, o.z)
+		var au := arena.normal(o.x, o.z)
+		var af := Vector3(0, 0, 1)
+		af = (af - au * af.dot(au)).normalized()
+		(o.node as Node3D).transform = Transform3D(Basis(au.cross(af), au, af), Vector3(o.x, float(o.y) + 0.04, o.z))
+		return
 	o.y = track.road_y(pj[0], pj[1], pj[2], false)
 	var up := track.normal(pj[0], pj[1], pj[2], false)
 	var fwd := Vector3(track.tx[pj[0]], 0.0, track.tz[pj[0]])
@@ -1195,7 +1323,7 @@ func _explode(px: float, pz: float, kind := 0) -> void:
 
 
 func _explode_fx(px: float, pz: float, kind := 0) -> void:
-	var gp := Vector3(px, track.ground(px, pz), pz)
+	var gp := Vector3(px, arena.ground(px, pz) if arena != null else track.ground(px, pz), pz)
 	Effects.explosion(fx, gp)
 	if kind == 1:
 		Effects.flash(fx, gp + Vector3(0, 2.0, 0), Color(0.45, 0.7, 1.0), 16.0, 0.5)
@@ -1222,7 +1350,7 @@ func _update_items(dt: float) -> void:
 			var dz: float = k.z - b.z
 			if dx * dx + dz * dz < 2.6 * 2.6 and k.y < float(b.y) + 1.2:
 				b.active = false
-				b.respawn = 2.5
+				b.respawn = BOX_BACK_ARENA if arena != null else 2.5
 				if k.item == 0 and k.roulette <= 0.0 and not k.finished:
 					k.roulette = 1.3 if k.local_slot >= 0 or k.human else 1.0
 				break
@@ -1235,7 +1363,7 @@ func _update_items(dt: float) -> void:
 			var dx: float = k.x - b.x
 			var dz: float = k.z - b.z
 			if dx * dx + dz * dz < 1.9 * 1.9 and k.y - float(b.y) < 1.0:
-				k.hit(1.1, false)
+				hit_kart(k, 1.1, false, b.owner)
 				b.node.queue_free()
 				bananas.remove_at(i)
 				break
@@ -1247,26 +1375,46 @@ func _update_items(dt: float) -> void:
 		var tz := 0.0
 		var homing := false
 		var tg: Kart = m.target
-		if tg != null and not tg.finished:
+		if tg != null and not tg.finished and not tg.out:
 			var ddx := tg.x - float(m.x)
 			var ddz := tg.z - float(m.z)
-			if ddx * ddx + ddz * ddz < 50.0 * 50.0:
+			if arena != null:
+				# in an arena it only follows a rival it can see ahead, not round corners
+				if ddx * ddx + ddz * ddz < ARENA_HOMING * ARENA_HOMING and \
+						absf(Game.wrap_angle(atan2(ddx, ddz) - float(m.h))) < 1.0:
+					tx = tg.x
+					tz = tg.z
+					homing = true
+			elif ddx * ddx + ddz * ddz < 50.0 * 50.0:
 				tx = tg.x
 				tz = tg.z
 				homing = true
-		if not homing:
-			var jj := (int(m.idx) + 9) % tr.n
-			tx = tr.x[jj]
-			tz = tr.z[jj]
-		var des := atan2(tx - float(m.x), tz - float(m.z))
-		m.h += clampf(Game.wrap_angle(des - float(m.h)), -4.5 * dt, 4.5 * dt)
-		m.x += sin(m.h) * m.v * dt
-		m.z += cos(m.h) * m.v * dt
-		var pj := tr.project(m.x, m.z, m.idx)
-		m.idx = pj[0]
-		var over_cut := tr.cut_at(m.x, m.z, 1.0)
-		m.y = (tr.cut_y(over_cut[0], over_cut[2]) if not over_cut.is_empty() else tr.road_y(pj[0], pj[1], pj[2])) + 0.9   # skims along the road, over hills and the ramp
-		var boom: bool = m.life <= 0.0 or (absf(float(pj[1])) > Game.BAR - 0.6 and over_cut.is_empty())
+		var boom: bool
+		if arena != null:
+			# in an arena: straight on unless it has a rival in sight, until it hits something
+			if not homing:
+				tx = float(m.x) + sin(float(m.h)) * 10.0
+				tz = float(m.z) + cos(float(m.h)) * 10.0
+			var ades := atan2(tx - float(m.x), tz - float(m.z))
+			m.h += clampf(Game.wrap_angle(ades - float(m.h)), -ARENA_TURN * dt, ARENA_TURN * dt)
+			m.x += sin(m.h) * m.v * dt
+			m.z += cos(m.h) * m.v * dt
+			m.y = arena.ground(m.x, m.z) + 0.9
+			boom = m.life <= 0.0 or arena.space(m.x, m.z, float(m.y) - 0.5) < 0.6
+		else:
+			if not homing:
+				var jj := (int(m.idx) + 9) % tr.n
+				tx = tr.x[jj]
+				tz = tr.z[jj]
+			var des := atan2(tx - float(m.x), tz - float(m.z))
+			m.h += clampf(Game.wrap_angle(des - float(m.h)), -4.5 * dt, 4.5 * dt)
+			m.x += sin(m.h) * m.v * dt
+			m.z += cos(m.h) * m.v * dt
+			var pj := tr.project(m.x, m.z, m.idx)
+			m.idx = pj[0]
+			var over_cut := tr.cut_at(m.x, m.z, 1.0)
+			m.y = (tr.cut_y(over_cut[0], over_cut[2]) if not over_cut.is_empty() else tr.road_y(pj[0], pj[1], pj[2])) + 0.9   # skims along the road, over hills and the ramp
+			boom = m.life <= 0.0 or (absf(float(pj[1])) > Game.BAR - 0.6 and over_cut.is_empty())
 		if not boom:
 			for k in karts:
 				if k == m.owner and m.age < 0.6:
@@ -1274,7 +1422,7 @@ func _update_items(dt: float) -> void:
 				var dx: float = k.x - m.x
 				var dz: float = k.z - m.z
 				if dx * dx + dz * dz < 4.0 and absf(k.y + 0.6 - float(m.y)) < 1.6:
-					k.hit(1.6, true)
+					hit_kart(k, 1.6, true, m.owner)
 					boom = true
 					break
 		if not boom:
@@ -1305,7 +1453,7 @@ func _update_items(dt: float) -> void:
 			var dx: float = k.x - o.x
 			var dz: float = k.z - o.z
 			if dx * dx + dz * dz < (OIL_R + 0.4) * (OIL_R + 0.4) and absf(k.y - float(o.y)) < 1.0 and not k.air:
-				k.hit(1.9, false)
+				hit_kart(k, 1.9, false, o.owner)
 	for i in range(blues.size() - 1, -1, -1):
 		if _update_blue(blues[i], dt):
 			blues[i].node.queue_free()
@@ -1316,6 +1464,8 @@ func _update_items(dt: float) -> void:
 func _update_blue(b: Dictionary, dt: float) -> bool:
 	b.life -= dt
 	var tg: Kart = b.target
+	if battle != null:
+		return _update_blue_arena(b, dt, tg)
 	if tg == null or tg.finished:
 		# the leader crossed the line: on to whoever leads now
 		tg = null
@@ -1337,7 +1487,7 @@ func _update_blue(b: Dictionary, dt: float) -> bool:
 	var to := Vector3(tg.x - float(b.x), tg.y + 0.8 - float(b.y), tg.z - float(b.z))
 	var step := BLUE_SPEED * 0.7 * dt
 	if to.length() <= step + 1.2 or float(b.dive) > 1.2:
-		_blue_blast(tg)
+		_blue_blast(tg, b.owner)
 		return true
 	var mv := to.normalized() * step
 	b.x = float(b.x) + mv.x
@@ -1348,12 +1498,43 @@ func _update_blue(b: Dictionary, dt: float) -> bool:
 	return false
 
 
-func _blue_blast(tg: Kart) -> void:
+## The blue missile in an arena: high over the floor straight to whoever
+## has the most balloons, then down onto them.
+func _update_blue_arena(b: Dictionary, dt: float, tg: Kart) -> bool:
+	if tg == null or tg.out:
+		tg = battle.blue_target(b.owner)
+		b.target = tg
+	if tg == null or b.life <= 0.0:
+		_explode(b.x, b.z, 1)
+		return true
+	var flat := Vector2(tg.x - float(b.x), tg.z - float(b.z))
+	if float(b.dive) <= 0.0 and flat.length() > 10.0:
+		var mv := flat.normalized() * minf(BLUE_SPEED * dt, flat.length() - 9.0)
+		b.x = float(b.x) + mv.x
+		b.z = float(b.z) + mv.y
+		b.y = lerpf(float(b.y), arena.ground(float(b.x), float(b.z)) + 4.0, 1.0 - exp(-4.0 * dt))
+		b.h = atan2(flat.x, flat.y)
+		return false
+	b.dive = float(b.dive) + dt
+	var to := Vector3(tg.x - float(b.x), tg.y + 0.8 - float(b.y), tg.z - float(b.z))
+	var step := BLUE_SPEED * 0.7 * dt
+	if to.length() <= step + 1.2 or float(b.dive) > 1.2:
+		_blue_blast(tg, b.owner)
+		return true
+	var mv3 := to.normalized() * step
+	b.x = float(b.x) + mv3.x
+	b.y = float(b.y) + mv3.y
+	b.z = float(b.z) + mv3.z
+	b.h = atan2(to.x, to.z)
+	return false
+
+
+func _blue_blast(tg: Kart, by: Kart = null) -> void:
 	_explode(tg.x, tg.z, 1)
 	for k in karts:
 		var d := Vector2(k.x - tg.x, k.z - tg.z).length()
 		if k == tg or (d < BLUE_BLAST and absf(k.y - tg.y) < 3.0):
-			k.hit(1.8, true)
+			hit_kart(k, 1.8, true, by)
 
 
 # ================================================================== network
@@ -1617,6 +1798,13 @@ func _process(delta: float) -> void:
 	if karts.is_empty():
 		return
 	var dt := 0.0 if paused else delta
+	Haptics.speed = float(fast)
+	if battle != null and touch_ctl != null and not locals.is_empty() and touch_ctl.visible and (locals[0] as Kart).out:
+		touch_ctl.visible = false       # out of the battle: nothing left to steer
+	if state == "countdown" and countdown <= 1.3 and not tilt_leveled and touch_ctl != null:
+		# the last second of the countdown: the way the phone is held now is straight
+		tilt_leveled = true
+		Game.tilt.level(1.0)
 	var alpha := Engine.get_physics_interpolation_fraction()
 	var smooth := mode == Mode.CLIENT
 	for k in karts:
@@ -1690,6 +1878,14 @@ func _process(delta: float) -> void:
 		for k in locals:
 			if not k.finished:
 				all_done = false
+		if battle != null:
+			all_done = battle.over
+			if battle.over and not battle_end_seen:
+				battle_end_seen = true
+				_battle_end()
+			if not battle.fast_music and state == "race" and (battle.time_left() < 30.0 or battle.alive().size() <= 2):
+				battle.fast_music = true
+				Sfx.music(true, true)
 		if all_done:
 			if all_done_t < 0.0:
 				all_done_t = 0.0
@@ -1732,7 +1928,8 @@ func _update_box_visuals(dt: float) -> void:
 
 func _reset_obs(k: Kart) -> void:
 	k.obs = {"spin": 0.0, "boost": 0.0, "roulette": 0.0, "item": 0, "level": 0, "hop": 0.0, "star": 0.0,
-		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0, "trick": 0.0, "air": false, "shield": 0.0, "shrink": 0.0}
+		"lap": maxi(1, k.lap), "finished": false, "tick": 0.0, "trick": 0.0, "air": false, "shield": 0.0, "shrink": 0.0,
+		"balloons": k.balloons, "out": false}
 
 
 ## Turns state changes into sounds, messages and effects. Works the same
@@ -1748,6 +1945,7 @@ func _observe(k: Kart, dt: float) -> void:
 		burst(Vector3(k.x, k.y + 1.6, k.z), Color(1.0, 0.88, 0.4), 14, 5.0)
 		if loc:
 			shake(k.local_slot, 0.5)
+			_buzz(k, "hit")
 	# jumps: a whoosh for the trick, a thump on landing
 	if k.trick > 0.0 and float(o.trick) <= 0.0:
 		sound_at("trick", k.x, k.z, loc, 0.8)
@@ -1758,13 +1956,15 @@ func _observe(k: Kart, dt: float) -> void:
 		sound_at("land", k.x, k.z, loc, 0.7)
 		if loc:
 			shake(k.local_slot, 0.25)
+			_buzz(k, "land", k.land_v / LAND_HARD)
 	o.air = k.air
 	if k.boost > float(o.boost) + 0.05:
 		sound_at("boost", k.x, k.z, loc, 0.9)
 		k.on_boost(int(o.level) if not k.drift_active else 0)
+		_buzz(k, "boost", 0.5)
 		if loc and hud != null and race_time < 0.6 and state == "race" and k.boost > 1.0:
 			hud.show_msg("Raketový start!", UI.GO)
-	if k.finished and not bool(o.finished) and mode != Mode.DEMO:
+	if k.finished and not bool(o.finished) and mode != Mode.DEMO and battle == null:
 		if loc:
 			Effects.confetti_shower(k)
 		if _ear(k.x, k.z) > 0.0:
@@ -1781,6 +1981,7 @@ func _observe(k: Kart, dt: float) -> void:
 			Sfx.play("got", 0.9)
 		if k.drift_level > int(o.level):
 			Sfx.play("level%d" % clampi(k.drift_level, 1, 3), 0.8)
+			_buzz(k, "drift", k.drift_level / 3.0)
 		if k.hop > float(o.hop) + 0.05 and k.spin <= 0.0:
 			Sfx.play("hop", 0.6)
 		if k.star > 0.0 and float(o.star) <= 0.0:
@@ -1804,11 +2005,12 @@ func _observe(k: Kart, dt: float) -> void:
 				else:
 					hud.show_banner("KOLO %d/%d" % [k.lap, Game.LAPS], UI.PAPER, lap_time, sub_col)
 					Sfx.play("lap")
-		if k.finished and not bool(o.finished):
+		if k.finished and not bool(o.finished) and battle == null:
 			var place := _place_of(k)
 			if hud != null:
 				hud.show_msg("Vítězství!" if place == 1 else "Cíl! %d. místo" % place, UI.GOLD if place == 1 else UI.GO)
 			Sfx.play("finish")
+			_buzz(k, "finish")
 			if trial:
 				_trial_finish(k)
 			else:
@@ -1826,6 +2028,9 @@ func _observe(k: Kart, dt: float) -> void:
 		if zap_t < 0.3:
 			zap_t = 0.4
 			Sfx.play("zap", 0.9)
+		_buzz(k, "hit", 0.6)
+	if battle != null and mode != Mode.DEMO:
+		_observe_battle(k, o, loc, hud)
 	o.shield = k.shield
 	o.shrink = k.shrink
 	o.spin = k.spin
@@ -1836,6 +2041,49 @@ func _observe(k: Kart, dt: float) -> void:
 	o.hop = k.hop
 	o.star = k.star
 	o.finished = k.finished
+
+
+## Balloons popping and karts dropping out of the battle, seen from the
+## karts' state like the rest of _observe.
+func _observe_battle(k: Kart, o: Dictionary, loc: bool, hud: Hud) -> void:
+	var was := int(o.balloons)
+	if k.balloons < was:
+		for i in range(k.balloons, was):
+			var at := k.out_at + Vector3(0, 2.6, 0) if k.out else k.balloon_pos(i)
+			burst(at, (k.ch.color as Color).lightened(0.25), 18, 6.5, false, 0.55, 0.55)
+			Effects.flash(fx, at, Color(1.0, 1.0, 1.0), 3.0, 0.15)
+			sound_at("pop", at.x, at.z, loc)
+		if loc and hud != null and not k.out:
+			hud.show_msg("Poslední balónek!" if k.balloons == 1 else "Prasklý balónek!", UI.KERB)
+	o.balloons = k.balloons
+	if k.out and not bool(o.out):
+		o.out = true
+		burst(k.out_at + Vector3(0, 1.0, 0), Color(0.85, 0.85, 0.9), 26, 5.0, false, 1.4, 0.9)
+		for p in panes:
+			if p.hud == null:
+				continue
+			if p.kart == k:
+				p.hud.show_msg("Vypadl jsi!", UI.KERB)
+			else:
+				p.hud.show_msg("%s vypadl!" % display_name(k), UI.PAPER)
+
+
+## The battle is over: the winner's message, confetti, the finish buzz.
+func _battle_end() -> void:
+	var win := battle.winner()
+	for p in panes:
+		var me: Kart = p.kart
+		if p.hud == null or me == null:
+			continue
+		if me == win:
+			p.hud.show_msg("Vítězství!", UI.GOLD)
+		else:
+			p.hud.show_msg("Konec! %d. místo" % _place_of(me), UI.PAPER)
+	for k in locals:
+		_buzz(k, "finish")
+	Sfx.play("finish")
+	if win != null and not win.out:
+		Effects.confetti_burst(fx, win.position + Vector3(0, 1.5, 0))
 
 
 func _count_display() -> void:
@@ -1862,6 +2110,8 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 		_podium_camera(p)
 		return
 	var k: Kart = p.kart if p.kart != null else demo_focus
+	if battle != null and k != null and k.out:
+		k = _watch(p)                   # out of the battle: watching the others
 	if k == null:
 		return
 	var cam: Camera3D = p.cam
@@ -1908,7 +2158,8 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 	else:
 		cam.position = cam.position.lerp(desired, follow)
 	# never inside a hill behind the kart
-	var floor_y := track.ground(cam.position.x, cam.position.z, k.idx) + 1.4
+	var floor_y := (arena.ground(cam.position.x, cam.position.z) if arena != null else
+		track.ground(cam.position.x, cam.position.z, k.idx)) + 1.4
 	if cam.position.y < floor_y:
 		cam.position.y = floor_y
 	if p.shake > 0.0:
@@ -1920,8 +2171,24 @@ func _update_camera(p: Dictionary, delta: float) -> void:
 	cam.fov = p.fov
 
 
+## A player out of the battle watches someone still in: the one they were
+## watching, else whoever leads.
+func _watch(p: Dictionary) -> Kart:
+	var w: Kart = p.get("watch")
+	if w == null or w.out:
+		w = null
+		for o in battle.standings():
+			if not o.out:
+				w = o
+				break
+		p.watch = w
+	return w if w != null else p.kart
+
+
 # ================================================================== results & pause
 func _place_of(k: Kart) -> int:
+	if battle != null:
+		return battle.standings().find(k) + 1
 	var place := 1
 	for o in karts:
 		if o != k and o.finished and o.finish_time < k.finish_time:
@@ -1950,6 +2217,10 @@ func _save_record(k: Kart) -> void:
 
 func standings() -> Array:
 	var rows: Array = []
+	if battle != null:
+		for k in battle.standings():
+			rows.append({"k": k, "t": k.finish_time, "est": false})
+		return rows
 	for k in karts:
 		if k.finished:
 			rows.append({"k": k, "t": k.finish_time, "est": false})
@@ -2019,24 +2290,38 @@ func toggle_pause() -> void:
 	var row := UI.hbox(10)
 	inner.add_child(row)
 	if mode == Mode.OFFLINE:
-		var r := UI.button("Restartovat závod", func(): restart_requested.emit())
+		var r := UI.button("Restartovat bitvu" if battle != null else "Restartovat závod", func(): restart_requested.emit())
 		r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(r)
 	var q := UI.button("Odejít do menu", func(): menu_requested.emit())
 	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(q)
-	var row2 := UI.hbox(10)
+	var row2 := UI.hbox(8)
 	inner.add_child(row2)
-	var sb := UI.button(Menu._mute_text().replace("\n", ": "), Callable())
+	var sb := Menu._small_button(Menu._mute_text())
 	sb.pressed.connect(_pause_mute.bind(sb))
-	var gb := UI.button(Menu._gfx_text().replace("\n", ": "), Callable())
+	var gb := Menu._small_button(Menu._gfx_text())
 	gb.pressed.connect(_pause_quality.bind(gb))
-	var fb := UI.button(Menu._fps_text().replace("\n", ": "), Callable())
+	var fb := Menu._small_button(Menu._fps_text())
 	fb.pressed.connect(_pause_fps.bind(fb))
-	for b in [sb, gb, fb]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 17)
+	var vb := Menu._small_button(Menu._vibrate_text())
+	vb.pressed.connect(_pause_vibrate.bind(vb))
+	for b in [sb, gb, fb, vb]:
 		row2.add_child(b)
+	if touch_ctl != null and Game.tilt.have:
+		# the phone's steering: wheel or tilting, how sharp, and straight again
+		var row3 := UI.hbox(8)
+		inner.add_child(row3)
+		var st := Menu._small_button(Menu._steer_text())
+		var sens := Menu._small_button(Menu._sens_text())
+		var lv := Menu._small_button("Vyrovnat")
+		st.pressed.connect(_pause_steer.bind(st, sens, lv))
+		sens.pressed.connect(_pause_sens.bind(sens))
+		lv.pressed.connect(_pause_level.bind(lv))
+		for b in [st, sens, lv]:
+			row3.add_child(b)
+		sens.visible = Game.tilting()
+		lv.visible = Game.tilting()
 	var hint := UI.label("Stíny a záře se přepnou hned, hustota stromů, počet částic a sníh až od dalšího závodu.", 15, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(470, 0)
@@ -2046,19 +2331,49 @@ func toggle_pause() -> void:
 
 func _pause_mute(b: Button) -> void:
 	Sfx.toggle_mute()
-	b.text = Menu._mute_text().replace("\n", ": ")
+	b.text = Menu._mute_text()
 
 
 func _pause_quality(b: Button) -> void:
 	Gfx.cycle()
 	apply_quality()
-	b.text = Menu._gfx_text().replace("\n", ": ")
+	b.text = Menu._gfx_text()
 
 
 func _pause_fps(b: Button) -> void:
 	Game.settings.show_fps = not bool(Game.settings.show_fps)
 	Game.save_settings()
-	b.text = Menu._fps_text().replace("\n", ": ")
+	b.text = Menu._fps_text()
+
+
+func _pause_vibrate(b: Button) -> void:
+	Menu.toggle_vibrate()
+	b.text = Menu._vibrate_text()
+
+
+func _pause_steer(b: Button, sens: Button, lv: Button) -> void:
+	Menu.toggle_steer()
+	b.text = Menu._steer_text()
+	sens.visible = Game.tilting()
+	lv.visible = Game.tilting()
+	if Game.tilting():
+		Game.tilt.level()          # straight is how the phone is held now
+	if touch_ctl != null:
+		touch_ctl.steer_mode_changed()
+
+
+func _pause_sens(b: Button) -> void:
+	Menu.cycle_sens()
+	b.text = Menu._sens_text()
+
+
+## Straight is how the phone is held over the next half second.
+func _pause_level(b: Button) -> void:
+	Game.tilt.level()
+	b.text = "Vyrovnáno"
+	get_tree().create_timer(1.2).timeout.connect(func():
+		if is_instance_valid(b):
+			b.text = "Vyrovnat")
 
 
 func _resume() -> void:
@@ -2096,6 +2411,9 @@ func _show_results() -> void:
 		return
 	if trial:
 		_show_trial_results()
+		return
+	if battle != null:
+		_show_battle_results()
 		return
 	var title := "Výsledky"
 	var sub := ""
@@ -2143,6 +2461,55 @@ func _show_results() -> void:
 			inner.add_child(UI.label("Další závod spouští hostitel.", 18, UI.MUTED))
 			first = UI.button("Odejít", func(): menu_requested.emit())
 			row.add_child(first)
+	for c in row.get_children():
+		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	first.grab_focus.call_deferred()
+
+
+## After a balloon battle: places, balloons left and popped; a win on Hard
+## gives the winner's driver the battle paint.
+func _show_battle_results() -> void:
+	var rows := battle.standings()
+	var title := "Výsledky bitvy"
+	var sub := ""
+	if mode == Mode.OFFLINE and unlocked_now.is_empty():
+		var won: Array = []
+		for k in locals:
+			if rows.find(k) == 0:
+				won.append(k.driver)
+		if not won.is_empty():
+			unlocked_now = Game.award_battle(won, diff_idx)
+	if locals.size() == 1:
+		var k: Kart = locals[0]
+		var place := rows.find(k) + 1
+		title = "Vítězství!" if place == 1 else "%d. místo" % place
+		sub = "%s · zbylé balónky: %d · praskl jsi jich %d" % [arena.def.name, k.balloons, k.pops]
+	else:
+		var parts: Array = []
+		for k in locals:
+			parts.append("Hráč %d: %d. místo" % [k.local_slot + 1, rows.find(k) + 1])
+		sub = " · ".join(parts)
+	if battle.end_time >= Game.BATTLE_TIME - 0.01:
+		sub += " · čas vypršel"
+	var p := _panel(title, not podium.is_empty())
+	results_panel = p[0]
+	var inner: VBoxContainer = p[1]
+	var tl: Label = p[2]
+	if locals.size() == 1:
+		tl.add_theme_color_override("font_color", UI.place_color(rows.find(locals[0]) + 1))
+	var sl := UI.label(sub, 18, UI.MUTED)
+	sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sl.custom_minimum_size = Vector2(470, 0)
+	inner.add_child(sl)
+	results_body = UI.vbox(2)
+	inner.add_child(results_body)
+	_fill_results()
+	_unlock_box(inner)
+	var row := UI.hbox(10)
+	inner.add_child(row)
+	var first := UI.button("Hrát znovu", func(): restart_requested.emit(), true)
+	row.add_child(first)
+	row.add_child(UI.button("Hlavní menu", func(): menu_requested.emit()))
 	for c in row.get_children():
 		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	first.grab_focus.call_deferred()
@@ -2609,7 +2976,19 @@ func _fill_results() -> void:
 		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		nl.clip_text = true
 		h.add_child(nl)
-		h.add_child(UI.label("jede…" if r.est else Game.fmt_time(r.t), 19, UI.MUTED if r.est else col))
+		if battle != null:
+			# balloons left (dots in the kart's colour), balloons popped, when out
+			var bl := BalloonIcons.new(k.ch.color, 16.0)
+			bl.set_count(k.balloons)
+			bl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(bl)
+			var pl2 := UI.label("prask %d" % k.pops, 17, UI.MUTED)
+			pl2.custom_minimum_size = Vector2(72, 0)
+			h.add_child(pl2)
+			h.add_child(UI.label("vypadl %s" % Game.fmt_time(k.finish_time) if k.out else "vydržel", 17,
+				UI.MUTED if k.out else UI.GO))
+		else:
+			h.add_child(UI.label("jede…" if r.est else Game.fmt_time(r.t), 19, UI.MUTED if r.est else col))
 		if not cup.is_empty():
 			var gain := UI.label("+%d" % (int(Game.CUP_POINTS[i]) if i < Game.CUP_POINTS.size() else 0), 19, UI.GO, UI.bold_font)
 			gain.custom_minimum_size = Vector2(40, 0)
