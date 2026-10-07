@@ -6,7 +6,7 @@
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.16.1 na telefonu: několik závodů za sebou na Střední (oprava černé obrazovky), pak odemykání.** Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
+**Plán vylepšení 2 (`PLAN_VYLEPSENI_2.md`): etapa G – zatáčení nakláněním a vibrace (verze 1.17.0), pak H – bitva s balónky, I – bitva po Wi-Fi.** Verze 1.16.1 je na telefonu ověřená (oprava černé obrazovky funguje). Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
