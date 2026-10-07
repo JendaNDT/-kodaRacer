@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 07. 10. 2026 (verze 1.16.1)*
+*Naposled aktualizováno: 07. 10. 2026 (verze 1.17.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Plán vylepšení 2 (`PLAN_VYLEPSENI_2.md`): etapa G – zatáčení nakláněním a vibrace (verze 1.17.0), pak H – bitva s balónky, I – bitva po Wi-Fi.** Verze 1.16.1 je na telefonu ověřená (oprava černé obrazovky funguje). Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
+**Vyzkoušet verzi 1.17.0 na telefonu: v menu přepnout Ovládání na naklánění, zkusit všechny tři citlivosti a Vyrovnat v pauze, a jestli jsou vibrace příjemné. Pak etapa H – bitva s balónky (`PLAN_VYLEPSENI_2.md`), nakonec I – bitva po Wi-Fi.** Etapa G (naklánění a vibrace) je hotová a otestovaná v cloudu, senzor a vibrace se ale dají ověřit jen na skutečném telefonu.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -36,6 +36,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Etapa E (verze 1.15.0):** zkratka na každé trati (hlína, písek, led, štěrk) s cedulí, kolíky po okrajích, mezerou v bariéře a čárkovaně na minimapě. Bez turba se nevyplatí, s turbem nebo hvězdou ano. Počítač ji bere s turbem nebo hvězdou. Kola, pořadí i Wi-Fi fungují. Test `--cuttest`.
 - **Etapa F (verze 1.16.0):** obrazovka Sbírka (poháry pro každou obtížnost, odměny odemčené i zamčené s návodem), oznámení „ODEMČENO!“ s fanfárou po mistrovství a časovce. Odměny: druhý a zlatý lak pro každého jezdce, zrcadlové tratě (zlatý pohár na Střední), tajný 7. jezdec Profesor Píst s retro roadsterem (zlatý pohár na Těžké, pak jede 6 ze 7 jezdců), duch vývojáře v časovce (časovka pod limitem na všech tratích). Lak a zrcadlové tratě fungují i po Wi-Fi. Test `--unlocktest`, test vzletů i na zrcadlových tratích.
 - **Oprava 1.16.1:** na telefonech (Samsung i jiné) se na Střední po prvním závodě 3D grafika rozbila: v menu šum, v závodě černo. Zkušební sestavení s volbami „bez vyhlazení / bez stínů / bez záře“ ukázalo, že za to může vyhlazování hran (MSAA). Na telefonu je teď vypnuté a 3D obraz se kreslí ve vyšším rozlišení (Střední 85 %, Vysoká 100 %). Nový test paměti `--soaktest` (závod → výsledky → menu dokola) a přepínač `--mobile` (počítač se chová jako telefon).
+- **Etapa G (verze 1.17.0):** zatáčení nakláněním telefonu (Ovládání: volant / naklánění, citlivost Jemná / Střední / Ostrá, mrtvá zóna 3°, vyhlazení, vyrovnání na konci odpočtu a tlačítkem Vyrovnat v pauze, správný směr i po otočení telefonu na druhou stranu), malý volantík místo dotykového volantu. Vibrace telefonu nebo herního ovladače při nárazu, zásahu, dopadu, turbu, změně jisker driftu a v cíli, nejvýš 10× za vteřinu, tlačítko Vibrace v menu i v pauze, fungují i po Wi-Fi. Testy `--tilttest` a `--hapticstest` (i pro dva hráče).
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -107,6 +108,10 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Stopy smyku bez per-frame práce:** pevný kruh pásů (MultiMesh), mizení počítá grafická karta. Počet podle kvality v `gfx.gd`.
 - **Fyzika s pevným krokem 1/120 s**: stejné chování na rychlém PC i pomalém telefonu.
 - **Na mobilu plyn automaticky**: palcem se nedá zároveň držet plyn a driftovat.
+- **Naklánění = otočení volantu (od verze 1.17.0):** úhel se počítá jako otočení telefonu kolem osy displeje (`Tilt.wheel`), část gravitace kolmo do displeje má váhu jen 0,5. Držený normálně (nakloněný dozadu 30–60°) tak telefon zatáčí skoro přesně podle otočení, a když ho někdo drží naplocho, řídí se tím, jak moc klesá pravý okraj, a nezačne cukat. Čistě „o kolik klesá pravý okraj“ by u telefonu nakloněného dozadu o 45° chtělo otočit telefonem o 40 % víc.
+- **Otočený telefon řeší hra, ne Godot:** Godot 4.7.1 přepočítá osy senzoru jen při změně nastavení Androidu, a otočení o 180° žádnou změnu neohlásí. Displej se ale vždy otočí spodkem k zemi, takže gravitace v něm vždy míří dolů. Když míří jasně nahoru (víc než 3 m/s²), jsou osy o půl otáčky pozadu a `Tilt` si je otočí.
+- **Senzory jsou zapnuté pořád** (`input_devices/sensors/enable_gravity` a `enable_accelerometer` v `project.godot`): Godot je na Androidu registruje jen při startu, za běhu zapnout nejdou. Spotřeba proti 3D hře je zanedbatelná.
+- **Vibrace podle herního času:** limit 0,1 s mezi vibracemi měří `Haptics` ve stejném čase jako závod, takže test s `--fast=8` kontroluje totéž co skutečná hra. Po průjezdu cílem nevibruje nic kromě samotného cíle (motokáru řídí autopilot).
 
 ## 📁 Stav souborů
 - `godot/project.godot` – Godot projekt (otevřít přes Import)
@@ -125,6 +130,8 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky
 - `godot/scripts/focus_ring.gd` – kurzor v menu pro klávesnici a ovladač
 - `godot/scripts/gfx.gd` – úrovně kvality grafiky (co která zapíná)
+- `godot/scripts/tilt.gd` – zatáčení nakláněním (úhel, mrtvá zóna, vyhlazení, vyrovnání, otočený telefon)
+- `godot/scripts/haptics.gd` – vibrace telefonu a herních ovladačů (autoload `Haptics`, limit 10× za vteřinu)
 - `godot/scripts/effects.gd` – jednorázové efekty: výbuch, střepy krabic, konfety, hvězdičky po zásahu
 - `godot/scripts/skid_marks.gd`, `speed_lines.gd` – stopy smyku a rychlostní čáry
 - `godot/export_presets.cfg` – export Android + Windows

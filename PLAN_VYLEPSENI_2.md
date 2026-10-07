@@ -14,7 +14,34 @@ Pořadí je schválně tohle: G je rychlá a hned je na telefonu znát. H je nej
 
 ---
 
-## Etapa G – Naklánění a vibrace
+## Etapa G – Naklánění a vibrace  ✅ hotovo (verze 1.17.0), čeká na vyzkoušení na telefonu
+
+> **Výsledek:** v menu i v pauze je tlačítko **Vibrace** (i na počítači, kde vibruje herní ovladač) a na telefonu se
+> senzorem tlačítka **Ovládání: volant / naklánění** a **Citlivost** (Jemná / Střední / Ostrá), v pauze navíc
+> **Vyrovnat**. Při naklánění zmizí dotykový volant a vlevo dole je malý volantík, který ukazuje, jak moc motokára
+> zatáčí (při plném rejdu zezlátne). Naklánění měří otočení telefonu jako volantu (kolem osy displeje); když
+> telefon držíš skoro naplocho, bere místo toho, jak moc klesá pravý okraj. Vyrovnání proběhne v poslední vteřině
+> odpočtu (průměr z 1 s), tlačítko Vyrovnat bere průměr z dalšího půl vteřiny. Vyhlazení s časovou konstantou
+> 0,07 s: jeden roztřesený snímek pohne řízením necelou desetinou rejdu, skutečné natočení je za 0,2 s z 93 % hotové.
+> **Otočení telefonu:** ve zdrojovém kódu Godotu 4.7.1 jsem ověřil, že Godot osy senzoru otáčí podle displeje sám,
+> ale jen když Android ohlásí změnu nastavení, a otočení o 180° (z jedné strany na šířku na druhou) ji neohlásí.
+> Hra proto pozná „vzhůru nohama“ podle toho, že gravitace míří k hornímu okraji displeje, a směr si otočí sama.
+> Senzor gravitace se musí v Godotu zapnout v nastavení projektu (`input_devices/sensors/enable_gravity`, výchozí je
+> vypnuto); kde telefon gravitační senzor nemá, použije se akcelerometr.
+> **Vibrace** jdou všechny přes `haptics.gd` (nový autoload `Haptics`), události se poznávají ze stavu motokáry
+> stejně jako zvuky, takže fungují i u klienta po Wi-Fi. Síla a délka: náraz 20–60 ms podle síly, zásah 135–160 ms,
+> dopad 30–110 ms podle rychlosti pádu (skok z rampy ≈ 13 m/s → 0,66), turbo 35–50 ms, změna jisker 15–30 ms,
+> cíl 2× 70 ms. Když přijde další dřív než za 0,1 s, silnější počká na svou chvíli, slabší se zahodí. Po průjezdu
+> cílem (jede autopilot) už nic nevibruje. Při zapnutí vibrací telefon jednou zkušebně zavibruje.
+> **Test `--tilttest`:** 17 kontrol (rovně, mrtvá zóna, plný rejd přesně na 35° / 25° / 18°, trochu / hodně / přes
+> hranu, doleva jako doprava, pořadí citlivostí, skoro naplocho, otočený telefon, vyhlazení, vyrovnání, ovládání)
+> a závod s telefonem drženým 12° nakřivo: po odpočtu rovně, po naklonění o 15° zatáčí doprava.
+> **Test `--hapticstest`:** celý závod s autopilotem, test sám přidá zásah, blesk, náraz do bariéry, pád ze 6 m
+> a drift klávesami. Každá událost zavibruje, mezi dvěma vibracemi je vždy aspoň 0,1 s, v druhém kole jsou vibrace
+> vypnuté a nevibruje nic (i když se v něm děje 9–20 událostí). Běží i pro dva hráče (každý cítí jen své).
+> Wi-Fi test navíc kontroluje, že hráč u klienta cítí průjezd cílem.
+> **Co jde ověřit jen na telefonu:** jestli je naklánění příjemné (citlivost, vyhlazení) a jestli jsou vibrace
+> dost silné, ale ne otravné. Některé telefony neumí měnit sílu vibrace, ty rozliší jen délku.
 
 **Cíl:** na telefonu jde zatáčet nakloněním jako s volantem a telefon při nárazech, zásazích a turbu jemně zavibruje.
 

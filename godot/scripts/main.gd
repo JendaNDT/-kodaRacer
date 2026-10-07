@@ -35,6 +35,12 @@ var _ai_sum := {}
 var _ai_drifts := 0
 var _items_bad := 0
 var _jump_bad := 0
+var _tilt_phase := 0
+var _tilt_at := 0.0
+var _hap_phase := 0
+var _hap_at := 0.0
+var _hap_off := []       # [buzzes before vibrations went off, buzzes when they came on again]
+var _hap_asked_off := 0  # events while they were off
 
 
 func _ready() -> void:
@@ -288,6 +294,39 @@ func _ready() -> void:
 		for k in race.locals:
 			k.autopilot = true
 		return
+	if a.has("tilttest"):
+		# made-up sensor readings (straight, a little, a lot, past full lock,
+		# the phone turned over) must become the right steering, with the dead
+		# zone, smoothing and levelling; then a race on a "phone" held askew:
+		# straight after the countdown, steering right when tilted right
+		_test_mode = "tilt"
+		menu.visible = false
+		_tilt_checks()
+		Game.cmd_args["touch"] = "1"         # the phone's controls on a computer
+		Game.settings.steer = 1              # not saved
+		Game.settings.tilt_sens = 1
+		Game.tilt = Tilt.new()
+		Game.fake_gravity = _held(12.0, 40.0)
+		start_offline(1)
+		_test_t = 0.0
+		return
+	if a.has("hapticstest"):
+		# a whole race with the autopilot; the buzzes are written into a list
+		# instead of the phone. Every kind of event must buzz, never two within
+		# Haptics.GAP for the same player, and nothing while vibrations are
+		# off (the second lap)
+		_test_mode = "haptics"
+		menu.visible = false
+		Haptics.log_on = true
+		Game.settings.vibrate = true         # not saved
+		Game.settings.diff = 2               # Těžká: the computer drifts (not saved)
+		start_offline(int(a.get("players", "1")))
+		race.fast = int(a.get("fast", "8"))
+		for k in race.locals:
+			k.autopilot = true
+		Haptics.reset_log()
+		_test_t = 0.0
+		return
 	if a.has("jumptest"):
 		# one lap on every track, all six karts on autopilot with endless turbo
 		# or star: they may only take off from the ramp
@@ -319,6 +358,7 @@ func _ready() -> void:
 			Net.cup_mode = a.has("cup")   # --cup: a championship (--cup-start=4: only the last races)
 		else:
 			Net.join("127.0.0.1", "Klient", 1, Game.paint_of(1))
+			Haptics.log_on = true            # what the client's player felt, printed at the end
 		return
 	if a.has("showcase"):
 		return
@@ -829,6 +869,10 @@ func _process(delta: float) -> void:
 		_items_tick()
 	elif _test_mode == "jump" and race != null:
 		_jump_tick()
+	elif _test_mode == "tilt" and race != null:
+		_tilt_tick()
+	elif _test_mode == "haptics" and race != null:
+		_haptics_tick()
 	elif _test_mode == "autotest" and race != null:
 		if race.results_shown:
 			_finish_test(true, "results shown")
@@ -861,6 +905,10 @@ func _process(delta: float) -> void:
 			print("PREDICTION lag=%d ms: error avg %.2f p95 %.2f max %.2f m (%d), correction avg %.2f p95 %.2f max %.2f m" % [
 				int(Net.fake_lag), rep.err.avg, rep.err.p95, rep.err.max, rep.err.n, rep.corr.avg, rep.corr.p95, rep.corr.max])
 			print("CLIENT SAW: %s" % ", ".join(race.net_seen.keys()))
+			var felt := {}
+			for b in Haptics.buzzes:
+				felt[b[2]] = int(felt.get(b[2], 0)) + 1
+			print("CLIENT FELT: %s, events %s" % [str(felt), str(Haptics.asked)])
 			var pred_ok: bool = rep.err.n > 100 and rep.err.p95 <= float(Game.cmd_args.get("max-err", "1.0"))
 			if race.cup.is_empty():
 				_finish_test(me.finished and pred_ok, "client finished place %d, prediction %s" % [race._place_of(me), "ok" if pred_ok else "too far"])
@@ -1470,6 +1518,315 @@ func _jump_tick() -> void:
 	else:
 		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
 			else "%d problems" % _jump_bad)
+
+
+## Gravity in the screen's frame (as Godot gives it) for a phone tilted back
+## `back` degrees from upright and turned `deg` degrees to the right like a wheel.
+static func _held(deg: float, back := 0.0) -> Vector3:
+	var along := 9.81 * cos(deg_to_rad(back))     # the part along the screen
+	var r := deg_to_rad(deg)
+	return Vector3(along * sin(r), -along * cos(r), -9.81 * sin(deg_to_rad(back)))
+
+
+static func _settle(t: Tilt, g: Vector3, secs := 1.0) -> void:
+	for i in int(secs * 60.0):
+		t.feed(g, 1.0 / 60.0)
+
+
+func _tilt_check(name: String, ok: bool, info := "") -> void:
+	print("TILT CHECK %s: %s %s" % [name, "ok" if ok else "FAIL", info])
+	if not ok:
+		_items_bad += 1
+
+
+func _tilt_checks() -> void:
+	var t := Tilt.new()
+	_tilt_check("no sensor: no steering", t.steer(1) == 0.0 and not t.have)
+	t.feed(Vector3.ZERO, 1.0 / 60.0)
+	_tilt_check("zero reading ignored", not t.have)
+	# held straight, tilted back as people hold a phone
+	t = Tilt.new()
+	_settle(t, _held(0.0, 40.0))
+	_tilt_check("straight", t.steer(1) == 0.0, "%.3f" % t.steer(1))
+	_settle(t, _held(Tilt.DEAD - 0.5, 0.0))
+	_tilt_check("dead zone", t.steer(1) == 0.0, "%.3f" % t.steer(1))
+	# upright the wheel angle is exact: full lock at FULL, half way between DEAD and FULL
+	for s in Tilt.FULL.size():
+		var full: float = Tilt.FULL[s]
+		_settle(t, _held(full, 0.0))
+		var at_full := t.steer(s)
+		_settle(t, _held((Tilt.DEAD + full) * 0.5, 0.0))
+		var half := t.steer(s)
+		_settle(t, _held(-full - 5.0, 0.0))
+		var past := t.steer(s)
+		_tilt_check("%s: full lock at %.0f°" % [Tilt.NAMES[s], full], at_full > 0.995 and absf(half - 0.5) < 0.02 and past == -1.0,
+			"full %.3f half %.3f past-left %.3f" % [at_full, half, past])
+	# held back 45°: a little, a lot, past full lock, both ways alike
+	var little := 0.0
+	var lot := 0.0
+	_settle(t, _held(8.0, 45.0))
+	little = t.steer(1)
+	_settle(t, _held(18.0, 45.0))
+	lot = t.steer(1)
+	_settle(t, _held(-18.0, 45.0))
+	var lot_left := t.steer(1)
+	_settle(t, _held(45.0, 45.0))
+	var over := t.steer(1)
+	_tilt_check("a little / a lot / past full lock", little > 0.05 and little < 0.4 and lot > 0.5 and lot < 0.9 and over == 1.0,
+		"8° %.3f, 18° %.3f, 45° %.3f" % [little, lot, over])
+	_tilt_check("left like right", absf(lot + lot_left) < 0.001, "%.3f / %.3f" % [lot, lot_left])
+	var sens: Array = []
+	for s in Tilt.FULL.size():
+		_settle(t, _held(15.0, 30.0))
+		sens.append(t.steer(s))
+	_tilt_check("Jemná < Střední < Ostrá", sens[0] < sens[1] and sens[1] < sens[2], str(sens))
+	# held nearly flat: the edge that dips still steers, no jump to full lock
+	t = Tilt.new()
+	_settle(t, _held(0.0, 88.0))
+	var flat0 := t.steer(1)
+	_settle(t, Vector3(9.81 * sin(deg_to_rad(6.0)), 0.0, -9.81 * cos(deg_to_rad(6.0))))
+	var flat6 := t.steer(1)
+	_tilt_check("nearly flat", flat0 == 0.0 and flat6 > 0.1 and flat6 < 0.8, "straight %.3f, right edge 6° down %.3f" % [flat0, flat6])
+	# the axes half a turn behind the display (phone turned over to the other
+	# landscape side without Android telling Godot): turned back here
+	var right := _held(15.0, 40.0)
+	var t_ok := Tilt.new()
+	_settle(t_ok, right)
+	t = Tilt.new()
+	_settle(t, Vector3(-right.x, -right.y, right.z))
+	var turned := t.steer(1)
+	_settle(t, right)                     # Godot caught up with the display again
+	var back_again := t.steer(1)
+	_tilt_check("phone turned over", absf(turned - t_ok.steer(1)) < 0.001 and absf(back_again - t_ok.steer(1)) < 0.001,
+		"right turn %.3f, stale axes %.3f, axes caught up %.3f" % [t_ok.steer(1), turned, back_again])
+	# smoothing: one shaky reading barely moves the wheel, a real turn gets there quickly
+	t = Tilt.new()
+	_settle(t, _held(0.0, 40.0))
+	t.feed(_held(25.0, 40.0), 1.0 / 60.0)
+	var shake := t.steer(1)
+	_settle(t, _held(0.0, 40.0), 0.5)
+	_settle(t, _held(20.0, 0.0), 0.2)
+	var quick := t.steer(1)
+	_settle(t, _held(20.0, 0.0))
+	var final := t.steer(1)
+	_tilt_check("smoothing", shake < 0.25 and quick > 0.9 * final, "one shaky frame %.3f, after 0.2 s %.3f of %.3f" % [shake, quick, final])
+	# levelling: held askew, then that is straight
+	t = Tilt.new()
+	_settle(t, _held(10.0, 40.0))
+	var askew := t.steer(1)
+	t.level()
+	_settle(t, _held(10.0, 40.0), Tilt.LEVEL_TIME + 0.1)
+	var leveled := t.steer(1)
+	_settle(t, _held(25.0, 40.0))
+	var more := t.steer(1)
+	_settle(t, _held(-5.0, 40.0))
+	var less := t.steer(1)
+	_tilt_check("levelling", askew > 0.2 and leveled == 0.0 and more > 0.3 and less < -0.3,
+		"askew %.3f, levelled %.3f, 15° more %.3f, 15° less %.3f" % [askew, leveled, more, less])
+	# the controls: tilting steers the first player only with the phone's controls on
+	Game.set_local_players(1)
+	Game.touch.active = true
+	Game.tilt = Tilt.new()
+	_settle(Game.tilt, _held(20.0, 0.0))
+	Game.settings.steer = 0
+	var wheel_mode := float(Game.read_input(0).steer)
+	Game.settings.steer = 1
+	var tilt_mode := float(Game.read_input(0).steer)
+	_tilt_check("controls", wheel_mode == 0.0 and absf(tilt_mode - Game.tilt.steer(int(Game.settings.tilt_sens))) < 0.001 and tilt_mode > 0.5,
+		"wheel chosen %.3f, tilting chosen %.3f" % [wheel_mode, tilt_mode])
+	Game.touch.active = false
+
+
+## --tilttest, the race: the phone held 12° askew is straight once the
+## countdown has levelled it, tilted 15° further right the kart turns right.
+func _tilt_tick() -> void:
+	var k: Kart = race.locals[0]
+	if _tilt_phase == 0 and race.state == "race" and race.race_time > 1.0 and not Game.tilt.levelling():
+		_tilt_phase = 1
+		var st := float(Game.read_input(0).steer)
+		_tilt_check("race: straight after the countdown", race.tilt_leveled and st == 0.0 and race.touch_ctl != null,
+			"steer %.3f (phone held %.1f° askew, straight at %.1f°)" % [st, Game.tilt.angle, Game.tilt.zero])
+		Game.fake_gravity = _held(27.0, 40.0)
+		_tilt_at = _test_t
+	elif _tilt_phase == 1 and _test_t - _tilt_at > 0.6:
+		_tilt_phase = 2
+		var st := float(Game.read_input(0).steer)
+		_tilt_check("race: tilted right steers right", st > 0.3 and k.steer > 0.2, "input %.3f, kart %.3f" % [st, k.steer])
+		_finish_test(_items_bad == 0, "tilting steers" if _items_bad == 0 else "%d problems" % _items_bad)
+	elif _test_t > float(Game.cmd_args.get("timeout", "60")):
+		_finish_test(false, "timeout")
+
+
+## --hapticstest: knocks the test sets up itself (a hit, the lightning, the
+## barrier, a drop from 6 m, a drift to purple sparks with the keys) and
+## whatever the race brings (turbos, other karts, the finish). Vibrations are
+## off for the whole second lap.
+func _haptics_tick() -> void:
+	var r := race
+	var lead: Kart = r.locals[0]
+	if r.results_shown:
+		if _hap_at <= 0.0:
+			_hap_at = _test_t
+		elif _test_t - _hap_at > 1.0:            # the second buzz of the finish
+			_haptics_checks()
+		return
+	if r.state != "race":
+		return
+	var t := r.race_time
+	if _hap_phase == 0 and t > 5.0:
+		var ok := true
+		for k in r.locals:
+			ok = (k.spin > 0.0 or k.hit(1.2, false)) and ok
+		if ok:
+			print("HAPTIC set up: a hit at %.1f s" % t)
+			_hap_phase = 1
+	elif _hap_phase == 1 and t > 10.0:
+		var other: Kart = null
+		for k in r.karts:
+			if k.local_slot < 0:
+				other = k
+		r._lightning(other)
+		print("HAPTIC set up: the lightning at %.1f s" % t)
+		_hap_phase = 2
+	elif _hap_phase == 2 and t > 16.0:
+		for k in r.locals:
+			_into_barrier(k)
+		print("HAPTIC set up: into the barrier at %.1f s" % t)
+		_hap_phase = 3
+	elif _hap_phase == 3 and t > 22.0:
+		var ok := true
+		for k in r.locals:
+			ok = not k.air and ok
+		if ok:
+			for k in r.locals:
+				k.air = true
+				k.air_t = 0.0
+				k.vy = 0.0
+				k.y += 6.0
+			print("HAPTIC set up: a drop from 6 m at %.1f s" % t)
+			_hap_phase = 4
+	elif _hap_phase == 4 and t > 27.0:
+		# a drift with the keys towards the wider side of the road, until the
+		# sparks change colour (a drift always turns, so soon after it would
+		# reach the barrier), then the turbo
+		_hap_keys(true)
+		_hap_at = t
+		for k in r.locals:
+			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f, %.1f m from the middle" % [t, k.speed, k.lat])
+		_hap_phase = 5
+	elif _hap_phase == 5:
+		var done := true
+		for k in r.locals:
+			done = done and k.drift_level >= 1
+		if done or t > _hap_at + 1.5:
+			for k in r.locals:
+				print("HAPTIC drift: sparks level %d after %.2f s" % [k.drift_level, t - _hap_at])
+			_hap_keys(false)
+			_hap_phase = 6
+	elif _hap_phase == 6 and lead.lap == 2:
+		_hap_off = [Haptics.buzzes.size()]
+		_hap_asked_off = -_asked_total()
+		Game.settings.vibrate = false
+		print("HAPTIC vibrations off at %.1f s" % t)
+		_hap_at = t
+		_hap_phase = 7
+	elif _hap_phase == 7 and t > _hap_at + 4.0:
+		for k in r.locals:
+			k.hit(1.0, false)
+		print("HAPTIC set up: a hit with vibrations off at %.1f s" % t)
+		_hap_phase = 8
+	elif _hap_phase == 8 and lead.lap == 3:
+		_hap_off.append(Haptics.buzzes.size())
+		_hap_asked_off += _asked_total()
+		Game.settings.vibrate = true
+		print("HAPTIC vibrations on again at %.1f s" % t)
+		_hap_at = 0.0
+		_hap_phase = 9
+	if _test_t > float(Game.cmd_args.get("timeout", "300")):
+		_finish_test(false, "timeout in phase %d" % _hap_phase)
+
+
+## The local players hold gas, drift and left or right (towards the wider
+## side of the road) on the keyboard (true), or let the autopilot drive
+## again (false).
+func _hap_keys(down: bool) -> void:
+	var maps: Array = [Game.KEYS_SOLO] if race.locals.size() == 1 else [Game.KEYS_P1, Game.KEYS_P2]
+	var tr := race.track
+	for i in race.locals.size():
+		var k: Kart = race.locals[i]
+		k.autopilot = not down
+		# steering right turns the heading down, so the kart's right is heading - 90°
+		var th := tr.heading(k.idx)
+		var plus_right := -cos(th) * tr.nx[k.idx] + sin(th) * tr.nz[k.idx] > 0.0
+		var side := "left" if (k.lat > 0.0) == plus_right else "right"
+		var other := "right" if side == "left" else "left"
+		Game.key_down[maps[i].gas[0]] = down
+		Game.key_down[maps[i].drift[0]] = down
+		Game.key_down[maps[i][side][0]] = down
+		Game.key_down[maps[i][other][0]] = false
+
+
+func _asked_total() -> int:
+	var n := 0
+	for kind in Haptics.asked:
+		n += int(Haptics.asked[kind])
+	return n
+
+
+## Puts kart k next to the barrier on its right, heading into it at 45°.
+func _into_barrier(k: Kart) -> void:
+	var tr := race.track
+	var i := k.idx
+	var lim := Game.BAR - Game.KART_R - 0.3
+	k.x = tr.x[i] + tr.nx[i] * lim
+	k.z = tr.z[i] + tr.nz[i] * lim
+	var th := tr.heading(i)
+	var f := Vector2(sin(th), cos(th)) + Vector2(tr.nx[i], tr.nz[i])
+	k.heading = atan2(f.x, f.y)
+	k.speed = maxf(k.speed, 20.0)
+	k.bump_cd = 0.0
+
+
+func _haptics_checks() -> void:
+	var B: Array = Haptics.buzzes
+	var kinds := {}
+	var gaps := [INF, INF]
+	var last := [-INF, -INF]
+	var land: Array = []
+	for i in B.size():
+		var b: Array = B[i]
+		var slot := int(b[1])
+		kinds["%s/%d" % [b[2], slot]] = int(kinds.get("%s/%d" % [b[2], slot], 0)) + 1
+		gaps[slot] = minf(gaps[slot], float(b[0]) - float(last[slot]))
+		last[slot] = float(b[0])
+		if b[2] == "land":
+			land.append("%.2f" % float(b[4]))
+	var asked: Array = []
+	for kind in Haptics.KINDS:
+		asked.append("%s %d" % [kind, int(Haptics.asked.get(kind, 0))])
+	print("HAPTIC events: ", ", ".join(asked))
+	print("HAPTIC buzzes: %d %s" % [B.size(), str(kinds)])
+	print("HAPTIC landings (strength): ", ", ".join(land))
+	var bad: Array = []
+	for slot in race.locals.size():
+		for kind in Haptics.KINDS:
+			var need := 2 if kind == "finish" else 1      # the finish buzzes twice
+			if int(kinds.get("%s/%d" % [kind, slot], 0)) < need:
+				bad.append("player %d never felt %s" % [slot + 1, kind])
+		if gaps[slot] < Haptics.GAP - 0.0001:
+			bad.append("player %d: two buzzes %.3f s apart" % [slot + 1, gaps[slot]])
+		print("HAPTIC player %d: shortest gap %.3f s" % [slot + 1, gaps[slot]])
+	if _hap_off.size() < 2:
+		bad.append("the second lap never came")
+	else:
+		print("HAPTIC with vibrations off: %d events, %d buzzes" % [_hap_asked_off, int(_hap_off[1]) - int(_hap_off[0])])
+		if int(_hap_off[1]) != int(_hap_off[0]):
+			bad.append("buzzed with vibrations off")
+		if _hap_asked_off < 3:
+			bad.append("too few events with vibrations off to tell")
+	for b in bad:
+		print("HAPTIC FAIL ", b)
+	_finish_test(bad.is_empty(), "every event buzzes, never too often, nothing when off" if bad.is_empty() else "%d problems" % bad.size())
 
 
 func _finish_test(ok: bool, why: String) -> void:

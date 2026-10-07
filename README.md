@@ -103,6 +103,12 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 
 **Mobil**: plyn běží sám. Vlevo je volant (táhni palcem), vpravo **DRIFT**, **PŘEDMĚT** a **BRZDA**. Tlačítko Zpět hru pozastaví.
 
+**Naklánění telefonu** (jen telefon se senzorem náklonu): v menu nebo v pauze přepni **Ovládání** z *volant* na *naklánění*. Zatáčíš pak jako volantem: nakloň telefon doprava (pravý okraj dolů) a motokára jede doprava. Volant vlevo zmizí, místo něj je tam malý volantík, který ukazuje, jak moc zatáčíš (při plném rejdu zezlátne). Tlačítka vpravo zůstávají.
+
+- **Citlivost**: Jemná / Střední / Ostrá. Plný rejd je při náklonu asi 35° / 25° / 18°. Do 3° se nic neděje, aby motokára necukala.
+- **Vyrovnání**: na konci odpočtu si hra zapamatuje, jak telefon držíš, a to bere jako „rovně“. Když si sedneš jinak, dej v pauze **Vyrovnat** a půl vteřiny drž telefon tak, jak chceš jezdit rovně.
+- Telefon můžeš otočit na druhou stranu na šířku, směr řízení zůstane správný.
+
 ### Tipy
 
 - **Drift**: v zatáčce drž drift a zatáčej. Jiskry se mění z modrých na oranžové a nakonec na fialové. Když drift pustíš, dostaneš turbo: čím dál jsi došel, tím delší. Modré jiskry (první turbo) naskočí zhruba po 0,7 s driftu, takže se drift vyplatí v každé delší zatáčce. Nejvíc času dá, když do zatáčky vjedeš od vnějšího okraje.
@@ -121,9 +127,9 @@ Další klávesy: **Esc** pauza, **F11** celá obrazovka.
 | Blesk | všichni ostatní se na 6 s zmenší, jsou pomalejší a dá se přes ně přejet. Chrání hvězda a štít. Velmi vzácný, jen pro poslední dva |
 | Štít | bublina kolem motokáry na 10 s, pohltí jeden zásah (banán, olej, raketa, blesk) |
 
-## Grafika a výkon
+## Grafika, vibrace a výkon
 
-V hlavním menu i v pauze jsou tři tlačítka:
+V hlavním menu i v pauze jsou čtyři tlačítka:
 
 - **Zvuk**: zapnout nebo vypnout.
 - **Grafika**: Nízká / Střední / Vysoká. Telefon začíná na Střední, počítač na Vysoké. Když se hra na telefonu trhá, přepni na Nízkou.
@@ -134,6 +140,7 @@ V hlavním menu i v pauze jsou tři tlačítka:
   - Barvy a nálada tratí jsou na všech kvalitách stejné: odpoledne v údolí, západ slunce v kaňonu, zatažená obloha na laguně.
   - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů a diváků, počet částic a stop smyku, sníh a zjednodušení vzdálených motokár se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
+- **Vibrace**: zapnuté / vypnuté (výchozí zapnuté). Telefon krátce zavibruje při nárazu do bariéry nebo soupeře (podle síly), při zásahu raketou, banánem, olejem nebo bleskem, při dopadu ze skoku (podle výšky), při turbu, když jiskry driftu změní barvu, a dvakrát v cíli. Na počítači to samé dělá herní ovladač, u dvou hráčů vibruje jen ovladač toho, koho se to týká. Vibrace nikdy nepřijdou častěji než 10× za vteřinu. Když telefon nevibruje, zkontroluj, jestli nemá vibrace vypnuté v nastavení nebo režim Nerušit.
 
 ## Hra po Wi-Fi
 

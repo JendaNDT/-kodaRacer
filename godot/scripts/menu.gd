@@ -133,6 +133,12 @@ func _ready() -> void:
 	Net.hosts_changed.connect(_fill_hosts)
 	Net.joined.connect(_on_joined)
 	Net.join_failed.connect(set_status)
+	Game.tilt_found.connect(_on_tilt_found)
+
+
+func _on_tilt_found() -> void:
+	if screen == "home" and visible and Game.is_mobile():
+		show_screen("home")   # now with the steering choice
 
 
 func _on_lobby_changed() -> void:
@@ -450,6 +456,20 @@ func _home() -> void:
 	var fps := _small_button(_fps_text())
 	fps.pressed.connect(_toggle_fps.bind(fps))
 	row.add_child(fps)
+	var vib := _small_button(_vibrate_text())
+	vib.pressed.connect(_toggle_vibrate.bind(vib))
+	row.add_child(vib)
+	if Game.is_mobile() and Game.tilt.have:
+		# steering by tilting: only on a phone that has the sensor
+		var row2 := UI.hbox(8)
+		content.add_child(row2)
+		var st := _small_button(_steer_text())
+		st.pressed.connect(_toggle_steer)
+		row2.add_child(st)
+		if Game.tilting():
+			var sens := _small_button(_sens_text())
+			sens.pressed.connect(_cycle_sens.bind(sens))
+			row2.add_child(sens)
 	if not Game.is_mobile():
 		_wide(UI.button("Konec", func(): quit_requested.emit()))
 	var help := _section("Ovládání")
@@ -458,6 +478,7 @@ func _home() -> void:
 		"Ovladač: A plyn, B brzda, RB/RT drift, LB/LT nebo X předmět, Start pauza.",
 		"Drift: drž ho v zatáčce, po modrých a oranžových jiskrách pusť a dostaneš turbo.",
 		"Na mobilu plyn běží sám. Vlevo zatáčíš, vpravo je drift, předmět a brzda.",
+		"Zatáčet jde i nakláněním telefonu (Ovládání: naklánění). Na startu se telefon vyrovná podle toho, jak ho držíš.",
 	]
 	for t in lines:
 		var l := UI.label(t, 16, UI.MUTED)
@@ -672,7 +693,7 @@ func _cup_tracks(mirror := false) -> GridContainer:
 	return g
 
 
-func _small_button(text: String) -> Button:
+static func _small_button(text: String) -> Button:
 	var b := UI.button(text, Callable())
 	b.add_theme_font_size_override("font_size", 16)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -691,6 +712,35 @@ static func _fps_text() -> String:
 	return "FPS\n" + ("zobrazené" if Game.settings.show_fps else "skryté")
 
 
+static func _vibrate_text() -> String:
+	return "Vibrace\n" + ("zapnuté" if Game.settings.vibrate else "vypnuté")
+
+
+static func _steer_text() -> String:
+	return "Ovládání\n" + ("naklánění" if int(Game.settings.steer) == 1 else "volant")
+
+
+static func _sens_text() -> String:
+	return "Citlivost\n" + Tilt.NAMES[int(Game.settings.tilt_sens)]
+
+
+static func toggle_vibrate() -> void:
+	Game.settings.vibrate = not bool(Game.settings.vibrate)
+	Game.save_settings()
+	if Game.settings.vibrate:
+		Haptics.buzz(0, "hit", 0.5)     # a sample of how it feels
+
+
+static func toggle_steer() -> void:
+	Game.settings.steer = 1 - int(Game.settings.steer)
+	Game.save_settings()
+
+
+static func cycle_sens() -> void:
+	Game.settings.tilt_sens = (int(Game.settings.tilt_sens) + 1) % Tilt.NAMES.size()
+	Game.save_settings()
+
+
 func _toggle_mute(btn: Button) -> void:
 	Sfx.toggle_mute()
 	btn.text = _mute_text()
@@ -706,6 +756,21 @@ func _toggle_fps(btn: Button) -> void:
 	Game.settings.show_fps = not bool(Game.settings.show_fps)
 	Game.save_settings()
 	btn.text = _fps_text()
+
+
+func _toggle_vibrate(btn: Button) -> void:
+	toggle_vibrate()
+	btn.text = _vibrate_text()
+
+
+func _toggle_steer() -> void:
+	toggle_steer()
+	show_screen("home")   # the sensitivity shows only with tilting
+
+
+func _cycle_sens(btn: Button) -> void:
+	cycle_sens()
+	btn.text = _sens_text()
 
 
 func _pick_driver(i: int, key: String) -> void:

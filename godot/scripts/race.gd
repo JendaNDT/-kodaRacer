@@ -45,6 +45,7 @@ const BLUE_SPEED := 85.0
 const BLUE_BLAST := 7.0
 const DRIFT_IN := 0.24          # the computer starts a drift where the bend turns this fast (× turn rate)
 const DRIFT_ANGLE := 1.6        # and only in bends turning at least this far (rad): shorter ones give no turbo
+const LAND_HARD := 22.0         # m/s falling speed that lands with the strongest buzz (the ramp's jump: about 13)
 const AI_YAW := 0.8             # how fast (× turn rate) the computer reckons a kart turns at speed         # the blue missile's blast hits everyone this close to the leader
 var explosions: Array = []
 var explosion_id := 0
@@ -77,11 +78,12 @@ var podium_t := -1.0
 var confetti_t := 0.0
 var split_bar: Control
 var music_fast := false
+var tilt_leveled := false       # the phone's hold taken as straight during this countdown (Etapa G)
 
 var view_layer: Control
 var overlay: Control
 var panes: Array = []
-var touch_ctl: Control
+var touch_ctl: TouchControls
 var pause_panel: Control
 var results_panel: Control
 var results_body: VBoxContainer
@@ -488,12 +490,20 @@ func on_lap(k: Kart, dir: int) -> void:
 		k.autopilot = true
 
 
+## A vibration for a local player (Etapa G): only while they drive, not
+## once the autopilot has taken over after the finish.
+func _buzz(k: Kart, kind: String, strength := 1.0) -> void:
+	if k.local_slot >= 0 and mode != Mode.DEMO and (not k.finished or kind == "finish"):
+		Haptics.buzz(k.local_slot, kind, strength)
+
+
 func on_bump(k: Kart, loss: float) -> void:
 	if replaying:
 		return
 	sound_at("bump", k.x, k.z, k.local_slot >= 0, clampf(loss * 1.5, 0.3, 1.0))
 	if k.local_slot >= 0:
 		shake(k.local_slot, 0.25 * loss)
+		_buzz(k, "bump", loss)
 
 
 func _compute_ranks() -> void:
@@ -548,6 +558,8 @@ func _kart_collisions() -> void:
 				a.bump_cd = 0.35
 				b.bump_cd = 0.35
 				Sfx.play("bump", 0.5)
+				for kk in [a, b]:
+					_buzz(kk, "bump", 0.5)
 
 
 # ---------------------------------------------------------------- AI
@@ -1617,6 +1629,11 @@ func _process(delta: float) -> void:
 	if karts.is_empty():
 		return
 	var dt := 0.0 if paused else delta
+	Haptics.speed = float(fast)
+	if state == "countdown" and countdown <= 1.3 and not tilt_leveled and touch_ctl != null:
+		# the last second of the countdown: the way the phone is held now is straight
+		tilt_leveled = true
+		Game.tilt.level(1.0)
 	var alpha := Engine.get_physics_interpolation_fraction()
 	var smooth := mode == Mode.CLIENT
 	for k in karts:
@@ -1748,6 +1765,7 @@ func _observe(k: Kart, dt: float) -> void:
 		burst(Vector3(k.x, k.y + 1.6, k.z), Color(1.0, 0.88, 0.4), 14, 5.0)
 		if loc:
 			shake(k.local_slot, 0.5)
+			_buzz(k, "hit")
 	# jumps: a whoosh for the trick, a thump on landing
 	if k.trick > 0.0 and float(o.trick) <= 0.0:
 		sound_at("trick", k.x, k.z, loc, 0.8)
@@ -1758,10 +1776,12 @@ func _observe(k: Kart, dt: float) -> void:
 		sound_at("land", k.x, k.z, loc, 0.7)
 		if loc:
 			shake(k.local_slot, 0.25)
+			_buzz(k, "land", k.land_v / LAND_HARD)
 	o.air = k.air
 	if k.boost > float(o.boost) + 0.05:
 		sound_at("boost", k.x, k.z, loc, 0.9)
 		k.on_boost(int(o.level) if not k.drift_active else 0)
+		_buzz(k, "boost", 0.5)
 		if loc and hud != null and race_time < 0.6 and state == "race" and k.boost > 1.0:
 			hud.show_msg("Raketový start!", UI.GO)
 	if k.finished and not bool(o.finished) and mode != Mode.DEMO:
@@ -1781,6 +1801,7 @@ func _observe(k: Kart, dt: float) -> void:
 			Sfx.play("got", 0.9)
 		if k.drift_level > int(o.level):
 			Sfx.play("level%d" % clampi(k.drift_level, 1, 3), 0.8)
+			_buzz(k, "drift", k.drift_level / 3.0)
 		if k.hop > float(o.hop) + 0.05 and k.spin <= 0.0:
 			Sfx.play("hop", 0.6)
 		if k.star > 0.0 and float(o.star) <= 0.0:
@@ -1809,6 +1830,7 @@ func _observe(k: Kart, dt: float) -> void:
 			if hud != null:
 				hud.show_msg("Vítězství!" if place == 1 else "Cíl! %d. místo" % place, UI.GOLD if place == 1 else UI.GO)
 			Sfx.play("finish")
+			_buzz(k, "finish")
 			if trial:
 				_trial_finish(k)
 			else:
@@ -1826,6 +1848,7 @@ func _observe(k: Kart, dt: float) -> void:
 		if zap_t < 0.3:
 			zap_t = 0.4
 			Sfx.play("zap", 0.9)
+		_buzz(k, "hit", 0.6)
 	o.shield = k.shield
 	o.shrink = k.shrink
 	o.spin = k.spin
@@ -2025,18 +2048,32 @@ func toggle_pause() -> void:
 	var q := UI.button("Odejít do menu", func(): menu_requested.emit())
 	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(q)
-	var row2 := UI.hbox(10)
+	var row2 := UI.hbox(8)
 	inner.add_child(row2)
-	var sb := UI.button(Menu._mute_text().replace("\n", ": "), Callable())
+	var sb := Menu._small_button(Menu._mute_text())
 	sb.pressed.connect(_pause_mute.bind(sb))
-	var gb := UI.button(Menu._gfx_text().replace("\n", ": "), Callable())
+	var gb := Menu._small_button(Menu._gfx_text())
 	gb.pressed.connect(_pause_quality.bind(gb))
-	var fb := UI.button(Menu._fps_text().replace("\n", ": "), Callable())
+	var fb := Menu._small_button(Menu._fps_text())
 	fb.pressed.connect(_pause_fps.bind(fb))
-	for b in [sb, gb, fb]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.add_theme_font_size_override("font_size", 17)
+	var vb := Menu._small_button(Menu._vibrate_text())
+	vb.pressed.connect(_pause_vibrate.bind(vb))
+	for b in [sb, gb, fb, vb]:
 		row2.add_child(b)
+	if touch_ctl != null and Game.tilt.have:
+		# the phone's steering: wheel or tilting, how sharp, and straight again
+		var row3 := UI.hbox(8)
+		inner.add_child(row3)
+		var st := Menu._small_button(Menu._steer_text())
+		var sens := Menu._small_button(Menu._sens_text())
+		var lv := Menu._small_button("Vyrovnat")
+		st.pressed.connect(_pause_steer.bind(st, sens, lv))
+		sens.pressed.connect(_pause_sens.bind(sens))
+		lv.pressed.connect(_pause_level.bind(lv))
+		for b in [st, sens, lv]:
+			row3.add_child(b)
+		sens.visible = Game.tilting()
+		lv.visible = Game.tilting()
 	var hint := UI.label("Stíny a záře se přepnou hned, hustota stromů, počet částic a sníh až od dalšího závodu.", 15, UI.MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(470, 0)
@@ -2046,19 +2083,49 @@ func toggle_pause() -> void:
 
 func _pause_mute(b: Button) -> void:
 	Sfx.toggle_mute()
-	b.text = Menu._mute_text().replace("\n", ": ")
+	b.text = Menu._mute_text()
 
 
 func _pause_quality(b: Button) -> void:
 	Gfx.cycle()
 	apply_quality()
-	b.text = Menu._gfx_text().replace("\n", ": ")
+	b.text = Menu._gfx_text()
 
 
 func _pause_fps(b: Button) -> void:
 	Game.settings.show_fps = not bool(Game.settings.show_fps)
 	Game.save_settings()
-	b.text = Menu._fps_text().replace("\n", ": ")
+	b.text = Menu._fps_text()
+
+
+func _pause_vibrate(b: Button) -> void:
+	Menu.toggle_vibrate()
+	b.text = Menu._vibrate_text()
+
+
+func _pause_steer(b: Button, sens: Button, lv: Button) -> void:
+	Menu.toggle_steer()
+	b.text = Menu._steer_text()
+	sens.visible = Game.tilting()
+	lv.visible = Game.tilting()
+	if Game.tilting():
+		Game.tilt.level()          # straight is how the phone is held now
+	if touch_ctl != null:
+		touch_ctl.steer_mode_changed()
+
+
+func _pause_sens(b: Button) -> void:
+	Menu.cycle_sens()
+	b.text = Menu._sens_text()
+
+
+## Straight is how the phone is held over the next half second.
+func _pause_level(b: Button) -> void:
+	Game.tilt.level()
+	b.text = "Vyrovnáno"
+	get_tree().create_timer(1.2).timeout.connect(func():
+		if is_instance_valid(b):
+			b.text = "Vyrovnat")
 
 
 func _resume() -> void:

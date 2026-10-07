@@ -1,6 +1,8 @@
 extends Node
 ## Global game data, settings and player input (keyboard, gamepads, touch).
 
+signal tilt_found           # the tilt sensor gave its first reading: the menu offers tilting
+
 const LAPS := 3
 const HW := 11.0          # half road width
 const KERB := 1.6         # kerb width
@@ -259,6 +261,8 @@ var settings := {
 	"quality": -1, "show_fps": false,
 	# Etapa F: what has been won ({key: true}), the paint chosen per driver, mirrored tracks on/off
 	"unlocks": {}, "paints": {}, "mirror": false,
+	# Etapa G: steering on the phone (0 = the wheel on the screen, 1 = tilting), its sensitivity, vibrations
+	"steer": 0, "tilt_sens": 1, "vibrate": true,
 }
 
 # ---------------------------------------------------------------- input state
@@ -267,6 +271,8 @@ var item_queue := [false, false]
 var pause_queue := false
 var touch := {"active": false, "steer": 0.0, "drift": false, "brake": false, "item": false}
 var _trigger_prev := {}
+var tilt := Tilt.new()      # the phone's tilt (Etapa G), read every frame
+var fake_gravity := Vector3.ZERO   # tests and screenshots: a made-up sensor
 
 const K_LSHIFT := -1
 const K_RSHIFT := -2
@@ -300,6 +306,33 @@ func _ready() -> void:
 			var kv := s.substr(2).split("=", true, 1)
 			cmd_args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	load_settings()
+	if cmd_args.has("fake-gravity"):     # --fake-gravity=x,y,z: a computer pretends to be a tilted phone
+		var v := String(cmd_args["fake-gravity"]).split_floats(",")
+		if v.size() == 3:
+			fake_gravity = Vector3(v[0], v[1], v[2])
+
+
+func _process(delta: float) -> void:
+	var had := tilt.have
+	tilt.feed(gravity(), delta)
+	if tilt.have and not had:
+		tilt_found.emit()
+
+
+## The gravity sensor (the accelerometer where a phone has none), in the
+## screen's frame; zero on computers.
+func gravity() -> Vector3:
+	if fake_gravity != Vector3.ZERO:
+		return fake_gravity
+	var g := Input.get_gravity()
+	if g.length_squared() < 1.0:
+		g = Input.get_accelerometer()
+	return g
+
+
+## The phone is steered by tilting: chosen, and the phone has the sensor.
+func tilting() -> bool:
+	return int(settings.steer) == 1 and tilt.have
 
 
 func is_mobile() -> bool:
@@ -535,6 +568,9 @@ func load_settings() -> void:
 		settings.quality = 1             # a test level of 1.16.0's trial build: back to Střední
 	settings.quality = clampi(int(settings.quality), 0, 2)
 	settings.show_fps = bool(settings.show_fps)
+	settings.steer = clampi(int(settings.steer), 0, 1)
+	settings.tilt_sens = clampi(int(settings.tilt_sens), 0, Tilt.NAMES.size() - 1)
+	settings.vibrate = bool(settings.vibrate)
 	if typeof(settings.records) != TYPE_DICTIONARY:
 		settings.records = {}
 	if typeof(settings.cups) != TYPE_DICTIONARY:
@@ -670,6 +706,10 @@ func read_input(slot: int) -> Dictionary:
 	if slot == 0 and touch.active:
 		if absf(touch.steer) > 0.0:
 			steer = touch.steer
+		if tilting():
+			var ts := tilt.steer(int(settings.tilt_sens))
+			if absf(ts) > 0.0:
+				steer = ts
 		brake = brake or touch.brake
 		gas = gas or not brake
 		drift = drift or touch.drift
