@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 07. 10. 2026 (verze 1.16.0)*
+*Naposled aktualizováno: 07. 10. 2026 (verze 1.16.1)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.16.0 (odemykání) na telefonu a na Windows.** Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
+**Vyzkoušet verzi 1.16.1 na telefonu: několik závodů za sebou na Střední (oprava černé obrazovky), pak odemykání.** Všechny etapy A–F z `PLAN_VYLEPSENI.md` jsou hotové. Další nápady jsou v backlogu níže.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -35,6 +35,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Etapa D (verze 1.14.0):** chytřejší soupeři: ideální stopa každé trati, rychlost podle zatáček před sebou, předjíždění, drift v dlouhých zatáčkách s turbem, povahy jezdců (Zuzka vráží, Pepa pozdě brzdí, Máňa startuje, Karel šetří předměty, Bára driftuje), taktika s předměty a jemnější dohánění na Těžké. Na Těžké jsou soupeři bez otazníků o 4,8 % rychlejší. První turbo z driftu teď stačí po kratším driftu (pro všechny). Test `--aitest`.
 - **Etapa E (verze 1.15.0):** zkratka na každé trati (hlína, písek, led, štěrk) s cedulí, kolíky po okrajích, mezerou v bariéře a čárkovaně na minimapě. Bez turba se nevyplatí, s turbem nebo hvězdou ano. Počítač ji bere s turbem nebo hvězdou. Kola, pořadí i Wi-Fi fungují. Test `--cuttest`.
 - **Etapa F (verze 1.16.0):** obrazovka Sbírka (poháry pro každou obtížnost, odměny odemčené i zamčené s návodem), oznámení „ODEMČENO!“ s fanfárou po mistrovství a časovce. Odměny: druhý a zlatý lak pro každého jezdce, zrcadlové tratě (zlatý pohár na Střední), tajný 7. jezdec Profesor Píst s retro roadsterem (zlatý pohár na Těžké, pak jede 6 ze 7 jezdců), duch vývojáře v časovce (časovka pod limitem na všech tratích). Lak a zrcadlové tratě fungují i po Wi-Fi. Test `--unlocktest`, test vzletů i na zrcadlových tratích.
+- **Oprava 1.16.1:** na telefonech (Samsung i jiné) se na Střední po prvním závodě 3D grafika rozbila: v menu šum, v závodě černo. Zkušební sestavení s volbami „bez vyhlazení / bez stínů / bez záře“ ukázalo, že za to může vyhlazování hran (MSAA). Na telefonu je teď vypnuté a 3D obraz se kreslí ve vyšším rozlišení (Střední 85 %, Vysoká 100 %). Nový test paměti `--soaktest` (závod → výsledky → menu dokola) a přepínač `--mobile` (počítač se chová jako telefon).
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -59,6 +60,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 *(Aby ses k tomu zase zbytečně nevracel.)*
 - **Engine: Godot 4.7.1**, protože Jenda chce crossplay Android ↔ Windows a má Godot na Macu. Webový prototyp zůstává jako předloha a hratelná ukázka.
 - **Renderer Compatibility (OpenGL) i pro hezčí grafiku**: v Godotu 4.7.1 umí stíny od slunce, záři, základní SSAO i barvy AgX (ověřeno ve zdrojovém kódu enginu). Hra tak vypadá na PC i mobilu stejně a jde testovat v cloudu. Neumí decals, proto budou stopy smyku z vlastních pásů geometrie. Forward+ pro PC je jen volitelný bonus.
+- **Na telefonech bez MSAA (od verze 1.16.1):** s vyhlazováním hran (MSAA) se na telefonech po prvním závodě (když hra zahodí 3D obraz závodu a vytvoří nový) rozbila grafika. V cloudu (Mesa, OpenGL ES) se to zopakovat nedalo, našlo se to až zkušebním sestavením na telefonu. Místo MSAA má telefon vyšší rozlišení 3D. Na počítači MSAA zůstává.
 - **Grafika po fázích s nastavením kvality**: každá fáze se dá vyzkoušet zvlášť a slabé telefony si nastaví nižší kvalitu. Co která úroveň zapíná, je na jednom místě v `godot/scripts/gfx.gd`. Výchozí: telefon Střední, PC Vysoká.
 - **Stejné barvy na všech kvalitách:** AgX se zvýšenou sytostí běží i na Nízké (stojí to asi 5 % výkonu), kvality se liší jen stíny, září, SSAO, sněžením a hustotou. Samotné AgX bez sytosti dělalo barvy vybledlé.
 - **Vyrovnání jasu u stínů:** renderer Compatibility přidává slunce se stíny jako druhou vrstvu a sčítá ji tak, že je obraz přepálený. `Atmosphere._shadowed_sun` proto spočítá slabší slunce, aby osvětlená silnice a tráva měly stejný jas jako na Nízké. Kde jsou stíny zapnuté, musí být zapnutá i záře (tónování pak proběhne jednou za obě vrstvy).

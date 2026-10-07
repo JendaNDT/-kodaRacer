@@ -130,6 +130,7 @@ V hlavním menu i v pauze jsou tři tlačítka:
   - **Nízká**: pod motokárami jen tmavé skvrny, bez záře, méně stromů, částic, stop smyku a diváků, vzdálené motokáry zjednodušené už od 10 m.
   - **Střední**: stíny od slunce, záře plamenů, jiskřiček a hvězdy, sněžení na Ledové laguně.
   - **Vysoká**: navíc měkčí a delší stíny, jemné stínování v rozích (SSAO), hustší sníh a detailní motokáry až do 32 m.
+  - Na telefonu je vyhlazování hran (MSAA) vždy vypnuté, místo něj se 3D obraz kreslí ve vyšším rozlišení (Střední 85 %, Vysoká 100 % displeje). S vyhlazováním se na telefonech po prvním závodě rozbila grafika.
   - Barvy a nálada tratí jsou na všech kvalitách stejné: odpoledne v údolí, západ slunce v kaňonu, zatažená obloha na laguně.
   - Ostrost obrazu, vyhlazení hran, stíny a záře se změní hned. Hustota stromů a diváků, počet částic a stop smyku, sníh a zjednodušení vzdálených motokár se změní od dalšího závodu.
 - **FPS**: ukáže dole uprostřed, kolik snímků za sekundu hra kreslí (60 = plynulé, pod 30 = trhání). Hodí se, když chceš napsat, jak hra běží.
