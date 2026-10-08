@@ -2141,19 +2141,24 @@ func _haptics_tick() -> void:
 			print("HAPTIC set up: a drop from 6 m at %.1f s" % t)
 			_hap_phase = 4
 	elif _hap_phase == 4 and t > 27.0:
-		# a drift with the keys towards the wider side of the road, until the
-		# sparks change colour (a drift always turns, so soon after it would
-		# reach the barrier), then the turbo
+		# a drift with the keys until the sparks change colour (a drift always
+		# turns, so soon after it would reach the barrier), then the turbo:
+		# along the road and fast enough, wherever the computer happened to
+		# be driving; alone from near one edge, so the drift (towards the
+		# wider side) has the whole road before it runs onto the grass
+		for k in r.locals:
+			_to_middle(k, -(Game.HW - 2.0) if r.locals.size() == 1 else (k.local_slot * 2 - 1) * 2.5)
+			k.speed = maxf(k.speed, k.max_speed() * 0.8)
 		_hap_keys(true)
 		_hap_at = t
 		for k in r.locals:
-			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f, %.1f m from the middle" % [t, k.speed, k.lat])
+			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f" % [t, k.speed])
 		_hap_phase = 5
 	elif _hap_phase == 5:
 		var done := true
 		for k in r.locals:
 			done = done and k.drift_level >= 1
-		if done or t > _hap_at + 1.5:
+		if done or t > _hap_at + 3.0:
 			for k in r.locals:
 				print("HAPTIC drift: sparks level %d after %.2f s" % [k.drift_level, t - _hap_at])
 			_hap_keys(false)
@@ -2166,17 +2171,31 @@ func _haptics_tick() -> void:
 		_hap_at = t
 		_hap_phase = 7
 	elif _hap_phase == 7 and t > _hap_at + 4.0:
+		# with vibrations off, events of three kinds (the race may bring more)
 		for k in r.locals:
 			k.hit(1.0, false)
 		print("HAPTIC set up: a hit with vibrations off at %.1f s" % t)
 		_hap_phase = 8
-	elif _hap_phase == 8 and lead.lap == 3:
+	elif _hap_phase == 8 and t > _hap_at + 8.0:
+		for k in r.locals:
+			_into_barrier(k)
+		print("HAPTIC set up: into the barrier with vibrations off at %.1f s" % t)
+		_hap_phase = 9
+	elif _hap_phase == 9 and t > _hap_at + 12.0 and not lead.air:
+		for k in r.locals:
+			k.air = true
+			k.air_t = 0.0
+			k.vy = 0.0
+			k.y += 6.0
+		print("HAPTIC set up: a drop with vibrations off at %.1f s" % t)
+		_hap_phase = 10
+	elif _hap_phase == 10 and lead.lap == 3:
 		_hap_off.append(Haptics.buzzes.size())
 		_hap_asked_off += _asked_total()
 		Game.settings.vibrate = true
 		print("HAPTIC vibrations on again at %.1f s" % t)
 		_hap_at = 0.0
-		_hap_phase = 9
+		_hap_phase = 11
 	if _test_t > float(Game.cmd_args.get("timeout", "300")):
 		_finish_test(false, "timeout in phase %d" % _hap_phase)
 
@@ -2209,6 +2228,17 @@ func _asked_total() -> int:
 
 
 ## Puts kart k next to the barrier on its right, heading into it at 45°.
+## The kart in the middle of the road (or `off` metres to the side), heading along it.
+func _to_middle(k: Kart, off := 0.0) -> void:
+	var tr := race.track
+	var i := k.idx
+	k.x = tr.x[i] + tr.nx[i] * off
+	k.z = tr.z[i] + tr.nz[i] * off
+	k.heading = tr.heading(i)
+	k.lat = off
+	k.drift_active = false
+
+
 func _into_barrier(k: Kart) -> void:
 	var tr := race.track
 	var i := k.idx
