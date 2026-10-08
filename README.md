@@ -186,5 +186,6 @@ Na Windows se při prvním založení hry objeví dotaz brány firewall. Povol p
 
 ## Licence přibalených souborů
 
+- Hudba „Škoda Racer – Menu“ a „Škoda Racer – Závod“: dodal autor hry Jenda pro tuto hru (`godot/music/`)
 - Písma Bungee a Barlow Semi Condensed: SIL Open Font License (`godot/fonts/`, `web/fonts/`)
 - Three.js r128 (jen webový prototyp): MIT (`web/vendor/three-LICENSE.txt`)

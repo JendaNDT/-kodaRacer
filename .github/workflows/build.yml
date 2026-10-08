@@ -133,6 +133,12 @@ jobs:
           grep -q "TEST PASS: every event buzzes" haptics-test.log
           grep -q "TEST PASS: every event buzzes" haptics2-test.log
 
+      - name: Test – music (both tracks load and loop, menu / race / pause / end)
+        run: |
+          ~/godot-bin/godot --headless --path godot -- --musictest 2>&1 | tee music-test.log
+          if grep -E "SCRIPT ERROR|Parse Error|MUSIC CHECK.*FAIL" music-test.log; then exit 1; fi
+          grep -q "TEST PASS: music tracks play" music-test.log
+
       - name: Test – balloon battle (the rules, then both arenas on every difficulty with only the computer driving)
         run: |
           ~/godot-bin/godot --headless --path godot -- --battletest --fast=8 2>&1 | tee battle-test.log

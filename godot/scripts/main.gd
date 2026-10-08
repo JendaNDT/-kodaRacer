@@ -369,6 +369,9 @@ func _ready() -> void:
 		for k in race.locals:
 			k.autopilot = true
 		return
+	if a.has("musictest"):
+		_music_test()
+		return
 	if a.has("disctest"):
 		_test_mode = "discovery"
 		menu.visible = false
@@ -1596,6 +1599,36 @@ func _jump_tick() -> void:
 			else "%d problems" % _jump_bad)
 
 
+# ---------------------------------------------------------------- --musictest
+## The two music tracks load and loop; the menu plays its own, a race the
+## race track (faster at the end), the pause holds it and the end stops it.
+func _music_test() -> void:
+	var bad := 0
+	var checks := [
+		["menu track loads and loops", Sfx.menu_track != null and Sfx.menu_track.loop and Sfx.menu_track.get_length() > 60.0],
+		["race track loads and loops", Sfx.race_track != null and Sfx.race_track.loop and Sfx.race_track.get_length() > 60.0],
+	]
+	Sfx.menu_music()
+	checks.append(["the menu plays the menu track", Sfx.music_player.stream == Sfx.menu_track and Sfx.music_player.playing])
+	Sfx.music(true)
+	checks.append(["a race plays the race track", Sfx.music_player.stream == Sfx.race_track and Sfx.music_player.playing
+		and is_equal_approx(Sfx.music_player.pitch_scale, 1.0)])
+	Sfx.music(true, true)
+	checks.append(["the end of a race: the same track, faster", Sfx.music_player.stream == Sfx.race_track
+		and Sfx.music_player.pitch_scale > 1.0])
+	Sfx.pause_music()
+	checks.append(["the pause holds the track", Sfx.music_player.stream_paused])
+	Sfx.music(true)
+	checks.append(["after the pause it goes on", not Sfx.music_player.stream_paused and Sfx.music_player.stream == Sfx.race_track])
+	Sfx.music(false)
+	checks.append(["the results: quiet", not Sfx.music_player.playing])
+	for c in checks:
+		print("MUSIC CHECK %s: %s" % [c[0], "ok" if c[1] else "FAIL"])
+		if not c[1]:
+			bad += 1
+	_finish_test(bad == 0, "music tracks play where they should" if bad == 0 else "%d music checks failed" % bad)
+
+
 # ---------------------------------------------------------------- --nettest --battle
 ## Everything both sides must agree on once the battle is over: each kart's
 ## balloons, pops and whether it is out, every pop (whose balloon, by whom)
@@ -2108,19 +2141,24 @@ func _haptics_tick() -> void:
 			print("HAPTIC set up: a drop from 6 m at %.1f s" % t)
 			_hap_phase = 4
 	elif _hap_phase == 4 and t > 27.0:
-		# a drift with the keys towards the wider side of the road, until the
-		# sparks change colour (a drift always turns, so soon after it would
-		# reach the barrier), then the turbo
+		# a drift with the keys until the sparks change colour (a drift always
+		# turns, so soon after it would reach the barrier), then the turbo:
+		# along the road and fast enough, wherever the computer happened to
+		# be driving; alone from near one edge, so the drift (towards the
+		# wider side) has the whole road before it runs onto the grass
+		for k in r.locals:
+			_to_middle(k, -(Game.HW - 2.0) if r.locals.size() == 1 else (k.local_slot * 2 - 1) * 2.5)
+			k.speed = maxf(k.speed, k.max_speed() * 0.8)
 		_hap_keys(true)
 		_hap_at = t
 		for k in r.locals:
-			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f, %.1f m from the middle" % [t, k.speed, k.lat])
+			print("HAPTIC set up: a drift with the keys at %.1f s, speed %.0f" % [t, k.speed])
 		_hap_phase = 5
 	elif _hap_phase == 5:
 		var done := true
 		for k in r.locals:
 			done = done and k.drift_level >= 1
-		if done or t > _hap_at + 1.5:
+		if done or t > _hap_at + 3.0:
 			for k in r.locals:
 				print("HAPTIC drift: sparks level %d after %.2f s" % [k.drift_level, t - _hap_at])
 			_hap_keys(false)
@@ -2133,17 +2171,31 @@ func _haptics_tick() -> void:
 		_hap_at = t
 		_hap_phase = 7
 	elif _hap_phase == 7 and t > _hap_at + 4.0:
+		# with vibrations off, events of three kinds (the race may bring more)
 		for k in r.locals:
 			k.hit(1.0, false)
 		print("HAPTIC set up: a hit with vibrations off at %.1f s" % t)
 		_hap_phase = 8
-	elif _hap_phase == 8 and lead.lap == 3:
+	elif _hap_phase == 8 and t > _hap_at + 8.0:
+		for k in r.locals:
+			_into_barrier(k)
+		print("HAPTIC set up: into the barrier with vibrations off at %.1f s" % t)
+		_hap_phase = 9
+	elif _hap_phase == 9 and t > _hap_at + 12.0 and not lead.air:
+		for k in r.locals:
+			k.air = true
+			k.air_t = 0.0
+			k.vy = 0.0
+			k.y += 6.0
+		print("HAPTIC set up: a drop with vibrations off at %.1f s" % t)
+		_hap_phase = 10
+	elif _hap_phase == 10 and lead.lap == 3:
 		_hap_off.append(Haptics.buzzes.size())
 		_hap_asked_off += _asked_total()
 		Game.settings.vibrate = true
 		print("HAPTIC vibrations on again at %.1f s" % t)
 		_hap_at = 0.0
-		_hap_phase = 9
+		_hap_phase = 11
 	if _test_t > float(Game.cmd_args.get("timeout", "300")):
 		_finish_test(false, "timeout in phase %d" % _hap_phase)
 
@@ -2176,6 +2228,17 @@ func _asked_total() -> int:
 
 
 ## Puts kart k next to the barrier on its right, heading into it at 45°.
+## The kart in the middle of the road (or `off` metres to the side), heading along it.
+func _to_middle(k: Kart, off := 0.0) -> void:
+	var tr := race.track
+	var i := k.idx
+	k.x = tr.x[i] + tr.nx[i] * off
+	k.z = tr.z[i] + tr.nz[i] * off
+	k.heading = tr.heading(i)
+	k.lat = off
+	k.drift_active = false
+
+
 func _into_barrier(k: Kart) -> void:
 	var tr := race.track
 	var i := k.idx

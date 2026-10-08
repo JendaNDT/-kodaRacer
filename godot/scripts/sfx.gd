@@ -1,6 +1,7 @@
 extends Node
-## Procedural audio: sound effects, a music loop and engine noise, all
-## synthesised at start-up so the game ships without audio files.
+## Audio: sound effects and engine noise synthesised at start-up, and two
+## music tracks from files (music/menu.ogg in the menu, music/race.ogg in
+## races and battles), both looping.
 
 const RATE := 22050
 enum W { SINE, SQUARE, SAW, TRI }
@@ -11,10 +12,9 @@ var pool: Array[AudioStreamPlayer] = []
 var pool_i := 0
 var engines: Array = []
 var muted := false
-var _want_music := false
-var _music_fast := false
-var _music_task_id := -1
-var _built_music: AudioStreamWAV
+var menu_track: AudioStream
+var race_track: AudioStream
+const FAST_PITCH := 1.05        # the last lap / the end of a battle: the race track a little faster
 
 
 func _ready() -> void:
@@ -26,9 +26,9 @@ func _ready() -> void:
 	music_player = AudioStreamPlayer.new()
 	music_player.volume_db = -9.0
 	add_child(music_player)
+	menu_track = _track("res://music/menu.ogg")
+	race_track = _track("res://music/race.ogg")
 	_build_sounds()
-	# the music loop takes the longest to synthesise, so build it off the main thread
-	_music_task_id = WorkerThreadPool.add_task(_music_task)
 	for i in 2:
 		_make_engine()
 	set_muted(bool(Game.settings.muted))
@@ -45,38 +45,42 @@ func play(name: String, vol := 1.0) -> void:
 	p.play()
 
 
+## The race music on or off; fast plays it a little faster (last lap,
+## the end of a battle). Off is silence (results, pause).
 func music(on: bool, fast := false) -> void:
-	_want_music = on
-	_music_fast = fast
-	music_player.pitch_scale = 1.12 if fast else 1.0
-	if music_player.stream == null:
-		return
-	if on and not music_player.playing:
-		music_player.play()
-	elif not on and music_player.playing:
+	_play(race_track if on else null, FAST_PITCH if fast else 1.0)
+
+
+## The menu's own track (behind the menu and the lobby).
+func menu_music() -> void:
+	_play(menu_track, 1.0)
+
+
+## The pause: the track stops where it is and goes on from there.
+func pause_music() -> void:
+	if music_player.playing:
+		music_player.stream_paused = true
+
+
+func _play(track: AudioStream, pitch: float) -> void:
+	music_player.pitch_scale = pitch
+	if track == null:
+		music_player.stream_paused = false
 		music_player.stop()
-
-
-func _music_task() -> void:
-	_built_music = _build_music()
-
-
-## Picks up the music once the worker thread is done (read only after completion).
-func _collect_music() -> void:
-	if _music_task_id < 0 or not WorkerThreadPool.is_task_completed(_music_task_id):
 		return
-	WorkerThreadPool.wait_for_task_completion(_music_task_id)
-	_music_task_id = -1
-	music_player.stream = _built_music
-	if Game.cmd_args.has("timing"):
-		print("MUSIC READY after %d ms" % Time.get_ticks_msec())
-	music(_want_music, _music_fast)
+	if music_player.stream == track and music_player.stream_paused:
+		music_player.stream_paused = false
+		return
+	if music_player.stream != track or not music_player.playing:
+		music_player.stream = track
+		music_player.play()
 
 
-func _exit_tree() -> void:
-	if _music_task_id >= 0:
-		WorkerThreadPool.wait_for_task_completion(_music_task_id)
-		_music_task_id = -1
+static func _track(path: String) -> AudioStream:
+	var st := load(path) as AudioStreamOggVorbis
+	if st != null:
+		st.loop = true
+	return st
 
 
 func set_muted(m: bool) -> void:
@@ -115,7 +119,6 @@ func _make_engine() -> void:
 
 
 func _process(_delta: float) -> void:
-	_collect_music()
 	for e in engines:
 		var pb: AudioStreamGeneratorPlayback = e.playback
 		if pb == null:
@@ -186,7 +189,7 @@ func _noise(b: PackedFloat32Array, start: float, dur: float, kind: int, f0: floa
 	var n := int(dur * RATE)
 	var low := 0.0
 	var band := 0.0
-	# its own dice: the music is built on another thread and must not move
+	# its own dice: building the sounds must not move
 	# the race's random numbers (the same luck every time in tests)
 	var rng := RandomNumberGenerator.new()
 	for i in n:
@@ -280,26 +283,3 @@ func _build_sounds() -> void:
 	for i in fin.size():
 		_tone(b, i * 0.12, 0.6 if i == 5 else 0.14, mtof(fin[i]), 0, W.SQUARE, 0.25)
 	sounds.finish = _to_stream(b)
-
-
-## A cheerful 4-bar loop: F – C – Dm – B♭, two phrases.
-func _build_music() -> AudioStreamWAV:
-	var e := 0.2
-	var steps := 64
-	var b := _buf(e * steps)
-	var root := [41, 36, 38, 34]
-	var ch := [[65, 69, 72], [64, 67, 72], [62, 65, 69], [62, 65, 70]]
-	var bp := [0, 12, 0, 12, 0, 12, 7, 12]
-	var lp := [[0, 1, 2, 1, 2, -1, 1, 0], [2, -1, 2, 1, 0, 1, 2, -1]]
-	for st in steps:
-		var bar := int(st / 8) % 4
-		var s := st % 8
-		var phrase := int(st / 32) % 2
-		var t := st * e
-		_tone(b, t, e * 0.9, mtof(root[bar] + bp[s]), 0, W.TRI, 0.5)
-		var li: int = lp[phrase][s]
-		if li >= 0:
-			_tone(b, t, e * 0.7, mtof(ch[bar][li] + (12 if phrase == 1 else 0)), 0, W.SQUARE, 0.09)
-		if s % 2 == 1:
-			_noise(b, t, 0.04, 2, 7000, 0, 0.25)
-	return _to_stream(b, true)
