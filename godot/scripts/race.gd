@@ -273,7 +273,10 @@ func start(p_mode: int, p_track: int, p_diff: int, roster: Array) -> void:
 		_start_trial()
 	if not cup.is_empty():
 		get_tree().create_timer(0.5).timeout.connect(_cup_banner)
-	Sfx.music(mode != Mode.DEMO, false)
+	if mode == Mode.DEMO:
+		Sfx.menu_music()
+	else:
+		Sfx.music(true, false)
 	if mode == Mode.CLIENT:              # the Wi-Fi test checks these arrived
 		if Game.is_mirror(track_idx):
 			net_seen["zrcadlo"] = true
@@ -2342,7 +2345,7 @@ func toggle_pause() -> void:
 		return
 	if mode == Mode.OFFLINE:
 		paused = true
-		Sfx.music(false)
+		Sfx.pause_music()
 	var parts := _panel("Pauza" if mode == Mode.OFFLINE else "Menu hry")
 	pause_panel = parts[0]
 	var inner: VBoxContainer = parts[1]
@@ -2449,6 +2452,8 @@ func _resume() -> void:
 		for k in locals:
 			if k.lap == Game.LAPS:
 				fast_music = true
+		if battle != null:
+			fast_music = battle.fast_music
 		if state != "demo":
 			Sfx.music(true, fast_music)
 

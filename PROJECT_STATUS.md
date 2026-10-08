@@ -1,5 +1,5 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 07. 10. 2026 (verze 1.19.0)*
+*Naposled aktualizováno: 08. 10. 2026 (verze 1.19.1)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
@@ -11,7 +11,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
 - Low-poly svět generovaný kódem: obloha, mlha, silnice, obrubníky, bariéry z pneumatik, startovní brána s nápisem ŠKODA RACER, stromy / kaktusy / smrky, sněhuláci, hory, stolové hory, mraky, jezero
-- Zvuky, hudba a zvuk motoru syntetizované v Godotu (žádné zvukové soubory)
+- Zvuky a zvuk motoru syntetizované v Godotu; hudba od verze 1.19.1 ze souborů (`godot/music/menu.ogg` v menu a lobby, `race.ogg` v závodě i bitvě, obě dokola; v posledním kole a na konci bitvy o 5 % rychleji, po pauze hraje dál od stejného místa)
 - **2 hráči na jednom počítači**: rozdělená obrazovka nahoře/dole, vlastní HUD, klávesy WASD vs. šipky, podpora 2 ovladačů
 - **Crossplay přes Wi-Fi**: hostitel/klient přes ENet, automatické hledání her v síti, ruční zadání adresy, lobby (výběr jezdce, trati, obtížnosti), až 6 hráčů, volná místa doplní AI. Když někdo odejde, jeho motokáru převezme AI.
 - Menu s živou ukázkou závodu v pozadí, pauza, výsledková tabulka
@@ -69,7 +69,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Vyrovnání jasu u stínů:** renderer Compatibility přidává slunce se stíny jako druhou vrstvu a sčítá ji tak, že je obraz přepálený. `Atmosphere._shadowed_sun` proto spočítá slabší slunce, aby osvětlená silnice a tráva měly stejný jas jako na Nízké. Kde jsou stíny zapnuté, musí být zapnutá i záře (tónování pak proběhne jednou za obě vrstvy).
 - **Dvě slunce:** jedno kreslí jen disk na obloze (může být hodně jasné a zářit), druhé svítí na scénu. Vzdálené hory, mraky, země a silnice stíny nevrhají (šetří výkon a při západu slunce by hory zakryly celou trať).
 - **Kontrola verze přes vestavěné ověření Godotu** (auth), ne přes běžné síťové volání: mezi různými verzemi hry se jinak síťová volání můžou pomíchat. Hráči musí mít stejnou verzi.
-- **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat.
+- **Všechno generované kódem** (tratě, modely, textury, zvuky): projekt je malý, snadno se upravuje a není potřeba žádné grafiky ani zvuky stahovat. **Výjimka: hudba** (od verze 1.19.1) jsou dvě skladby od Jendy, protože složená pípací smyčka zněla špatně. Uložené jako OGG (asi 128 kbit/s, celkem 5 MB), aplikace je o tolik větší.
 - **Motokáry z vlastního generátoru tvarů (`mesh_kit.gd`)**: zkosené kvádry, protažená zaoblená těla, soustružené díly (kola) a trubky. Všechno, co se na motokáře nehýbe, je jeden model s barvami ve vrcholech; lesk nebo matnost dílu nese malá textura. Hýbe se jen jezdec (trup, hlava, 4 díly rukou, volant) a 3 kola (přední zvlášť kvůli zatáčení, zadní na jedné ose).
 - **Jízdní vlastnosti se fází 3 nezměnily**: nové motokáry mění jen vzhled, fyzika i síťová data jsou stejné jako dřív.
 - **Vzdálené motokáry jednodušší (LOD)** podle kvality: Nízká od 10 m, Střední od 16 m, Vysoká od 32 m. Bez toho by detailní motokáry zbytečně zatěžovaly slabé telefony.
@@ -97,7 +97,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Duch vývojáře je nahraný předem:** `--devghosts` nechá autopilota s nejvyšší dovedností projet časovku na každé trati a obtížnosti a uloží to komprimovaně do `godot/ghosts/` (asi 400 kB). Limit pro odemčení je jeho čas + 10 %. Na zrcadlové trati se duch zrcadlí. Export soubory přibalí (`include_filter`). Při změně tratí nebo jízdy je potřeba ho nahrát znovu.
 - **Zkratky se hledají jen jednou, nástrojem:** `--trackinfo --findcuts` projde tisíce kandidátů (asi 5 s). Výsledek se uloží do `Game.TRACKS` a hra ho jen postaví, takže telefon při startu nečeká. `--cutcal` pak změří zpomalení každé zkratky, a to pro každou obtížnost zvlášť (`"slow": [Lehká, Střední, Těžká]`): čím rychlejší motokáry, tím víc je brzdí ostré zatáčky a horší přilnavost zkratky, takže jedno číslo nesedí na všechny. Při změně tvaru trati nebo rychlostí je potřeba obojí spustit znovu.
 - **Povrch zkratky musí být plynulý:** u silnice leží zkratka na jejím (klopeném) povrchu přesně pod motokárou. Dřív se to dělalo jen na prvních a posledních 40 bodech cesty, a kde cesta vedla u silnice déle, vznikl zlom, na kterém motokára s hvězdou vyletěla (město). Teď má každý bod cesty uložený nejbližší kus silnice (`cut.road_at`). `--cuttest` projede každou zkratku po celé šířce plnou rychlostí s hvězdou stejně jako `Kart._vertical` a hlídá, aby země nikde neklesla víc než o 60 % hranice pro vzlet.
-- **Testy s časy musí mít vždy stejnou „náhodu“:** `--cuttest` nastaví obtížnost i jezdce sám (nezáleží na tom, co je v počítači uložené) a před startem zavolá `seed(1234)`. Hudba se skládá ve vlákně a šum pro bicí si proto bere vlastní generátor náhody (`RandomNumberGenerator`), jinak by na pozadí přeházela náhodu závodu.
+- **Testy s časy musí mít vždy stejnou „náhodu“:** `--cuttest` nastaví obtížnost i jezdce sám (nezáleží na tom, co je v počítači uložené) a před startem zavolá `seed(1234)`. Šum ve zvucích si proto bere vlastní generátor náhody (`RandomNumberGenerator`), aby nepřeházel náhodu závodu.
 - **Crossplay nejdřív přes stejnou Wi-Fi** (bez serveru, zdarma). Hostitel počítá celý závod, ostatní posílají ovládání a dostávají stav 30× za sekundu.
 - **Předpověď jen pro vlastní motokáru (od verze 1.12.0):** klient si svou motokáru počítá sám stejným kódem jako hostitel, hostitel ale zůstává pánem všeho. Ve zprávě posílá číslo posledního použitého ovládání, klient od toho místa přepočítá novější ovládání a rozdíl plynule dorovná. Ostatní motokáry se dál jen plynule posouvají podle hostitele. Předměty, zásahy, srážky s ostatními, kola a cíl předpověď neřeší, rozhodne je hostitel a projeví se se zpožděním Wi-Fi.
 - **Síťový test jezdí jako skutečný hráč:** od verze 1.12.0 v testu řídí motokáru klienta počítačový řidič na straně klienta a jeho ovládání jde přes síť. Dřív ji řídil hostitel sám, takže se předávání ovládání netestovalo.

@@ -369,6 +369,9 @@ func _ready() -> void:
 		for k in race.locals:
 			k.autopilot = true
 		return
+	if a.has("musictest"):
+		_music_test()
+		return
 	if a.has("disctest"):
 		_test_mode = "discovery"
 		menu.visible = false
@@ -1594,6 +1597,36 @@ func _jump_tick() -> void:
 	else:
 		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
 			else "%d problems" % _jump_bad)
+
+
+# ---------------------------------------------------------------- --musictest
+## The two music tracks load and loop; the menu plays its own, a race the
+## race track (faster at the end), the pause holds it and the end stops it.
+func _music_test() -> void:
+	var bad := 0
+	var checks := [
+		["menu track loads and loops", Sfx.menu_track != null and Sfx.menu_track.loop and Sfx.menu_track.get_length() > 60.0],
+		["race track loads and loops", Sfx.race_track != null and Sfx.race_track.loop and Sfx.race_track.get_length() > 60.0],
+	]
+	Sfx.menu_music()
+	checks.append(["the menu plays the menu track", Sfx.music_player.stream == Sfx.menu_track and Sfx.music_player.playing])
+	Sfx.music(true)
+	checks.append(["a race plays the race track", Sfx.music_player.stream == Sfx.race_track and Sfx.music_player.playing
+		and is_equal_approx(Sfx.music_player.pitch_scale, 1.0)])
+	Sfx.music(true, true)
+	checks.append(["the end of a race: the same track, faster", Sfx.music_player.stream == Sfx.race_track
+		and Sfx.music_player.pitch_scale > 1.0])
+	Sfx.pause_music()
+	checks.append(["the pause holds the track", Sfx.music_player.stream_paused])
+	Sfx.music(true)
+	checks.append(["after the pause it goes on", not Sfx.music_player.stream_paused and Sfx.music_player.stream == Sfx.race_track])
+	Sfx.music(false)
+	checks.append(["the results: quiet", not Sfx.music_player.playing])
+	for c in checks:
+		print("MUSIC CHECK %s: %s" % [c[0], "ok" if c[1] else "FAIL"])
+		if not c[1]:
+			bad += 1
+	_finish_test(bad == 0, "music tracks play where they should" if bad == 0 else "%d music checks failed" % bad)
 
 
 # ---------------------------------------------------------------- --nettest --battle
