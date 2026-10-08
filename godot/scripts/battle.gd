@@ -22,6 +22,9 @@ var fast_music := false
 
 const AHEAD := [0.0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.45, -1.45, 1.95, -1.95, 2.6, -2.6]
 const LOOK := 0.08               # s between two looks around for room
+const CLOSE := 7.0               # m: this near a rival it drives past instead of into it
+const TURN_RATE := 1.6           # rad/s a kart turns at full steer and speed (a little less than it can)
+const SIDE_TIME := 2.5           # s with the goal at the side before it drives out of the circle
 
 
 func _init(r: Race, a: Arena) -> void:
@@ -39,6 +42,8 @@ func setup_kart(k: Kart) -> void:
 	k.ai.last_off = 0.0
 	k.ai.look_t = randf() * LOOK      # not all on the same step
 	k.ai.look_off = 0.0
+	k.ai.side_t = 0.0                 # how long the goal has stayed at the side (circling round it)
+	k.ai.straight = 0.0               # driving straight out of such a circle
 
 
 func time_left() -> float:
@@ -215,8 +220,12 @@ func ai_input(k: Kart, dt: float) -> Dictionary:
 			ai.stuck = 0.0
 			ai.rev = 0.8
 			# backing up turns the kart the other way round: steer so that it
-			# ends up facing the open space
+			# ends up facing the open space (and away from a kart it ran into)
 			var n := arena.away(k.x, k.z)
+			for o: Kart in alive():
+				var od := Vector2(k.x - o.x, k.z - o.z)
+				if o != k and od.length() < 3.5:
+					n = (n + od.normalized() * 2.0).normalized()
 			ai.rev_steer = 1.0 if Game.wrap_angle(atan2(n.x, n.y) - k.heading) > 0.0 else -1.0
 			return out
 	else:
@@ -231,7 +240,11 @@ func ai_input(k: Kart, dt: float) -> Dictionary:
 	var goal := Vector2(k.x, k.z)
 	var careful := (k.balloons == 1 and float(per.hunt) < 1.3) or (k.balloons == 2 and float(per.hunt) < 0.8)
 	var attacking := k.item in [Game.Item.MISSILE, Game.Item.STAR, Game.Item.BLUE, Game.Item.LIGHTNING] or k.star > 0.0
-	if k.item == 0 and k.roulette <= 0.0 and k.star <= 0.0:
+	if float(ai.straight) > 0.0:
+		# out of a circle round the goal: straight on for a moment, then a fresh run at it
+		ai.straight = float(ai.straight) - dt
+		goal = Vector2(k.x + sin(k.heading) * 30.0, k.z + cos(k.heading) * 30.0)
+	elif k.item == 0 and k.roulette <= 0.0 and k.star <= 0.0:
 		goal = _nearest_box(k)
 	elif careful and not attacking and tg != null:
 		goal = _away_from(k, tg)
@@ -239,6 +252,14 @@ func ai_input(k: Kart, dt: float) -> Dictionary:
 		# lead the rival a little
 		var lead := clampf(Vector2(tg.x - k.x, tg.z - k.z).length() / 60.0, 0.0, 0.6)
 		goal = Vector2(tg.x + sin(tg.heading) * tg.speed * lead, tg.z + cos(tg.heading) * tg.speed * lead)
+		# right on top of the rival with nothing that hurts it now (a bump
+		# takes no balloon): drive past it instead of pushing against it,
+		# and turn for another go
+		var gap := Vector2(tg.x - k.x, tg.z - k.z)
+		if gap.length() < CLOSE and k.star <= 0.0 and tg.shrink <= 0.0:
+			var rel := Game.wrap_angle(atan2(gap.x, gap.y) - k.heading)
+			var past := k.heading - (1.0 if rel >= 0.0 else -1.0) * 0.9
+			goal = Vector2(k.x + sin(past) * 12.0, k.z + cos(past) * 12.0)
 	var want := atan2(goal.x - k.x, goal.y - k.z)
 	# looking around for room costs; every LOOK seconds is plenty, in between
 	# it keeps the same turn away from the goal
@@ -252,6 +273,18 @@ func ai_input(k: Kart, dt: float) -> Dictionary:
 	var top := k.max_speed() * float(ai.skill)
 	out.gas = (absf(dif) < 1.7 or k.speed < 10.0) and (k.speed < top or k.boost > 0.0)
 	out.brake = absf(dif) > 2.3 and k.speed > 16.0
+	# a goal close by at the side lies inside the circle the kart turns at
+	# this speed: at full gas it would only drive round and round it (a box,
+	# or two karts chasing each other), so it slows down to turn in
+	var dist := Vector2(goal.x - k.x, goal.y - k.z).length()
+	if k.speed > 10.0 and dist < 2.2 * k.speed / TURN_RATE * sin(minf(absf(dif), PI * 0.5)):
+		out.gas = false
+		out.brake = k.speed > 14.0
+	# still circling (slowly turning karts can't turn tighter): break out of it
+	ai.side_t = float(ai.side_t) + dt if absf(dif) > 1.2 and dist < 20.0 else 0.0
+	if float(ai.side_t) > SIDE_TIME:
+		ai.side_t = 0.0
+		ai.straight = 0.9
 	_ai_item(k, out, tg, dt, careful)
 	return out
 

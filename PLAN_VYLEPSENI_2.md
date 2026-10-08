@@ -220,6 +220,10 @@ a výška země se v aréně počítají jinak než na trati.
 > motokáry, všechna prasknutí, vítěz), CI kontroluje, že jsou stejné, a že odešlého hráče převzal počítač
 > (v cloudu ujel ~500 m). Bitvy v testu trvaly asi 1,5 minuty, 17 prasknutí, 5 vypadnutí; předpověď klienta
 > p95 0,6 m (limit 1 m). Pak hostitel vrátí všechny do lobby a klient test končí až tam.
+> **Oprava z CI:** test bitvy na jednom zařízení jednou našel dvě počítačové motokáry, které se 10 s tlačily
+> o sebe (a jinde kroužily kolem blízkého otazníku). Počítač teď u blízkého cíle z boku ubere a případně
+> vyjede z kruhu rovně, soupeře, kterému nemůže ublížit, objede a od zaseknutí o motokáru couvá pryč od ní.
+> V 48 bitvách (8× obě arény na všech obtížnostech) žádné zaseknutí.
 > **Zbývá:** vyzkoušet mezi dvěma skutečnými zařízeními (Jenda + kamarád).
 
 **Cíl:** bitvu jde hrát s kamarády po Wi-Fi stejně jako závod, i mezi telefonem a počítačem.
