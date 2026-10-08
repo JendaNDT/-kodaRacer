@@ -14,7 +14,7 @@ signal joined
 signal join_failed(reason: String)
 signal session_ended(reason: String)
 signal hosts_changed
-signal race_started(track: int, diff: int, roster: Array, cup: Dictionary)
+signal race_started(track: int, diff: int, roster: Array, cup: Dictionary, battle: bool)
 signal cup_points(points: Dictionary)
 signal snapshot_received(data: PackedFloat32Array)
 signal back_to_lobby
@@ -29,6 +29,8 @@ var track := 0         # 0..5; with `mirror` the race runs on its mirrored versi
 var mirror := false
 var diff := 1
 var cup_mode := false  # the lobby is set to a championship over all tracks
+var battle_mode := false  # the lobby is set to a balloon battle (Etapa I)
+var arena := 0         # the battle's arena, the host's choice
 var cup := {}          # host: the championship being driven {round, points, roster, diff}
 var in_race := false
 var inputs := {}       # peer id -> {"steer", "buttons", "seq" (item presses), "frame" (number of the message)}
@@ -84,6 +86,7 @@ func host(name: String, driver: int, paint := 0) -> Error:
 	track = int(Game.settings.track)
 	diff = int(Game.settings.diff)
 	mirror = bool(Game.settings.mirror)
+	arena = int(Game.settings.arena)
 	_udp = PacketPeerUDP.new()
 	_udp.set_broadcast_enabled(true)
 	_bcast_t = 0.0
@@ -115,6 +118,7 @@ func leave() -> void:
 	is_host = false
 	in_race = false
 	cup_mode = false
+	battle_mode = false
 	cup = {}
 	players = {}
 	inputs = {}
@@ -335,9 +339,23 @@ func set_track(t: int, d: int, m := mirror) -> void:
 
 
 func set_cup_mode(on: bool) -> void:
+	set_mode(1 if on else 0)
+
+
+## The host's choice in the lobby: 0 one race, 1 the championship, 2 the
+## balloon battle.
+func set_mode(m: int) -> void:
 	if not is_host:
 		return
-	cup_mode = on
+	cup_mode = m == 1
+	battle_mode = m == 2
+	_sync_lobby()
+
+
+func set_arena(a: int) -> void:
+	if not is_host:
+		return
+	arena = clampi(a, 0, Game.ARENAS.size() - 1)
 	_sync_lobby()
 
 
@@ -354,22 +372,29 @@ func _free_driver(want: int, id: int) -> int:
 func _sync_lobby() -> void:
 	lobby_changed.emit()
 	if is_host and active:
-		_lobby.rpc(players, track, diff, cup_mode, mirror)
+		_lobby.rpc(players, track, diff, cup_mode, mirror, battle_mode, arena)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _lobby(p: Dictionary, t: int, d: int, cm: bool, m: bool) -> void:
+func _lobby(p: Dictionary, t: int, d: int, cm: bool, m: bool, bm: bool, ar: int) -> void:
 	players = p
 	track = t
 	diff = d
 	cup_mode = cm
 	mirror = m
+	battle_mode = bm
+	arena = ar
 	lobby_changed.emit()
 
 
 # ---------------------------------------------------------------- race
 func start_race() -> void:
 	if not is_host:
+		return
+	if battle_mode:
+		# the balloon battle: the host's arena, free places for the computer
+		cup = {}
+		_launch(arena, diff, _new_roster(), {}, true)
 		return
 	if cup_mode and cup.is_empty():
 		var first := _new_roster()
@@ -425,11 +450,11 @@ func _cup_pts(pts: Dictionary) -> void:
 	cup_points.emit(pts)
 
 
-func _launch(t: int, d: int, roster: Array, cupd: Dictionary) -> void:
+func _launch(t: int, d: int, roster: Array, cupd: Dictionary, battle := false) -> void:
 	in_race = true
 	inputs = {}
-	_race_start.rpc(t, d, roster, cupd)
-	race_started.emit(t, d, roster, cupd)
+	_race_start.rpc(t, d, roster, cupd, battle)
+	race_started.emit(t, d, roster, cupd, battle)
 
 
 func _new_roster() -> Array:
@@ -449,10 +474,11 @@ func _new_roster() -> Array:
 	return ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
 
 
+## t is the track, or the arena when battle is set.
 @rpc("authority", "call_remote", "reliable")
-func _race_start(t: int, d: int, roster: Array, cupd: Dictionary) -> void:
+func _race_start(t: int, d: int, roster: Array, cupd: Dictionary, battle: bool) -> void:
 	in_race = true
-	race_started.emit(t, d, roster, cupd)
+	race_started.emit(t, d, roster, cupd, battle)
 
 
 func return_to_lobby() -> void:

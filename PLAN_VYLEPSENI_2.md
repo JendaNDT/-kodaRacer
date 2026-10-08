@@ -204,7 +204,27 @@ a výška země se v aréně počítají jinak než na trati.
 
 ---
 
-## Etapa I – Bitva po Wi-Fi
+## Etapa I – Bitva po Wi-Fi  ✅ hotovo (verze 1.19.0)
+
+> **Výsledek:** v lobby je vedle **Jeden závod / Mistrovství** režim **Bitva**; hostitel vybírá arénu (stejné
+> dlaždice s plánkem jako v menu), ostatní jeho volbu vidí a tlačítko startu má nápis **Do bitvy!**. Hostitel
+> počítá celou bitvu. Ke každé motokáře posílá 30× za vteřinu i balónky, kolik jich praskla ostatním, jestli
+> vypadla a kde; v hlavičce stav bitvy, čas konce a poslední 4 prasknutí (pořadové číslo, čas, komu, kdo).
+> Klient z toho kreslí prasknutí, vypadnutí, HUD i výsledky stejným kódem jako hra na jednom zařízení a pořadí
+> bere od hostitele. Svou motokáru si dál předpovídá (i v aréně, s rampami a ledem), při vypadnutí se už
+> nedorovnává. Volná místa doplní počítač, kdo odejde, toho převezme počítač (bez balónků zůstane mimo hru),
+> výsledky mají u hostitele **Zpět do lobby**, u ostatních „Další hru spouští hostitel“. Nově ve všech bitvách:
+> kdo praskne soupeři balónek, uvidí „Trefa!“ a jeho jméno. Bitevní lak za vítězství na Těžké platí i po Wi-Fi.
+> **Test:** `--nettest=host --battle --wait-players=3` + klient se zpožděním 120 ms (±20 ms) + druhý klient,
+> který po 20 s odejde. Hostitel i klient na konci vypíšou `BATTLE STATE` (balónky, prasknutí a vypadnutí každé
+> motokáry, všechna prasknutí, vítěz), CI kontroluje, že jsou stejné, a že odešlého hráče převzal počítač
+> (v cloudu ujel ~500 m). Bitvy v testu trvaly asi 1,5 minuty, 17 prasknutí, 5 vypadnutí; předpověď klienta
+> p95 0,6 m (limit 1 m). Pak hostitel vrátí všechny do lobby a klient test končí až tam.
+> **Oprava z CI:** test bitvy na jednom zařízení jednou našel dvě počítačové motokáry, které se 10 s tlačily
+> o sebe (a jinde kroužily kolem blízkého otazníku). Počítač teď u blízkého cíle z boku ubere a případně
+> vyjede z kruhu rovně, soupeře, kterému nemůže ublížit, objede a od zaseknutí o motokáru couvá pryč od ní.
+> V 48 bitvách (8× obě arény na všech obtížnostech) žádné zaseknutí.
+> **Zbývá:** vyzkoušet mezi dvěma skutečnými zařízeními (Jenda + kamarád).
 
 **Cíl:** bitvu jde hrát s kamarády po Wi-Fi stejně jako závod, i mezi telefonem a počítačem.
 

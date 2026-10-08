@@ -395,7 +395,8 @@ func _track_grid(selected: int, enabled: bool, on_pick: Callable, trial := false
 
 
 ## The battle arenas to pick from: a plan of each, its name and what is in it.
-func _arena_grid(selected: int) -> GridContainer:
+## In the Wi-Fi lobby only the host picks (on_pick), the others see the choice.
+func _arena_grid(selected: int, enabled := true, on_pick := Callable()) -> GridContainer:
 	var g := UI.grid(2, 8)
 	var group := ButtonGroup.new()
 	for i in Game.ARENAS.size():
@@ -405,6 +406,7 @@ func _arena_grid(selected: int) -> GridContainer:
 		b.toggle_mode = true
 		b.button_group = group
 		b.button_pressed = sel
+		b.disabled = not enabled and not sel
 		b.custom_minimum_size = Vector2(150, 176)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var v := UI.vbox(3)
@@ -421,13 +423,26 @@ func _arena_grid(selected: int) -> GridContainer:
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		info.custom_minimum_size = Vector2(60, 0)
 		v.add_child(info)
-		b.pressed.connect(func():
-			Game.settings.arena = i
-			Game.save_settings()
-			Sfx.play("ui", 0.6)
-			show_screen("setup"))
+		if enabled:
+			b.pressed.connect(func():
+				Game.settings.arena = i
+				Game.save_settings()
+				Sfx.play("ui", 0.6)
+				if on_pick.is_valid():
+					on_pick.call(i)
+				else:
+					show_screen("setup"))
 		g.add_child(b)
 	return g
+
+
+## What the battle is about, under the arenas.
+func _battle_rules() -> Label:
+	var rules := UI.label("Každý má %d balónky. Zásah raketou, banánem, olejem, hvězdou nebo přejetí zmenšeného soupeře stojí balónek, pak máš %d s ochranu. Kdo přijde o všechny, vypadá. Vyhraje poslední ve hře, nebo kdo má po %d minutách nejvíc balónků." % [
+		Game.BALLOONS, int(Game.BATTLE_GUARD), int(Game.BATTLE_TIME / 60.0)], 16, UI.MUTED)
+	rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rules.custom_minimum_size = Vector2(300, 0)
+	return rules
 
 
 func _diff_row(selected: int, enabled: bool, on_pick: Callable) -> HBoxContainer:
@@ -623,11 +638,7 @@ func _setup() -> void:
 	if battle:
 		var as_ := _section("Aréna")
 		as_.add_child(_arena_grid(int(Game.settings.arena)))
-		var rules := UI.label("Každý má %d balónky. Zásah raketou, banánem, olejem, hvězdou nebo přejetí zmenšeného soupeře stojí balónek, pak máš %d s ochranu. Kdo přijde o všechny, vypadá. Vyhraje poslední ve hře, nebo kdo má po %d minutách nejvíc balónků." % [
-			Game.BALLOONS, int(Game.BATTLE_GUARD), int(Game.BATTLE_TIME / 60.0)], 16, UI.MUTED)
-		rules.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		rules.custom_minimum_size = Vector2(300, 0)
-		as_.add_child(rules)
+		as_.add_child(_battle_rules())
 	elif setup_mode == "cup":
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
 		cs.add_child(_cup_tracks(bool(Game.settings.mirror)))
@@ -1047,32 +1058,37 @@ func _lobby() -> void:
 	dsec.add_child(KartStage.new(md, 180.0, int(mine.get("paint", 0))))
 	dsec.add_child(_driver_grid(md, taken, _lobby_driver))
 	dsec.add_child(_paint_row(md, int(mine.get("paint", 0)), _pick_paint.bind(md)))
-	# one race or the championship over all tracks (the host decides)
+	# one race, the championship over all tracks or the balloon battle (the host decides)
 	var ms := _section("Režim")
 	var modes := UI.hbox(8)
 	ms.add_child(modes)
 	var group := ButtonGroup.new()
-	for m in 2:
+	var cur := 2 if Net.battle_mode else (1 if Net.cup_mode else 0)
+	for m in 3:
 		var mb := Button.new()
-		mb.text = ["Jeden závod", "Mistrovství"][m]
+		mb.text = ["Jeden závod", "Mistrovství", "Bitva"][m]
 		mb.toggle_mode = true
 		mb.button_group = group
-		mb.button_pressed = Net.cup_mode == (m == 1)
-		mb.disabled = not Net.is_host and Net.cup_mode != (m == 1)
+		mb.button_pressed = cur == m
+		mb.disabled = not Net.is_host and cur != m
 		mb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if Net.is_host:
 			mb.pressed.connect(func():
 				Sfx.play("ui", 0.6)
-				Net.set_cup_mode(m == 1))
+				Net.set_mode(m))
 		modes.add_child(mb)
-	if Net.cup_mode:
+	if Net.battle_mode:
+		var as_ := _section("Aréna")
+		as_.add_child(_arena_grid(Net.arena, Net.is_host, _lobby_arena))
+		as_.add_child(_battle_rules())
+	elif Net.cup_mode:
 		var cs := _section("Mistrovství: všech %d tratí za sebou" % Game.TRACKS.size())
 		cs.add_child(_cup_tracks(Net.mirror))
 	else:
 		var ts := _section("Trať")
 		ts.add_child(_track_grid(Net.track, Net.is_host, _lobby_track, false, Net.mirror))
 	# mirrored tracks: the host's choice, if the host has won them
-	if Net.mirror or (Net.is_host and Game.unlocked("mirror")):
+	if not Net.battle_mode and (Net.mirror or (Net.is_host and Game.unlocked("mirror"))):
 		var mrs := _section("Tratě")
 		mrs.add_child(_mirror_row(Net.mirror, Net.is_host, _pick_mirror))
 	var ds := _section("Obtížnost")
@@ -1080,11 +1096,12 @@ func _lobby() -> void:
 	var row := UI.hbox(10)
 	content.add_child(row)
 	if Net.is_host:
-		var go := UI.button("Začít mistrovství" if Net.cup_mode else "Start závodu", Net.start_race, true)
+		var go_text := "Do bitvy!" if Net.battle_mode else ("Začít mistrovství" if Net.cup_mode else "Start závodu")
+		var go := UI.button(go_text, Net.start_race, true)
 		go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(go)
 	else:
-		var w := UI.label("Čekáme, až hostitel spustí závod…", 18, UI.MUTED)
+		var w := UI.label("Čekáme, až hostitel spustí %s…" % ("bitvu" if Net.battle_mode else "závod"), 18, UI.MUTED)
 		w.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(w)
 	row.add_child(UI.button("Odejít", _leave_lobby))
@@ -1100,6 +1117,10 @@ func _lobby_track(i: int) -> void:
 	Game.settings.track = i
 	Game.save_settings()
 	Net.set_track(i, Net.diff)
+
+
+func _lobby_arena(i: int) -> void:
+	Net.set_arena(i)
 
 
 func _lobby_diff(i: int) -> void:

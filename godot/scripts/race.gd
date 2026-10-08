@@ -55,6 +55,7 @@ const ARENA_HOMING := 38.0      # an arena missile follows a rival only this clo
 const ARENA_TURN := 2.6         # and turns this fast (rad/s; 4.5 on a track)
 const BOX_BACK_ARENA := 6.0     # s before an arena's box is back
 const LAND_HARD := 22.0         # m/s falling speed that lands with the strongest buzz (the ramp's jump: about 13)
+const NET_POPS := 4             # the latest pops repeated in every snapshot (one may get lost)
 const AI_YAW := 0.8             # how fast (× turn rate) the computer reckons a kart turns at speed         # the blue missile's blast hits everyone this close to the leader
 var explosions: Array = []
 var explosion_id := 0
@@ -90,6 +91,7 @@ var music_fast := false
 var tilt_leveled := false       # the phone's hold taken as straight during this countdown (Etapa G)
 var battle_end_seen := false
 var hits_landed := 0            # battle: hits that got through (tests: each costs one balloon)
+var pops_shown := 0             # battle: pops already told to the one who popped the balloon
 
 var view_layer: Control
 var overlay: Control
@@ -1557,7 +1559,18 @@ func _pack() -> PackedFloat32Array:
 	d[7] = explosions.size()
 	d[8] = blues.size()
 	d[9] = oils.size()
-	# header slots 10-13 are reserved; explosions (id * 4 + kind, x, z) go after the projectiles
+	# the balloon battle (Etapa I): 1 on, 2 over; when it ended; how many of
+	# the latest pops (id, time, kart, by whom) follow the explosions
+	var recent: Array = []
+	if battle != null:
+		d[10] = 2 if battle.over else 1
+		d[11] = battle.end_time
+		var first := maxi(0, battle.pops.size() - NET_POPS)
+		for i in range(first, battle.pops.size()):
+			var pp: Array = battle.pops[i]
+			recent.append_array([i + 1, pp[0], karts.find(pp[1]), karts.find(pp[2]) if pp[2] != null else -1])
+		d[12] = battle.pops.size() - first
+	# header slot 13 is reserved; explosions (id * 4 + kind, x, z) go after the projectiles
 	var o := head
 	for k in karts:
 		k.pack(d, o)
@@ -1586,6 +1599,7 @@ func _pack() -> PackedFloat32Array:
 	for e in explosions:
 		ex.append_array(PackedFloat32Array([int(e[0]) * 4 + int(e[3]), e[1], e[2]]))
 	d.append_array(ex)
+	d.append_array(PackedFloat32Array(recent))
 	return d
 
 
@@ -1613,8 +1627,8 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 	for k in karts:
 		k.unpack(d, o)
 		o += Kart.SNAP_FIELDS
-	if not was.is_empty():
-		_reconcile(me, was)
+	if not was.is_empty() and not me.out:
+		_reconcile(me, was)   # (knocked out of a battle the kart is gone: nothing to ease)
 	while bananas.size() < nb:
 		var node := _banana_node()
 		fx.add_child(node)
@@ -1624,7 +1638,7 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 		b.node.queue_free()
 	for b in bananas:
 		if absf(float(b.x) - d[o]) + absf(float(b.z) - d[o + 1]) > 0.01:
-			b.y = track.ground(d[o], d[o + 1])
+			b.y = arena.ground(d[o], d[o + 1]) if arena != null else track.ground(d[o], d[o + 1])
 		b.x = d[o]
 		b.z = d[o + 1]
 		b.node.position = Vector3(b.x, float(b.y) + 0.25, b.z)
@@ -1643,9 +1657,12 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 		m.x = d[o]
 		m.z = d[o + 1]
 		m.h = d[o + 2]
-		var mp := track.project(m.x, m.z, int(m.idx) if int(m.idx) >= 0 else track.nearest(m.x, m.z))
-		m.idx = mp[0]
-		m.y = track.road_y(mp[0], mp[1], mp[2]) + 0.9
+		if arena != null:
+			m.y = arena.ground(m.x, m.z) + 0.9
+		else:
+			var mp := track.project(m.x, m.z, int(m.idx) if int(m.idx) >= 0 else track.nearest(m.x, m.z))
+			m.idx = mp[0]
+			m.y = track.road_y(mp[0], mp[1], mp[2]) + 0.9
 		if m.get("fresh", false):
 			m.fresh = false
 			sound_at("missile", m.x, m.z)
@@ -1692,7 +1709,7 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 				sound_at("oil", d[o], d[o + 1])
 			p.x = d[o]
 			p.z = d[o + 1]
-			_place_oil(p, track.project(p.x, p.z, track.nearest(p.x, p.z)))
+			_place_oil(p, [] if arena != null else track.project(p.x, p.z, track.nearest(p.x, p.z)))
 		p.age = d[o + 2]
 		o += 3
 	var ne := int(d[7])
@@ -1705,7 +1722,34 @@ func apply_snapshot(d: PackedFloat32Array) -> void:
 			seen_explosion = eid
 			_explode_fx(d[o + 1], d[o + 2], code & 3)
 		o += 3
+	if battle != null:
+		_apply_battle(d, o)
 	_compute_order_client()
+
+
+## Wi-Fi client: the battle as the host decided it. The balloons, the pops
+## and who is out came with the karts; here the clock, the end and the
+## latest pops (who popped whose balloon).
+func _apply_battle(d: PackedFloat32Array, o: int) -> void:
+	if int(d[10]) == 2 and not battle.over:
+		battle.over = true
+	battle.end_time = d[11]
+	for i in int(d[12]):
+		if o + 3 >= d.size():
+			break
+		var pid := int(d[o])
+		if pid > battle.seen_pop:
+			battle.seen_pop = pid
+			var vi := int(d[o + 2])
+			var bi := int(d[o + 3])
+			if vi >= 0 and vi < karts.size():
+				battle.pops.append([d[o + 1], karts[vi], karts[bi] if bi >= 0 and bi < karts.size() else null])
+				net_seen["prasknutí"] = true
+		o += 4
+	for k: Kart in karts:
+		if k.out and not battle.outs.has(k):
+			battle.outs.append(k)
+			net_seen["vyřazení"] = true
 
 
 func _compute_order_client() -> void:
@@ -1719,7 +1763,9 @@ func _client_tick() -> void:
 		return
 	var me: Kart = locals[0]
 	# the tests drive the client's kart with the computer driver, through the network as a player would
-	var inp: Dictionary = _ai_input(me, Game.SIM_DT * 2.0) if me.autopilot and not me.finished else Game.read_input(0)
+	var inp: Dictionary = Game.read_input(0)
+	if me.autopilot and not me.finished:
+		inp = battle.ai_input(me, Game.SIM_DT * 2.0) if battle != null else _ai_input(me, Game.SIM_DT * 2.0)
 	if inp.item:
 		item_seq += 1
 	in_frame += 1
@@ -1841,6 +1887,8 @@ func _process(delta: float) -> void:
 		time += dt
 	for k in karts:
 		_observe(k, dt)
+	if battle != null and mode != Mode.DEMO:
+		_observe_pops()
 	_count_display()
 	# views
 	var sc := get_viewport().get_final_transform().get_scale()
@@ -2066,6 +2114,21 @@ func _observe_battle(k: Kart, o: Dictionary, loc: bool, hud: Hud) -> void:
 				p.hud.show_msg("Vypadl jsi!", UI.KERB)
 			else:
 				p.hud.show_msg("%s vypadl!" % display_name(k), UI.PAPER)
+
+
+## Who popped whose balloon: the player who did it hears about it (on the
+## Wi-Fi client from the pops the host sends).
+func _observe_pops() -> void:
+	while pops_shown < battle.pops.size():
+		var pp: Array = battle.pops[pops_shown]
+		pops_shown += 1
+		var v: Kart = pp[1]
+		var by: Kart = pp[2]
+		if by == null or by == v or by.local_slot < 0 or by.local_slot >= panes.size() or v.out:
+			continue   # knocking a kart out has its own message
+		var hud: Hud = panes[by.local_slot].hud
+		if hud != null:
+			hud.show_msg("Trefa! %s" % display_name(v), UI.GO)
 
 
 ## The battle is over: the winner's message, confetti, the finish buzz.
@@ -2467,12 +2530,12 @@ func _show_results() -> void:
 
 
 ## After a balloon battle: places, balloons left and popped; a win on Hard
-## gives the winner's driver the battle paint.
+## gives the winner's driver the battle paint (also over Wi-Fi, like the cups).
 func _show_battle_results() -> void:
 	var rows := battle.standings()
 	var title := "Výsledky bitvy"
 	var sub := ""
-	if mode == Mode.OFFLINE and unlocked_now.is_empty():
+	if unlocked_now.is_empty():
 		var won: Array = []
 		for k in locals:
 			if rows.find(k) == 0:
@@ -2507,9 +2570,20 @@ func _show_battle_results() -> void:
 	_unlock_box(inner)
 	var row := UI.hbox(10)
 	inner.add_child(row)
-	var first := UI.button("Hrát znovu", func(): restart_requested.emit(), true)
-	row.add_child(first)
-	row.add_child(UI.button("Hlavní menu", func(): menu_requested.emit()))
+	var first: Button
+	match mode:
+		Mode.OFFLINE:
+			first = UI.button("Hrát znovu", func(): restart_requested.emit(), true)
+			row.add_child(first)
+			row.add_child(UI.button("Hlavní menu", func(): menu_requested.emit()))
+		Mode.HOST:
+			first = UI.button("Zpět do lobby", func(): lobby_requested.emit(), true)
+			row.add_child(first)
+			row.add_child(UI.button("Ukončit hru", func(): menu_requested.emit()))
+		_:
+			inner.add_child(UI.label("Další hru spouští hostitel.", 18, UI.MUTED))
+			first = UI.button("Odejít", func(): menu_requested.emit())
+			row.add_child(first)
 	for c in row.get_children():
 		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	first.grab_focus.call_deferred()

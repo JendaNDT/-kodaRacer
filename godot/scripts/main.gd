@@ -50,6 +50,8 @@ var _bt_done_at := -1.0
 var _bt_air := {}             # kart -> was in the air (counting take-offs from the ramps)
 var _bt_jumps := 0
 var _bt_rows: Array = []
+var _net_end := {}            # Wi-Fi battle test: {ok, why, t} once the battle is done, before leaving
+var _net_left := {}           # Wi-Fi battle test, host: kart -> {t, out, balloons, x, z, dist} of a player who left
 
 
 func _ready() -> void:
@@ -380,6 +382,9 @@ func _ready() -> void:
 		if a.nettest == "host":
 			Net.host("Hostitel", 0, Game.paint_of(0))
 			Net.cup_mode = a.has("cup")   # --cup: a championship (--cup-start=4: only the last races)
+			if a.has("battle"):           # --battle --arena=N: the balloon battle (Etapa I)
+				Net.battle_mode = true
+				Net.arena = clampi(int(a.get("arena", "0")), 0, Game.ARENAS.size() - 1)
 		else:
 			Net.join("127.0.0.1", "Klient", 1, Game.paint_of(1))
 			Haptics.log_on = true            # what the client's player felt, printed at the end
@@ -391,6 +396,9 @@ func _ready() -> void:
 	if a.has("host"):
 		menu._host()
 		Net.set_cup_mode(a.has("cup"))
+		if a.has("lobby-battle"):   # screenshots of the lobby set to the battle
+			Net.set_arena(int(a.get("arena", "0")))
+			Net.set_mode(2)
 	if a.has("trial"):
 		start_trial()
 		race.fast = int(a.get("fast", "1"))
@@ -660,7 +668,7 @@ func _offline_roster(players: int) -> Array:
 	return ai.slice(0, Game.MAX_KARTS - humans.size()) + humans
 
 
-func _on_net_race(track: int, diff: int, roster: Array, cupd: Dictionary) -> void:
+func _on_net_race(track: int, diff: int, roster: Array, cupd: Dictionary, bt := false) -> void:
 	var me := Net.my_id()
 	var r: Array = []
 	for e in roster:
@@ -671,6 +679,7 @@ func _on_net_race(track: int, diff: int, roster: Array, cupd: Dictionary) -> voi
 	Net.stop_listening()
 	var nr := _new_race()
 	nr.cup = cupd
+	nr.battle_mode = bt   # then `track` is the arena
 	nr.start(Race.Mode.HOST if Net.is_host else Race.Mode.CLIENT, track, diff, r)
 	fade_in()   # no fade out first: the host's countdown must not wait
 	if _test_mode != "":
@@ -689,6 +698,12 @@ func _on_snapshot(d: PackedFloat32Array) -> void:
 
 func _on_peer_left(id: int) -> void:
 	if race != null and race.mode == Race.Mode.HOST:
+		if _test_mode == "net_host" and race.battle != null:
+			for k: Kart in race.karts:
+				if k.peer == id:
+					_net_left[k] = {"t": race.race_time, "out": k.out, "balloons": k.balloons, "x": k.x, "z": k.z, "dist": 0.0}
+					print("HOST: %s left the battle at %.1f s%s" % [race.display_name(k), race.race_time,
+						" (already out)" if k.out else ", the computer drives on"])
 		race.on_peer_left(id)
 
 
@@ -932,9 +947,15 @@ func _process(delta: float) -> void:
 		elif _test_t > float(Game.cmd_args.get("timeout", "240")):
 			_finish_test(false, "timeout")
 	elif _test_mode == "net_host":
-		if race == null or race.mode == Race.Mode.DEMO:
-			if Net.players.size() >= 2 and _test_t > 2.0:
+		if not _net_end.is_empty():
+			# everybody sent back to the lobby: give the message time to arrive
+			if _test_t - float(_net_end.t) > 3.0:
+				_finish_test(bool(_net_end.ok), String(_net_end.why))
+		elif race == null or race.mode == Race.Mode.DEMO:
+			if Net.players.size() >= int(Game.cmd_args.get("wait-players", "2")) and _test_t > 2.0:
 				Net.start_race()
+		elif race.battle != null:
+			_net_battle_host()
 		elif race.results_shown:
 			var all_in := true
 			for k in race.karts:
@@ -950,6 +971,8 @@ func _process(delta: float) -> void:
 				_finish_test(true, "host championship finished" if not race.cup.is_empty() else "host results, all players finished")
 		if _test_t > float(Game.cmd_args.get("timeout", "300")):
 			_finish_test(false, "timeout")
+	elif _test_mode == "net_client" and (not _net_end.is_empty() or race != null and race.battle != null):
+		_net_battle_client()
 	elif _test_mode == "net_client":
 		if race != null and race.mode == Race.Mode.CLIENT and race.results_shown and (race.cup.is_empty() or race._cup_last()):
 			var me: Kart = race.locals[0]
@@ -1571,6 +1594,121 @@ func _jump_tick() -> void:
 	else:
 		_finish_test(_jump_bad == 0, "take-offs only from the ramp on all %d tracks" % Game.TRACKS.size() if _jump_bad == 0
 			else "%d problems" % _jump_bad)
+
+
+# ---------------------------------------------------------------- --nettest --battle
+## Everything both sides must agree on once the battle is over: each kart's
+## balloons, pops and whether it is out, every pop (whose balloon, by whom)
+## and the winner. The host and the client print it, CI compares the lines.
+func _battle_state(r: Race) -> String:
+	var ks: Array = []
+	for k: Kart in r.karts:
+		ks.append("%d:%d:%d:%s" % [k.driver, k.balloons, k.pops, "out" if k.out else "in"])
+	var ps: Array = []
+	for pp: Array in r.battle.pops:
+		var by: Kart = pp[2]
+		ps.append("%d<%s" % [(pp[1] as Kart).driver, str(by.driver) if by != null else "-"])
+	var w: Kart = r.battle.winner()
+	return "karts %s | pops %s | winner %s" % [" ".join(ks), " ".join(ps), str(w.driver) if w != null else "-"]
+
+
+## The rules hold in what this side saw: every kart lost one balloon for each
+## pop on it, popped as many as the pops say, and is out exactly when it has
+## none left. Empty when all is well.
+func _battle_consistent(r: Race) -> String:
+	for k: Kart in r.karts:
+		var lost := 0
+		var popped := 0
+		for pp: Array in r.battle.pops:
+			if pp[1] == k:
+				lost += 1
+			elif pp[2] == k:
+				popped += 1
+		if k.balloons != maxi(0, Game.BALLOONS - lost):
+			return "%s has %d balloons after %d pops" % [r.display_name(k), k.balloons, lost]
+		if k.pops != popped:
+			return "%s popped %d, the pops say %d" % [r.display_name(k), k.pops, popped]
+		if k.out != (k.balloons <= 0):
+			return "%s is %s with %d balloons" % [r.display_name(k), "out" if k.out else "in", k.balloons]
+	return ""
+
+
+## Host: the battle to its end; a player who left was taken over by the
+## computer (or stayed out); then everybody back to the lobby.
+func _net_battle_host() -> void:
+	var r := race
+	for k: Kart in _net_left:
+		var e: Dictionary = _net_left[k]
+		if not k.out:
+			e.dist = float(e.dist) + Vector2(k.x - float(e.x), k.z - float(e.z)).length()
+		e.x = k.x
+		e.z = k.z
+	if r.results_shown and _done_at < 0.0:
+		_done_at = _test_t
+	if _done_at >= 0.0 and _test_t - _done_at > float(Game.cmd_args.get("linger", "5")):
+		_done_at = -1.0
+		print("BATTLE STATE: %s" % _battle_state(r))
+		var bad := _battle_consistent(r)
+		if r.battle.pops.is_empty() or r.battle.outs.is_empty():
+			bad = "no balloon popped or nobody out"
+		for k: Kart in _net_left:
+			var e: Dictionary = _net_left[k]
+			var ok_k: bool = not k.human and k.peer == 0 and (k.out if bool(e.out) else float(e.dist) > 10.0)
+			print("HOST TAKEOVER: %s left at %.1f s %s, then %s: %s" % [r.display_name(k), float(e.t),
+				"already out" if bool(e.out) else "with %d balloons" % int(e.balloons),
+				"stayed out" if bool(e.out) else "the computer drove %.0f m%s" % [float(e.dist), ", out at the end" if k.out else ""],
+				"ok" if ok_k else "FAIL"])
+			if not ok_k:
+				bad = "%s was not taken over" % r.display_name(k)
+		var want_left := int(Game.cmd_args.get("wait-players", "2")) - 2
+		if _net_left.size() < want_left:
+			bad = "the player who should leave did not"
+		var w: Kart = r.battle.winner()
+		Net.return_to_lobby()
+		_net_end = {"ok": bad == "", "t": _test_t,
+			"why": "host battle over, %d pops, %d out, winner %s, back to the lobby" % [r.battle.pops.size(), r.battle.outs.size(),
+				r.display_name(w) if w != null else "-"] if bad == "" else bad}
+	if _test_t > float(Game.cmd_args.get("timeout", "300")):
+		_finish_test(false, "timeout")
+
+
+## Client: what the host decided arrived (the same balloons, pops and
+## knock-outs), its own kart predicted well enough, then back in the lobby.
+## With --leave-at=S it leaves in the middle of the battle instead.
+func _net_battle_client() -> void:
+	var r := race
+	if _net_end.is_empty() and r != null and r.battle != null and r.mode == Race.Mode.CLIENT:
+		var leave_at := float(Game.cmd_args.get("leave-at", "-1"))
+		var me: Kart = r.locals[0]
+		if leave_at >= 0.0 and r.state == "race" and r.race_time >= leave_at:
+			print("CLIENT LEAVES the battle at %.1f s with %d balloons" % [r.race_time, me.balloons])
+			Net.leave()
+			_finish_test(true, "left in the middle of the battle")
+			return
+		if r.results_shown:
+			var rep := r.prediction_report()
+			print("PREDICTION lag=%d ms: error avg %.2f p95 %.2f max %.2f m (%d), correction avg %.2f p95 %.2f max %.2f m" % [
+				int(Net.fake_lag), rep.err.avg, rep.err.p95, rep.err.max, rep.err.n, rep.corr.avg, rep.corr.p95, rep.corr.max])
+			print("CLIENT SAW: %s" % ", ".join(r.net_seen.keys()))
+			var felt := {}
+			for b in Haptics.buzzes:
+				felt[b[2]] = int(felt.get(b[2], 0)) + 1
+			print("CLIENT FELT: %s, events %s" % [str(felt), str(Haptics.asked)])
+			print("BATTLE STATE: %s" % _battle_state(r))
+			var pred_ok: bool = rep.err.n > 100 and rep.err.p95 <= float(Game.cmd_args.get("max-err", "1.0"))
+			var bad := _battle_consistent(r)
+			if not r.battle.over:
+				bad = "the battle is not over"
+			elif r.battle.pops.is_empty() or r.battle.outs.is_empty():
+				bad = "no pop or knock-out arrived"
+			elif not pred_ok:
+				bad = "prediction too far"
+			_net_end = {"ok": bad == "", "t": _test_t, "why": "client battle place %d, %d balloons, popped %d, prediction ok" % [
+				r.battle.standings().find(me) + 1, me.balloons, me.pops] if bad == "" else bad}
+	elif not _net_end.is_empty() and not Net.in_race and menu.visible and menu.screen == "lobby":
+		_finish_test(bool(_net_end.ok), String(_net_end.why) + ", back in the lobby")
+	if _test_t > float(Game.cmd_args.get("timeout", "300")):
+		_finish_test(false, "timeout" + (" waiting for the lobby" if not _net_end.is_empty() else ""))
 
 
 # ---------------------------------------------------------------- --battletest

@@ -1,12 +1,12 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 07. 10. 2026 (verze 1.18.0)*
+*Naposled aktualizováno: 07. 10. 2026 (verze 1.19.0)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
-**Vyzkoušet verzi 1.18.0: bitvu s balónky na telefonu i ve dvou na počítači (obě arény, všechny obtížnosti) a k tomu z etapy G naklánění a vibrace na telefonu. Pak etapa I – bitva po Wi-Fi (`PLAN_VYLEPSENI_2.md`).** Etapy G a H jsou hotové a otestované v cloudu; jestli je bitva zábavná (délka, síla soupeřů, velikost arén), ukáže až hraní.
+**Vyzkoušet verzi 1.19.0 na dvou skutečných zařízeních: bitvu s balónky po Wi-Fi (telefon + telefon nebo telefon + počítač, obě arény), k tomu bitvu sólo a ve dvou na počítači a z etapy G naklánění a vibrace.** Etapy G, H a I jsou hotové a otestované v cloudu (hostitel + klient na jednom stroji se zpožděním 120 ms); plán `PLAN_VYLEPSENI_2.md` je tím celý splněný. Jestli je bitva zábavná (délka, síla soupeřů, velikost arén), ukáže až hraní.
 
 ## ✅ Hotovo
 - Přepis celé hry do Godotu 4.7.1: 3 tratě, 6 jezdců, 3 obtížnosti, drift s mini-turbem, raketový start, předměty (turbo, 3× turbo, banán, naváděná raketa, hvězda), 5 AI soupeřů, 3 kola, pořadí, časy kol, rekordy
@@ -38,6 +38,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Oprava 1.16.1:** na telefonech (Samsung i jiné) se na Střední po prvním závodě 3D grafika rozbila: v menu šum, v závodě černo. Zkušební sestavení s volbami „bez vyhlazení / bez stínů / bez záře“ ukázalo, že za to může vyhlazování hran (MSAA). Na telefonu je teď vypnuté a 3D obraz se kreslí ve vyšším rozlišení (Střední 85 %, Vysoká 100 %). Nový test paměti `--soaktest` (závod → výsledky → menu dokola) a přepínač `--mobile` (počítač se chová jako telefon).
 - **Etapa G (verze 1.17.0):** zatáčení nakláněním telefonu (Ovládání: volant / naklánění, citlivost Jemná / Střední / Ostrá, mrtvá zóna 3°, vyhlazení, vyrovnání na konci odpočtu a tlačítkem Vyrovnat v pauze, správný směr i po otočení telefonu na druhou stranu), malý volantík místo dotykového volantu. Vibrace telefonu nebo herního ovladače při nárazu, zásahu, dopadu, turbu, změně jisker driftu a v cíli, nejvýš 10× za vteřinu, tlačítko Vibrace v menu i v pauze, fungují i po Wi-Fi. Testy `--tilttest` a `--hapticstest` (i pro dva hráče).
 - **Etapa H (verze 1.18.0):** bitva s balónky. Dvě nové arény postavené kódem: Náměstí (kašna, květináče se stromy, nízké zídky, čtyři rampy, domy s radnicí, diváci u zdi) a Ledový stadion (kluzký led uprostřed, sněhové valy, tři rampy, tribuny s diváky, stožáry světel, sněžení). Motokáry v aréně jezdí volně po ploše. Tři balónky nad každou motokárou, zásah stojí balónek, pak aspoň 2 s ochrana (balónky blikají), kdo nemá balónky, vypadne a sleduje ostatní, konec po 3 minutách nebo když zbyde jeden. Vlastní šance na předměty, raketa k nejbližšímu soupeři vpředu, modrá k tomu s nejvíc balónky. Počítačoví soupeři v aréně (cíl, pronásledování, otazníky, opatrnost s posledním balónkem, povahy jezdců). HUD s balónky, časem a soupeři, minimapa arény, výsledky a stupně vítězů za zdí arény. V menu „Bitva s balónky“ (1 nebo 2 hráči), ve Sbírce bitevní lak za vítězství na Těžké. Test `--battletest`.
+- **Etapa I (verze 1.19.0):** bitva s balónky po Wi-Fi. V lobby režim Bitva vedle Jeden závod / Mistrovství, hostitel vybírá arénu, ostatní vidí jeho volbu. Hostitel počítá celou bitvu a posílá každé motokáře balónky, prasknutí a vypadnutí, k tomu čas, konec a poslední prasknutí (kdo komu); klient si dál sám předpovídá svou motokáru. Volná místa doplní počítač, hráče, který odejde, převezme počítač (vypadlý zůstane mimo hru), po bitvě hostitel vrátí všechny do lobby. Kdo praskne balónek, uvidí „Trefa!“ a jméno soupeře. Bitevní lak za vítězství na Těžké jde získat i po Wi-Fi (jako poháry z mistrovství). Síťový test bitvy se zpožděním 120 ms a třetím hráčem, který uprostřed odejde, běží v GitHub Actions.
 - Ověřeno v oficiálním Godotu 4.7.1: import bez chyb, závod do cíle sólo i ve 2 hráčích, síťový závod (hostitel + klient), hledání her, odmítnutí jiné verze, screenshoty všech tratí a efektů, měření výkonu
 
 ## 📝 TODO
@@ -116,7 +117,10 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - **Bitva je závod v aréně, ne nová hra:** `Race` dál řídí motokáry, předměty, kamery, HUD a výsledky; `race.arena` je místo `race.track` a `race.battle` (`battle.gd`) přidává pravidla, pořadí, cíle raket a počítačové soupeře. Kde se bitva liší, ptá se závod `battle`. Každý zásah jde přes `Race.hit_kart` (kdo, čím, kdo to způsobil), takže balónek se bere na jednom místě a test může ověřit, že každý zásah stál právě jeden.
 - **Vypadlá motokára odjede z arény:** schová se a zaparkuje daleko mimo (5 km), takže do ní nic nenarazí a žádný předmět ji netrefí, a nemusely se kvůli tomu měnit všechny smyčky přes motokáry. Kde vypadla, si pamatuje kvůli efektu.
 - **Rakety v aréně míří hůř než na trati:** sledují jen soupeře do 38 m, kterého mají před sebou, a otáčejí se pomaleji (2,6 místo 4,5 rad/s); otazníky se v aréně obnovují za 6 s (na trati 2,5 s). Bitva šesti počítačů pak trvá 40–100 s (dřív 40–80 s); s hráčem, který se brání, déle. Další ladění až podle hraní.
+- **Počítač v aréně nekrouží kolem cíle (od verze 1.19.0):** otazník nebo soupeř blízko a z boku leží uvnitř kruhu, který motokára při plné rychlosti opíše, takže s plným plynem by ho jen objížděla dokola. Počítač proto v takové chvíli ubere (nad 10 m/s) a když má cíl z boku přes 2,5 s, vyjede na chvíli rovně a najede na něj znovu. U soupeře blíž než 7 m, kterému zrovna nemůže ublížit (náraz balónek nebere), ho objede místo tlačení do něj, a když se o jinou motokáru zasekne, couvá směrem od ní. Našel to test v CI: dvě motokáry se 10 s tlačily o sebe. V 48 bitvách po opravě žádné zaseknutí.
 - **Počítač v aréně se rozhlíží jen každých 0,08 s:** 13 směrů × vzorky po 1,5 m pro 6 motokár v každém kroku fyziky (120× za vteřinu) bylo tak drahé, že test běžel přes 5 minut. Mezi rozhlédnutími drží stejnou odchylku od cíle.
+- **Bitva po Wi-Fi posílá stav, ne události (od verze 1.19.0):** ke každé motokáře přibyly ve zprávě hostitele balónky, kolik jich praskla ostatním, jestli vypadla a kde; v hlavičce stav bitvy (běží / konec) a čas konce. Klient z toho kreslí prasknutí a vypadnutí stejným kódem jako hra na jednom zařízení (porovná se s minulým stavem), takže ztracená zpráva nic nerozbije, další ji opraví. Navíc jdou v každé zprávě poslední 4 prasknutí (pořadové číslo, čas, komu, kdo), aby klient věděl, kdo komu balónek vzal, i když se jedna zpráva ztratí. Pořadí klient nepočítá, bere ho od hostitele.
+- **Síťový test bitvy porovnává obě strany:** hostitel i klient na konci vypíšou řádek `BATTLE STATE` (balónky, prasknutí a vypadnutí každé motokáry, seznam všech prasknutí, vítěz) a CI kontroluje, že jsou stejné. Každá strana navíc ověří, že balónky odpovídají prasknutím. Při vypadnutí se předpověď vlastní motokáry nedorovnává (motokára odjede z arény), jinak by test hlásil „chybu“ 7 km.
 - **Vibrace podle herního času:** limit 0,1 s mezi vibracemi měří `Haptics` ve stejném čase jako závod, takže test s `--fast=8` kontroluje totéž co skutečná hra. Po průjezdu cílem nevibruje nic kromě samotného cíle (motokáru řídí autopilot).
 
 ## 📁 Stav souborů
@@ -131,7 +135,7 @@ Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes Gi
 - `godot/scripts/track.gd`, `world_builder.gd` – trať a svět kolem ní
 - `godot/scripts/atmosphere.gd` – obloha, slunce a stíny, mlha, barvy, záře, mraky, sníh
 - `godot/scripts/trackside.gd` – semafor, tribuny s diváky, praporky a vlajky, reklamní panely, balíky a kužely, vítr ve stromech, jezero, dominanty tratí
-- `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby)
+- `godot/scripts/net.gd` – Wi-Fi multiplayer (hostitel, klient, hledání her, lobby s režimy závod / mistrovství / bitva)
 - `godot/scripts/menu.gd`, `hud.gd`, `minimap.gd`, `item_icon.gd`, `touch_controls.gd`, `ui.gd` – rozhraní
 - `godot/scripts/game.gd`, `sfx.gd` – data (včetně nálady každé trati), nastavení, ovládání, zvuky
 - `godot/scripts/focus_ring.gd` – kurzor v menu pro klávesnici a ovladač

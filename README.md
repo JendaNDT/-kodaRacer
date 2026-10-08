@@ -22,7 +22,7 @@ Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). 
 - **Závod**: ty proti pěti počítačovým soupeřům, 3 kola.
 - **Mistrovství**: všech šest tratí za sebou se stejnými soupeři. Za 1.–6. místo dostaneš 10, 8, 6, 4, 2 a 1 bod. Po každém závodě uvidíš průběžné pořadí, kdo vede, startuje příště ze zadu. Na konci stojí tři nejlepší z celého mistrovství na stupních vítězů a hra si pamatuje tvůj nejlepší pohár pro každou obtížnost. Jde hrát sám, ve dvou na jednom počítači i po Wi-Fi (hostitel v lobby přepne na Mistrovství, další závod spouští on, až dojedou všichni hráči).
 - **Časovka proti rekordu**: jedeš sám, bez soupeřů a otazníků, se třemi turby. Proti tobě jede průhledný duch tvé nejlepší jízdy na téhle trati a obtížnosti. Po každém kole uvidíš, o kolik jsi před ním (zeleně) nebo za ním (červeně), a když ho porazíš, stane se z tvé jízdy nový duch.
-- **Bitva s balónky**: nezávodí se na kola, ale v aréně si navzájem praskáte balónky. Sám proti pěti počítačovým soupeřům, na počítači i ve dvou (rozdělená obrazovka). Víc níže.
+- **Bitva s balónky**: nezávodí se na kola, ale v aréně si navzájem praskáte balónky. Sám proti pěti počítačovým soupeřům, na počítači i ve dvou (rozdělená obrazovka) a po Wi-Fi (hostitel v lobby přepne na Bitva). Víc níže.
 - **2 hráči na jednom počítači**: obrazovka se rozdělí na horní a dolní půlku.
 - **Hra po Wi-Fi (crossplay)**: až 6 hráčů na stejné Wi-Fi, telefony i počítače dohromady. Volná místa doplní počítač.
 
@@ -54,7 +54,7 @@ V hlavním menu je obrazovka **Sbírka**. Ukazuje poháry z mistrovství (bronz,
 | Zlatý lak motokáry (pro každého jezdce zvlášť) | zlatý pohár na Těžké s tímto jezdcem |
 | **Zrcadlové tratě** (všech šest otočených zrcadlově) | zlatý pohár na Střední nebo Těžké |
 | **Tajný jezdec Profesor Píst** | zlatý pohár na Těžké |
-| Bitevní lak motokáry (pro každého jezdce zvlášť) | vítězství v bitvě s balónky na Těžké s tímto jezdcem |
+| Bitevní lak motokáry (pro každého jezdce zvlášť) | vítězství v bitvě s balónky na Těžké s tímto jezdcem (platí i po Wi-Fi) |
 | **Duch vývojáře** v časovce (zlatý průhledný soupeř) | časovka pod limitem na všech šesti tratích (limit je o 10 % pomalejší než duch, najdeš ho ve Sbírce) |
 
 - **Lak** si vybereš pod jezdci při nastavení závodu i v lobby po Wi-Fi. Ostatní hráči tvůj lak uvidí.
@@ -63,7 +63,7 @@ V hlavním menu je obrazovka **Sbírka**. Ukazuje poháry z mistrovství (bronz,
 
 ## Bitva s balónky
 
-V menu **Bitva s balónky** vybereš jezdce, lak, arénu a obtížnost. Na počítači můžete hrát i dva (rozdělená obrazovka).
+V menu **Bitva s balónky** vybereš jezdce, lak, arénu a obtížnost. Na počítači můžete hrát i dva (rozdělená obrazovka). Po Wi-Fi přepne hostitel v lobby režim na **Bitva** a vybere arénu (víc v části Hra po Wi-Fi).
 
 - Každý začíná se **3 balónky** nad motokárou v barvě jezdce.
 - Balónek praskne, když tě zasáhne raketa, modrá raketa, banán nebo olej, když do tebe narazí soupeř s hvězdou, nebo když tě přejede soupeř, zatímco jsi zmenšený bleskem. Samotný blesk balónek nebere.
@@ -71,7 +71,7 @@ V menu **Bitva s balónky** vybereš jezdce, lak, arénu a obtížnost. Na poč�
 - Kdo přijde o poslední balónek, **vypadává**. Jeho kamera pak sleduje ostatní.
 - Bitva končí, když zbyde jeden, nebo po **3 minutách**. Pak vyhraje, kdo má víc balónků; při rovnosti ten, kdo jich víc praskl ostatním. Pořadí ostatních je podle toho, kdo vypadl později.
 - Předměty jsou stejné jako v závodě, jen častěji padají rakety a banány a méně turbo. Raketa letí k nejbližšímu soupeři před tebou, modrá raketa k tomu, kdo má nejvíc balónků.
-- Vlevo nahoře máš své balónky, zbývající čas a seznam soupeřů s jejich balónky. Minimapa ukazuje arénu.
+- Vlevo nahoře máš své balónky, zbývající čas a seznam soupeřů s jejich balónky. Minimapa ukazuje arénu. Když někomu praskneš balónek, uvidíš „Trefa!“ a jeho jméno.
 
 | Aréna | Co v ní je |
 | --- | --- |
@@ -166,7 +166,9 @@ V hlavním menu i v pauze jsou čtyři tlačítka:
 1. Všichni musí být připojení ke **stejné Wi-Fi**.
 2. Jeden hráč dá **Hra po Wi-Fi → Založit hru**. Na obrazovce uvidí svou adresu, třeba `192.168.1.23`.
 3. Ostatní dají **Hra po Wi-Fi** a hru buď uvidí v seznamu, nebo zadají adresu ručně.
-4. Hostitel vybere trať a obtížnost (a jestli jsou zrcadlové, když je má odemčené) a spustí závod.
+4. Hostitel vybere režim **Jeden závod**, **Mistrovství** nebo **Bitva**, k tomu trať (u bitvy arénu) a obtížnost (a jestli jsou tratě zrcadlové, když je má odemčené) a spustí hru.
+
+**Bitva po Wi-Fi**: celou bitvu počítá hostitel, tedy kdo koho zasáhl, kolik má kdo balónků, kdo vypadl, čas i konec. Ostatní dostávají jeho výsledek, takže všichni vidí stejné balónky, stejná prasknutí i stejného vítěze. Volná místa doplní počítač. Když hráč uprostřed bitvy odejde, jeho motokáru převezme počítač; pokud už neměl žádný balónek, zůstane mimo hru. Po bitvě hostitel všechny vrátí do lobby tlačítkem **Zpět do lobby**.
 
 Svou motokáru máš pod kontrolou okamžitě, i když je Wi-Fi pomalejší: tvoje zařízení ji počítá samo a hostitel ji jen průběžně neznatelně dorovnává. Srážky, předměty, zásahy, pořadí a cíl dál rozhoduje hostitel, takže po zásahu raketou nebo po banánu se motokára může kousek přesunout.
 
