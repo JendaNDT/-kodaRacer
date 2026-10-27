@@ -37,6 +37,11 @@ jobs:
         run: python3 tools/setup_web_toolchain.py --github-env "$GITHUB_ENV"
       - name: Export a kontrola webového balíku
         run: python3 tools/export_web.py --godot "$GODOT_BIN"
+      - name: Porovnání předpočítaných stop s původním algoritmem
+        run: |
+          "$GODOT_BIN" --headless --path godot res://check_lines.tscn 2>&1 | tee lines-test.log
+          test "$(grep -c 'LINE CHECK OK' lines-test.log)" -eq 12
+          if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' lines-test.log; then exit 1; fi
       - name: Příprava prohlížeče
         run: |
           python3 -m pip install playwright==1.64.1

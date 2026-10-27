@@ -17,6 +17,13 @@ def main() -> int:
     parser.add_argument('--output-dir', type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    lines = json.loads((root / 'godot/racing_lines.json').read_text())
+    if lines.get('version') != 1 or len(lines.get('tracks', {})) != 12:
+        raise RuntimeError('Missing or incomplete precomputed racing lines')
+    for name in ('game.gd', 'track.gd'):
+        digest = hashlib.sha256((root / 'godot/scripts' / name).read_bytes()).hexdigest()
+        if lines.get('sources', {}).get(name) != digest:
+            raise RuntimeError(f'Precomputed racing lines are stale: {name}; regenerate them before export')
     godot = args.godot.expanduser().resolve()
     out = (args.output_dir or root / 'dist/web').resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -47,16 +54,16 @@ def main() -> int:
     ghosts = sorted((root/'godot/ghosts').glob('*.dat'))
     for path in ghosts:
         assert str(path.relative_to(root/'godot')).encode() in pack, f'Missing ghost: {path.name}'
-    for path in ['music/menu.ogg', 'music/race.ogg', 'fonts/bungee-latin-400-normal.woff2']:
+    for path in ['music/menu.ogg', 'music/race.ogg', 'fonts/bungee-latin-400-normal.woff2', 'racing_lines.json']:
         assert path.encode() in pack, f'Missing resource: {path}'
     html = (out/'index.html').read_text()
     assert '$GODOT_' not in html and 'const threads = false;' in html
     manifest = {
-        'stage': 'W01', 'godot': version,
+        'stage': 'W02-in-progress', 'godot': version,
         'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
         'dirty_tracked_sources': bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=no'], cwd=root, text=True).strip()),
         'threads': False, 'pwa': False, 'ghost_files': len(ghosts),
-        'limitations': ['Web audio is deferred to W03', 'Temporary centre-line AI fallback until W02', 'Online disabled until W10–W12', 'Browser sensors and haptics deferred to W04'],
+        'limitations': ['Web audio is deferred to W03', 'Loading responsiveness still needs W02 verification', 'Online disabled until W10–W12', 'Browser sensors and haptics deferred to W04'],
         'files': [{'name':p.name,'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
                   for p in sorted(out.iterdir()) if p.is_file()],
     }

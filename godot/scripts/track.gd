@@ -48,6 +48,7 @@ var _line := PackedFloat32Array()
 var _line_c := PackedFloat32Array()
 var _line_task := -1                # worker thread making the line
 var _flat_line := PackedFloat32Array()   # the centre line, used until the racing line is ready
+static var _baked_lines: Dictionary = {}
 const LINE_W := Game.HW - 2.4       # how close to the edge of the road it may go
 
 # --- the shortcut (Etapa E): a dirt path through the infield from the road
@@ -368,6 +369,7 @@ func _round_crests() -> void:
 ## on a computer, longer on a phone), so a race never waits for it.
 func prepare_line() -> void:
 	if PlatformCaps.preview_ai_line():
+		_load_baked_line()
 		return
 	if _line.is_empty() and _line_task < 0:
 		_line_task = WorkerThreadPool.add_task(_make_line, false, "racing line")
@@ -375,7 +377,8 @@ func prepare_line() -> void:
 
 func _line_ready() -> bool:
 	if PlatformCaps.preview_ai_line():
-		return false
+		_load_baked_line()
+		return _line_task == -2
 	if _line_task >= 0 and WorkerThreadPool.is_task_completed(_line_task):
 		WorkerThreadPool.wait_for_task_completion(_line_task)
 		_line_task = -2
@@ -404,10 +407,37 @@ func line_curv() -> PackedFloat32Array:
 ## Waits for the racing line (tools and tests that need it right away).
 func line_now() -> void:
 	if PlatformCaps.preview_ai_line():
+		_load_baked_line()
 		return
 	prepare_line()
 	while not _line_ready():
 		OS.delay_msec(5)
+
+
+func _load_baked_line() -> void:
+	if _line_task == -2:
+		return
+	if _baked_lines.is_empty():
+		var file := FileAccess.open("res://racing_lines.json", FileAccess.READ)
+		if file == null:
+			push_error("Missing precomputed racing lines")
+			return
+		var data = JSON.parse_string(file.get_as_text())
+		if not data is Dictionary or int(data.get("version", 0)) != 1:
+			push_error("Invalid precomputed racing lines")
+			return
+		_baked_lines = data.get("tracks", {})
+	var key := String(def.id) + ("_mirror" if bool(def.get("mirror", false)) else "")
+	var baked: Dictionary = _baked_lines.get(key, {})
+	if int(baked.get("n", 0)) != n or absf(float(baked.get("step", 0.0)) - step) > 0.0001:
+		push_error("Precomputed racing line does not match track: " + key)
+		return
+	_line = PackedFloat32Array(baked.get("line", []))
+	_line_c = PackedFloat32Array(baked.get("curvature", []))
+	if _line.size() != n or _line_c.size() != n:
+		push_error("Incomplete precomputed racing line: " + key)
+		return
+	_line_task = -2
 
 
 ## Like a stiff wire laid along the road: each point moves to where the bend
