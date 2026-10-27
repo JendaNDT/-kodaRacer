@@ -34,7 +34,7 @@ func _ready() -> void:
 
 
 func enabled() -> bool:
-	return bool(Game.settings.vibrate)
+	return PlatformCaps.haptics_ready() and bool(Game.settings.vibrate)
 
 
 ## Local player `slot` (0 or 1) feels event `kind` at `strength` 0..1.

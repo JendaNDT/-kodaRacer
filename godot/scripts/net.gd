@@ -48,6 +48,9 @@ var _late: Array = []      # [release ms, Callable] in release order
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not PlatformCaps.network_ready():
+		set_process(false)
+		return
 	if Game.cmd_args.has("fake-version"):
 		version = String(Game.cmd_args["fake-version"])   # tests only
 	fake_lag = float(Game.cmd_args.get("fake-lag", "0"))
@@ -71,6 +74,8 @@ func my_id() -> int:
 
 # ---------------------------------------------------------------- session
 func host(name: String, driver: int, paint := 0) -> Error:
+	if not PlatformCaps.network_ready():
+		return ERR_UNAVAILABLE
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(PORT, MAX_PLAYERS - 1)
@@ -95,6 +100,8 @@ func host(name: String, driver: int, paint := 0) -> Error:
 
 
 func join(ip: String, name: String, driver: int, paint := 0) -> Error:
+	if not PlatformCaps.network_ready():
+		return ERR_UNAVAILABLE
 	leave()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client(ip.strip_edges(), PORT)
@@ -129,6 +136,9 @@ func leave() -> void:
 
 
 func start_listening() -> void:
+	if not PlatformCaps.network_ready():
+		hosts = {}
+		return
 	stop_listening()
 	hosts = {}
 	_listen = PacketPeerUDP.new()
@@ -144,6 +154,8 @@ func stop_listening() -> void:
 
 ## Private IPv4 addresses of this device (shown to players on the host screen).
 func local_ips() -> Array:
+	if not PlatformCaps.network_ready():
+		return []
 	var out: Array = []
 	for a in IP.get_local_addresses():
 		var s := String(a)

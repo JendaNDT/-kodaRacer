@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "source_commit": "3d03fa41fe708f2d1d886d9efe4a0a9e1ae316f4",
+  "started_at": "2026-10-27T12:23:12.643960+00:00",
+  "godot": "4.7.1.stable.official.a13da4feb",
+  "workflow_sha256": "17d47818cf7160af3344a291512829e7ab7e7d62b0551dece73d2484cff433e8",
+  "scope": "Existing native headless logic tests; no browser, GPU, audible sound or physical sensors are verified.",
+  "results": [
+    {
+      "index": 1,
+      "name": "Import project",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 10.814,
+      "logs": [
+        "01/step.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [],
+      "evidence": []
+    },
+    {
+      "index": 2,
+      "name": "Test – full race against the AI",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 18.761,
+      "logs": [
+        "02/race-test.log",
+        "02/step.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [
+        {
+          "log": "race-test.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ],
+      "evidence": [
+        {
+          "log": "race-test.log",
+          "line": "TEST PASS: results shown"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: results shown"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "name": "Test – steering by tilting the phone (made-up sensor readings, levelling at the start)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 8.642,
+      "logs": [
+        "03/step.log",
+        "03/tilt-test.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [
+        {
+          "log": "step.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ],
+      "evidence": [
+        {
+          "log": "step.log",
+          "line": "TEST PASS: tilting steers"
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "TEST PASS: tilting steers"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Test – vibrations (every event, never more than 10 a second, nothing when off; also for two players)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 47.024,
+      "logs": [
+        "04/haptics-test.log",
+        "04/haptics2-test.log",
+        "04/step.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [],
+      "evidence": [
+        {
+          "log": "haptics-test.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "haptics2-test.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "name": "Test – music (both tracks load and loop, menu / race / pause / end)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 2.634,
+      "logs": [
+        "05/music-test.log",
+        "05/step.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [
+        {
+          "log": "music-test.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ],
+      "evidence": [
+        {
+          "log": "music-test.log",
+          "line": "TEST PASS: music tracks play where they should"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: music tracks play where they should"
+        }
+      ]
+    }
+  ],
+  "completed_at": "2026-10-27T12:24:40.526552+00:00",
+  "all_passed": true,
+  "working_tree_dirty": true,
+  "note": "Targeted native checks ran against the W01 working tree before the first W01 commit; source_commit records its parent. Full commit verification runs separately on GitHub."
+}

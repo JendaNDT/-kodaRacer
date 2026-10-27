@@ -422,6 +422,7 @@ func _ready() -> void:
 		if a.has("autopilot"):
 			for k in race.locals:
 				k.autopilot = true
+	WebBridge.scene_ready.call_deferred()
 
 
 ## Black curtain over everything for switching between menu and race.

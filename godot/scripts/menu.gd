@@ -537,11 +537,16 @@ func _home() -> void:
 	_wide(UI.button("Bitva s balónky", _go_setup.bind(1, "battle")))
 	if not Game.is_mobile():
 		_wide(UI.button("2 hráči na jednom počítači", _go_setup.bind(2)))
-	_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
+	if PlatformCaps.network_ready():
+		_wide(UI.button("Hra po Wi-Fi (crossplay)", show_screen.bind("wifi")))
+	else:
+		var online := _wide(UI.button("Online hra — připravuje se", Callable()))
+		online.disabled = true
 	_wide(UI.button("Sbírka: poháry a odměny", show_screen.bind("collection")))
 	var row := UI.hbox(8)
 	content.add_child(row)
 	var mute := _small_button(_mute_text())
+	mute.disabled = not PlatformCaps.audio_ready()
 	mute.pressed.connect(_toggle_mute.bind(mute))
 	row.add_child(mute)
 	var gfx := _small_button(_gfx_text())
@@ -551,6 +556,7 @@ func _home() -> void:
 	fps.pressed.connect(_toggle_fps.bind(fps))
 	row.add_child(fps)
 	var vib := _small_button(_vibrate_text())
+	vib.disabled = not PlatformCaps.haptics_ready()
 	vib.pressed.connect(_toggle_vibrate.bind(vib))
 	row.add_child(vib)
 	if Game.is_mobile() and Game.tilt.have:
@@ -564,7 +570,7 @@ func _home() -> void:
 			var sens := _small_button(_sens_text())
 			sens.pressed.connect(_cycle_sens.bind(sens))
 			row2.add_child(sens)
-	if not Game.is_mobile():
+	if not Game.is_mobile() and not PlatformCaps.is_web():
 		_wide(UI.button("Konec", func(): quit_requested.emit()))
 	var help := _section("Ovládání")
 	var lines := [
@@ -825,6 +831,8 @@ static func _small_button(text: String) -> Button:
 
 
 static func _mute_text() -> String:
+	if not PlatformCaps.audio_ready():
+		return "Zvuk\npřipravuje se"
 	return "Zvuk\n" + ("vypnutý" if Sfx.muted else "zapnutý")
 
 
@@ -837,6 +845,8 @@ static func _fps_text() -> String:
 
 
 static func _vibrate_text() -> String:
+	if not PlatformCaps.haptics_ready():
+		return "Vibrace\npřipravují se"
 	return "Vibrace\n" + ("zapnuté" if Game.settings.vibrate else "vypnuté")
 
 
@@ -938,6 +948,10 @@ func _name_changed(t: String) -> void:
 
 func _wifi() -> void:
 	_brand(true)
+	if not PlatformCaps.network_ready():
+		_text("Online hra v prohlížeči se připravuje. Zatím si můžeš vyzkoušet závod na tomto zařízení.")
+		_wide(UI.button("Zpět", show_screen.bind("home")))
+		return
 	content.add_child(UI.label("Hra po Wi-Fi", 26, UI.PAPER, UI.bold_font))
 	_text("Všichni musí být připojení ke stejné Wi-Fi. Hrát spolu můžou telefony s Androidem i počítače s Windows, až 6 hráčů.")
 	var ns := _section("Tvoje jméno")

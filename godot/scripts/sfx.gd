@@ -19,6 +19,10 @@ const FAST_PITCH := 1.05        # the last lap / the end of a battle: the race t
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not PlatformCaps.audio_ready():
+		muted = true
+		set_process(false)
+		return
 	for i in 10:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
@@ -58,11 +62,13 @@ func menu_music() -> void:
 
 ## The pause: the track stops where it is and goes on from there.
 func pause_music() -> void:
-	if music_player.playing:
+	if music_player != null and music_player.playing:
 		music_player.stream_paused = true
 
 
 func _play(track: AudioStream, pitch: float) -> void:
+	if music_player == null:
+		return
 	music_player.pitch_scale = pitch
 	if track == null:
 		music_player.stream_paused = false
@@ -84,11 +90,16 @@ static func _track(path: String) -> AudioStream:
 
 
 func set_muted(m: bool) -> void:
+	if not PlatformCaps.audio_ready():
+		muted = true
+		return
 	muted = m
 	AudioServer.set_bus_mute(0, m)
 
 
 func toggle_mute() -> bool:
+	if not PlatformCaps.audio_ready():
+		return true
 	set_muted(not muted)
 	Game.settings.muted = muted
 	Game.save_settings()

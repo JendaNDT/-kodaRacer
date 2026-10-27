@@ -1,0 +1,55 @@
+name: Web — sestavení a kontrola v prohlížeči
+
+on:
+  push:
+    paths:
+      - 'godot/**'
+      - 'tools/export_web.py'
+      - 'tools/setup_web_toolchain.py'
+      - 'tools/test_web_browser.py'
+      - '.github/workflows/web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/skodaracer-godot/4.7.1
+            ~/.local/share/godot/export_templates/4.7.1.stable/web_nothreads_debug.zip
+            ~/.local/share/godot/export_templates/4.7.1.stable/web_nothreads_release.zip
+          key: skodaracer-web-godot-4.7.1-v1
+      - name: Příprava Godotu a webových šablon
+        run: python3 tools/setup_web_toolchain.py --github-env "$GITHUB_ENV"
+      - name: Export a kontrola webového balíku
+        run: python3 tools/export_web.py --godot "$GODOT_BIN"
+      - name: Příprava prohlížeče
+        run: |
+          python3 -m pip install playwright==1.64.1
+          python3 -m playwright install --with-deps chromium
+      - name: Spuštění v prohlížeči a chybové stavy
+        run: python3 tools/test_web_browser.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SkodaRacer-Web-W01
+          path: |
+            dist/web/
+            dist/web-checks/
+            dist/web-import.log
+            dist/web-export.log
+          if-no-files-found: error

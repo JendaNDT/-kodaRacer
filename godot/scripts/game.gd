@@ -362,6 +362,8 @@ func _process(delta: float) -> void:
 func gravity() -> Vector3:
 	if fake_gravity != Vector3.ZERO:
 		return fake_gravity
+	if PlatformCaps.is_web():
+		return Vector3.ZERO   # W04 provides browser sensor events.
 	var g := Input.get_gravity()
 	if g.length_squared() < 1.0:
 		g = Input.get_accelerometer()
@@ -375,7 +377,7 @@ func tilting() -> bool:
 
 func is_mobile() -> bool:
 	# --mobile: a computer behaves as a phone (tests of the phone's graphics settings)
-	return OS.has_feature("android") or OS.has_feature("ios") or OS.has_feature("mobile") or cmd_args.has("mobile")
+	return PlatformCaps.uses_mobile_layout() or cmd_args.has("mobile")
 
 
 # ---------------------------------------------------------------- helpers
@@ -614,6 +616,8 @@ func load_settings() -> void:
 	# -1 = not chosen yet: phones start on Střední, computers on Vysoká
 	if int(settings.quality) < 0:
 		settings.quality = 1 if is_mobile() else 2
+	if PlatformCaps.is_web():
+		settings.quality = 0   # Conservative W01 start; measured web profiles arrive in W06.
 	if int(settings.quality) > 2:
 		settings.quality = 1             # a test level of 1.16.0's trial build: back to Střední
 	settings.quality = clampi(int(settings.quality), 0, 2)

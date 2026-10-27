@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0d1120">
+  <title>$GODOT_PROJECT_NAME — hra v prohlížeči</title>
+  $GODOT_HEAD_INCLUDE
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; background:#0d1120; color:#f4f6fc; font-family:system-ui,sans-serif; }
+    button { font:inherit; cursor:pointer; border:1px solid #65718b; border-radius:12px; padding:.75rem 1rem; color:#f4f6fc; background:#1a2438; }
+    button:focus-visible, summary:focus-visible { outline:3px solid #ffd166; outline-offset:4px; }
+    button:disabled { opacity:.55; cursor:default; }
+    button.primary { background:#ffd166; color:#161b28; border-color:#ffd166; font-weight:800; padding:1rem 2.4rem; }
+    [hidden] { display:none !important; }
+    #canvas { display:block; width:100%; height:100%; outline:none; touch-action:none; }
+    #launch { position:fixed; inset:0; z-index:10; display:grid; place-items:center; padding:24px; background:radial-gradient(ellipse at 75% 0%,#24385b 0,transparent 60%),#0d1120; overflow:auto; }
+    .card { width:min(100%,620px); border:1px solid #3b4760; border-radius:24px; padding:clamp(24px,5vw,42px); background:#141e30; box-shadow:0 20px 80px #0007; }
+    .flag { width:68px; height:12px; background:repeating-conic-gradient(#ffd166 0% 25%,transparent 0% 50%) 0 0/12px 12px; margin-bottom:24px; }
+    .eyebrow { color:#ffd166; text-transform:uppercase; letter-spacing:.16em; font-size:.72rem; font-weight:800; }
+    h1 { font-size:clamp(2rem,6vw,3.3rem); line-height:1.05; margin:12px 0 18px; letter-spacing:-.05em; }
+    p { color:#c1cadb; line-height:1.65; margin:12px 0 20px; }
+    #status { margin-bottom:10px; color:#f4f6fc; font-weight:650; }
+    progress { display:block; width:100%; height:10px; accent-color:#ffd166; margin:18px 0; }
+    .note { font-size:.85rem; color:#a6b4cb; }
+    dl { display:grid; grid-template-columns:1fr 1fr; gap:8px 18px; font-size:.85rem; margin:20px 0; }
+    dt { color:#a6b4cb; } dd { margin:0; text-align:right; }
+    details { margin-top:22px; font-size:.85rem; color:#bdc8db; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:120px; overflow:auto; }
+    #tools { position:fixed; right:max(12px,env(safe-area-inset-right)); top:max(12px,env(safe-area-inset-top)); z-index:5; }
+    #tools button { font-size:.8rem; background:#101a2ee8; }
+    #game-note { position:fixed; z-index:4; right:12px; top:70px; width:min(340px,calc(100% - 24px)); padding:18px; border:1px solid #65718b; border-radius:14px; background:#141e30f5; }
+    #game-note p { margin:8px 0; font-size:.85rem; }
+    #toast { position:fixed; z-index:20; bottom:20px; left:50%; transform:translateX(-50%); max-width:90%; padding:14px 20px; border-radius:14px; color:#fff; background:#24334d; }
+    @media(max-height:520px) { #launch { padding:12px; } .card { padding:18px 26px; } .flag { display:none; } h1 { margin:8px 0; font-size:2rem; } p { margin:8px 0; } }
+  </style>
+</head>
+<body data-game-state="idle">
+  <canvas id="canvas" tabindex="0" aria-label="Škoda Racer — herní plocha">Prohlížeč nepodporuje herní plochu.</canvas>
+  <div id="tools" hidden>
+    <button id="fullscreen" type="button">Celá obrazovka</button>
+    <button id="info" type="button" aria-expanded="false" aria-controls="game-note">O testovací verzi</button>
+  </div>
+  <aside id="game-note" hidden><strong>Testovací webová verze</strong><p>Zvuk a online hra se připravují. Chování soupeřů, ovládání a výkon budeme dál ověřovat.</p><p>Pro návrat do menu použij pauzu ve hře.</p></aside>
+  <section id="launch" aria-labelledby="title">
+    <div class="card">
+      <div class="flag" aria-hidden="true"></div>
+      <span class="eyebrow">Testovací webová verze</span>
+      <h1 id="title">Škoda Racer</h1>
+      <p id="intro">Šest jezdců. Drift, turbo a závody přímo v prohlížeči. Otevři herní menu a vyzkoušej si jízdu.</p>
+      <p id="status" role="status" aria-live="polite">Připraveno ke spuštění.</p>
+      <progress id="progress" hidden aria-label="Načítání hry"></progress>
+      <button id="start" class="primary" type="button">Hrát</button>
+      <button id="retry" type="button" hidden>Zkusit znovu</button>
+      <p class="note">První načtení stáhne herní soubory. Zvuk a online hra se připravují.</p>
+      <details id="capability-details"><summary>Možnosti tohoto prohlížeče</summary><dl id="capabilities"></dl></details>
+      <details id="error-details" hidden><summary>Technické podrobnosti chyby</summary><pre id="error-text"></pre></details>
+      <noscript><p>Pro spuštění hry zapni JavaScript v nastavení prohlížeče.</p><style>#start{display:none}</style></noscript>
+    </div>
+  </section>
+  <p id="toast" role="status" hidden></p>
+  <script>
+  (() => {
+    'use strict';
+    const config = $GODOT_CONFIG;
+    const threads = $GODOT_THREADS_ENABLED;
+    const $ = id => document.getElementById(id);
+    const canvas = $('canvas');
+    const state = { ready:false, failed:false, starting:false };
+    let watchdog;
+    const capabilities = {
+      web:true,
+      touch: typeof navigator.maxTouchPoints === 'number' ? navigator.maxTouchPoints > 0 : 'ontouchstart' in window,
+      mobileLayout:false,
+      gamepadApi: typeof navigator.getGamepads === 'function',
+      gamepadConnected:false,
+      storageAvailable:false,
+      storageChecked:false,
+      storagePersistent:false,
+      fullscreen:false
+    };
+    function refreshCapabilities() {
+      const mobileHint = Boolean(navigator.userAgentData && navigator.userAgentData.mobile) || /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+      capabilities.mobileLayout = capabilities.touch && (matchMedia('(pointer: coarse)').matches || mobileHint);
+      capabilities.fullscreen = Boolean((document.fullscreenEnabled && canvas.requestFullscreen) || (document.webkitFullscreenEnabled && canvas.webkitRequestFullscreen));
+      try { capabilities.gamepadConnected = capabilities.gamepadApi && Array.from(navigator.getGamepads()).some(Boolean); } catch (_) { capabilities.gamepadConnected = false; }
+      const pairs = [
+        ['Dotykové ovládání', capabilities.touch ? 'dostupné' : 'nezjištěno'],
+        ['Herní ovladač', capabilities.gamepadConnected ? 'připojený' : (capabilities.gamepadApi ? 'lze připojit' : 'nedostupný')],
+        ['Místní úložiště', capabilities.storageAvailable ? 'dostupné' : (capabilities.storageChecked ? 'dočasný režim' : (state.starting ? 'ověřuji…' : 'ověří se při spuštění'))],
+        ['Celá obrazovka', capabilities.fullscreen ? 'dostupná' : 'nedostupná']
+      ];
+      $('capabilities').replaceChildren(...pairs.flatMap(([key,value]) => {
+        const dt=document.createElement('dt'),dd=document.createElement('dd'); dt.textContent=key;dd.textContent=value;return [dt,dd];
+      }));
+      $('fullscreen').disabled = !capabilities.fullscreen;
+    }
+    function fail(message, details='') {
+      if (state.failed) return;
+      state.failed=true; state.starting=false; clearTimeout(watchdog);
+      document.body.dataset.gameState='error';
+      $('launch').hidden=false; $('status').textContent=message;
+      $('start').hidden=true; $('progress').hidden=true; $('retry').hidden=false;
+      $('error-details').hidden=!details; $('error-text').textContent=details;
+    }
+    function timeout() { clearTimeout(watchdog); watchdog=setTimeout(() => fail('Načítání trvá příliš dlouho. Zkontroluj připojení a zkus to znovu.'),120000); }
+    function probeStorage() {
+      return new Promise(resolve => {
+        let db, settled=false;
+        const finish = ok => { if(settled)return;settled=true;clearTimeout(timer);if(db)db.close();resolve(ok); };
+        const timer=setTimeout(() => finish(false),1500);
+        try {
+          const request=indexedDB.open('skodaracer-capability-probe-v1',1);
+          request.onupgradeneeded=() => request.result.createObjectStore('probe');
+          request.onerror=() => finish(false); request.onblocked=() => finish(false);
+          request.onsuccess=() => {
+            db=request.result;
+            if(settled){db.close();return;}
+            try {
+              const transaction=db.transaction('probe','readwrite');
+              transaction.objectStore('probe').put(1,'probe');
+              transaction.oncomplete=() => {finish(true);try{indexedDB.deleteDatabase('skodaracer-capability-probe-v1');}catch(_){};};
+              transaction.onerror=transaction.onabort=() => finish(false);
+            } catch (_) {finish(false);}
+          };
+        } catch (_) {finish(false);}
+      });
+    }
+    function loadEngine() {
+      return new Promise((resolve,reject) => {
+        const script=document.createElement('script');script.src='$GODOT_URL';
+        script.onload=resolve;script.onerror=() => reject(new Error('Spouštěcí soubor hry se nepodařilo stáhnout.'));
+        document.head.appendChild(script);
+      });
+    }
+    function reportReady(frames) {
+      if(state.failed)return;
+      state.ready=true;state.starting=false;clearTimeout(watchdog);
+      document.body.dataset.gameState='ready';document.body.dataset.sceneFrames=String(frames);
+      $('status').textContent='Herní menu je připravené.';
+      $('launch').hidden=true;$('tools').hidden=false;canvas.focus();
+    }
+    window.SkodaRacerWeb=Object.freeze({capabilitiesJson:()=>JSON.stringify(capabilities),reportReady});
+    async function start() {
+      if(state.starting || state.ready || state.failed)return;
+      state.starting=true;document.body.dataset.gameState='loading';
+      $('start').disabled=true;$('start').textContent='Načítám…';$('progress').hidden=false;timeout();
+      try {
+        if(typeof WebAssembly!=='object'){fail('Tento prohlížeč nepodporuje spuštění hry. Zkus aktuální Chrome, Edge, Firefox nebo Safari.','Chybí WebAssembly.');return;}
+        const probe=document.createElement('canvas');
+        const gl=probe.getContext('webgl2');
+        if(!gl){fail('Tento prohlížeč nebo zařízení nepodporuje potřebnou 3D grafiku. Zkus aktuální Chrome, Edge, Firefox nebo Safari.','Chybí WebGL 2.0.');return;}
+        const lose=gl.getExtension('WEBGL_lose_context');if(lose)lose.loseContext();
+        $('status').textContent='Ověřuji možnosti prohlížeče…';
+        capabilities.storageAvailable=await probeStorage();
+        capabilities.storageChecked=true;
+        try{capabilities.storagePersistent=Boolean(navigator.storage && await navigator.storage.persisted());}catch(_){}
+        refreshCapabilities();
+        $('status').textContent='Stahuji herní soubory…';
+        await loadEngine();
+        const missing=Engine.getMissingFeatures({threads});
+        if(missing.length){fail('Prohlížeči chybí některé funkce pro spuštění hry. Zkus ho aktualizovat.',missing.join('\n'));return;}
+        const engine=new Engine(config);
+        await engine.startGame({
+          canvas,
+          onProgress(current,total){
+            if(state.failed)return;
+            timeout();
+            if(current>0 && total>0){$('progress').max=total;$('progress').value=current;$('status').textContent=`Načítání hry… ${Math.min(100,Math.floor(current/total*100))} %`;}
+            else{$('progress').removeAttribute('value');$('status').textContent='Připravuji hru…';}
+          },
+          onPrint: (...args)=>console.log(...args),
+          onPrintError: (...args)=>{console.error(...args);if(/SCRIPT ERROR|Parse Error/.test(args.join(' ')))fail('Při přípravě hry nastala chyba. Zkus hru znovu načíst.',args.join(' '));},
+          onExit: code=>fail('Hra se ukončila. Můžeš ji znovu načíst.',`Návratový kód: ${code}`)
+        });
+        if(!state.ready && !state.failed)$('status').textContent='Připravuji herní menu a trať…';
+      } catch(error) {console.error(error);fail('Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu.',String(error && error.message || error));}
+    }
+    $('start').addEventListener('click',start);
+    $('retry').addEventListener('click',()=>location.reload());
+    $('info').addEventListener('click',()=>{$('game-note').hidden=!$('game-note').hidden;$('info').setAttribute('aria-expanded',String(!$('game-note').hidden));});
+    $('fullscreen').addEventListener('click',async()=>{
+      try {const fn=canvas.requestFullscreen||canvas.webkitRequestFullscreen;await fn.call(canvas);canvas.focus();}
+      catch(_){$('toast').textContent='Celou obrazovku se nepodařilo zapnout. Hra může pokračovat v okně.';$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,5000);}
+    });
+    for(const event of ['resize','gamepadconnected','gamepaddisconnected'])window.addEventListener(event,refreshCapabilities);
+    refreshCapabilities();
+  })();
+  </script>
+</body>
+</html>

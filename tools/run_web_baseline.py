@@ -52,6 +52,7 @@ def main() -> int:
     report = {
         'schema_version': 1,
         'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip(),
+        'working_tree_dirty': bool(subprocess.check_output(['git','status','--porcelain'], cwd=root, text=True).strip()),
         'started_at': dt.datetime.now(dt.timezone.utc).isoformat(),
         'godot': version,
         'workflow_sha256': hashlib.sha256(workflow_path.read_bytes()).hexdigest(),

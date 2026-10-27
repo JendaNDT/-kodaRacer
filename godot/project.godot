@@ -22,6 +22,7 @@ config/icon="res://icon.png"
 
 [autoload]
 
+WebBridge="*res://scripts/web_bridge.gd"
 Game="*res://scripts/game.gd"
 Sfx="*res://scripts/sfx.gd"
 Net="*res://scripts/net.gd"

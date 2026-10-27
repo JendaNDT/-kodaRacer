@@ -367,11 +367,15 @@ func _round_crests() -> void:
 ## Starts making the racing line on a worker thread (a fraction of a second
 ## on a computer, longer on a phone), so a race never waits for it.
 func prepare_line() -> void:
+	if PlatformCaps.preview_ai_line():
+		return
 	if _line.is_empty() and _line_task < 0:
 		_line_task = WorkerThreadPool.add_task(_make_line, false, "racing line")
 
 
 func _line_ready() -> bool:
+	if PlatformCaps.preview_ai_line():
+		return false
 	if _line_task >= 0 and WorkerThreadPool.is_task_completed(_line_task):
 		WorkerThreadPool.wait_for_task_completion(_line_task)
 		_line_task = -2
@@ -399,6 +403,8 @@ func line_curv() -> PackedFloat32Array:
 
 ## Waits for the racing line (tools and tests that need it right away).
 func line_now() -> void:
+	if PlatformCaps.preview_ai_line():
+		return
 	prepare_line()
 	while not _line_ready():
 		OS.delay_msec(5)
