@@ -6,7 +6,7 @@
 
 ## Stažení hotové hry
 
-Každá změna v repozitáři spustí automatické sestavení (GitHub Actions). Hotové soubory najdeš v **Releases → „Škoda Racer – testovací build“**:
+Změny herních souborů a sestavovacího workflow spouštějí automatické sestavení (GitHub Actions). Veřejný testovací build se vydává pouze z větve `main`. Hotové soubory najdeš v **Releases → „Škoda Racer – testovací build“**:
 
 - **SkodaRacer.apk** pro Android: stáhni v telefonu a otevři. Telefon se zeptá na povolení instalace z neznámých zdrojů, to je u her mimo Google Play normální.
 - **SkodaRacer.exe** pro Windows: stáhni a spusť, nic se neinstaluje. Windows může ukázat modré okno SmartScreen, protože hra není digitálně podepsaná: klikni na **Další informace → Přesto spustit**.
