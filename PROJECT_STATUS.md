@@ -1,11 +1,14 @@
 # Škoda Racer – Project Status
-*Naposled aktualizováno: 08. 10. 2026 (verze 1.19.1)*
+*Naposled aktualizováno: 27. 10. 2026 (herní verze 1.19.1; příprava webové verze W00)*
 
 ## 🎯 Co to je
 3D motokárové závody ve stylu Mario Kart pro Android a Windows: dva hráči na jednom počítači a crossplay přes Wi-Fi.
 Stack: Godot 4.7.1 (GDScript, renderer Compatibility), export APK + EXE přes GitHub Actions. Webový prototyp zůstává ve `web/`.
 
 ## ⏭️ Příští krok
+Webová verze pokračuje podle [plánu W00–W14](docs/PLAN_WEB.md). Výchozí herní kód je commit `870ba46e85eb0ae5fad1875bee585dd55752e7e9` na `main`, pracovní větev `codex/web-version`. Výsledky a známá omezení W00 jsou v [záznamu ověření](docs/WEB_TESTY.md). Další implementační etapa je W01 — první Web export a možnosti zařízení. Herní verze ani herní skripty se ve W00 nemění.
+
+Dosavadní fyzické ověření nativních režimů zůstává samostatný úkol:
 **Vyzkoušet verzi 1.19.0 na dvou skutečných zařízeních: bitvu s balónky po Wi-Fi (telefon + telefon nebo telefon + počítač, obě arény), k tomu bitvu sólo a ve dvou na počítači a z etapy G naklánění a vibrace.** Etapy G, H a I jsou hotové a otestované v cloudu (hostitel + klient na jednom stroji se zpožděním 120 ms); plán `PLAN_VYLEPSENI_2.md` je tím celý splněný. Jestli je bitva zábavná (délka, síla soupeřů, velikost arén), ukáže až hraní.
 
 ## ✅ Hotovo

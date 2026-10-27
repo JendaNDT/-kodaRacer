@@ -2,7 +2,7 @@
 
 **Autor projektu:** Jan Svatoš  
 **Datum plánu:** 27. října 2026  
-**Stav:** návrh připravený k realizaci; jednotlivé etapy zatím nejsou implementované  
+**Stav:** W00 dokončeno s evidovanými omezeními; pokračování W01. Výsledky jsou v [záznamu W00](WEB_W00.md).  
 **Cíl:** otevřít odkaz, načíst hru a hrát v prohlížeči na počítači, telefonu nebo tabletu.
 
 ## 1. Výsledná podoba

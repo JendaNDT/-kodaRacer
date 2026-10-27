@@ -87,19 +87,23 @@ def main() -> int:
                 code, timeout = 124, True
         logs = sorted(case.glob('*.log'))
         issues = []
+        engine_messages = []
         evidence = []
         for log in logs:
             content = log.read_text(encoding='utf-8', errors='replace')
             for line in content.splitlines():
                 if re.search(r'SCRIPT ERROR|Parse Error', line):
                     issues.append({'log': log.name, 'line': line})
+                if line.startswith(('ERROR:', 'WARNING:')):
+                    engine_messages.append({'log': log.name, 'line': line})
                 if re.search(r'TEST PASS|TEST FAIL|PREDICTION|BATTLE STATE|HOST TAKEOVER|FOUND HOSTS|JOIN FAILED', line):
                     evidence.append({'log': log.name, 'line': line})
         ok = code == 0 and not issues
         result = {'index': index, 'name': step['name'], 'ok': ok, 'exit_code': code,
                   'timeout': timeout, 'seconds': round(time.monotonic() - started, 3),
                   'logs': [str(p.relative_to(out)) for p in logs],
-                  'script_errors': issues, 'evidence': evidence}
+                  'script_errors': issues, 'engine_messages': engine_messages,
+                  'evidence': evidence}
         report['results'].append(result)
         report['completed_at'] = dt.datetime.now(dt.timezone.utc).isoformat()
         report['all_passed'] = all(r['ok'] for r in report['results'])

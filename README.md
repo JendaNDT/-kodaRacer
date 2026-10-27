@@ -4,6 +4,10 @@
 
 3D motokárové závody ve stylu Mario Kart, postavené v enginu **Godot 4.7.1**. Hraje se na **Androidu** i **Windows**, dva hráči můžou jet na jednom počítači s rozdělenou obrazovkou a přes Wi-Fi spolu závodí telefony i počítače (crossplay).
 
+## Příprava webové verze
+
+Práce probíhá ve větvi `codex/web-version` podle [plánu W00–W14](docs/PLAN_WEB.md). [Záznam W00](docs/WEB_W00.md) obsahuje ověřený výchozí stav, výsledky kontrol a známá omezení. První export samotné hry do prohlížeče je předmětem W01.
+
 ## Stažení hotové hry
 
 Změny herních souborů a sestavovacího workflow spouštějí automatické sestavení (GitHub Actions). Veřejný testovací build se vydává pouze z větve `main`. Hotové soubory najdeš v **Releases → „Škoda Racer – testovací build“**:

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source_commit": "870ba46e85eb0ae5fad1875bee585dd55752e7e9",
+  "game_version": "1.19.1",
+  "godot_version": "4.7.1",
+  "purpose": "Stejné výchozí scény pro pozdější porovnání nativní a webové hry. Nejde o naměřené FPS.",
+  "common": {
+    "viewport": [1280, 720],
+    "quality": 1,
+    "warmup_seconds": 2,
+    "sample_seconds": 20,
+    "repetitions": 3,
+    "notes": [
+      "Grafický výkon se měří s vykreslováním; --headless neměří GPU ani skutečná FPS hry.",
+      "Použít čistý oddělený profil uložených dat a uvést zařízení, OS, prohlížeč, kvalitu a skutečné rozlišení.",
+      "Současný --bench používá ukázkový závod s náhodným pořadím. Není zaručená totožná náhoda; porovnávat opakování a při webové automatizaci doplnit řízenou náhodu.",
+      "Nativní měření bez vsync porovnávat podle času snímku, ne přímo podle FPS prohlížeče omezeného obnovovací frekvencí."
+    ]
+  },
+  "scenarios": [
+    {"id": "menu", "args": ["--screen=home", "--track=0", "--quality=1", "--fps"], "observe": ["čas do ovladatelného menu", "živé pozadí", "náhled motokáry", "paměť"]},
+    {"id": "forest", "args": ["--bench", "--track=3", "--quality=1", "--seconds=20"], "observe": ["BENCH avg_ms", "p95_ms", "draw calls", "trojúhelníky"]},
+    {"id": "city", "args": ["--bench", "--track=4", "--quality=1", "--seconds=20"], "observe": ["BENCH avg_ms", "p95_ms", "světla", "paměť"]},
+    {"id": "battle_square", "args": ["--battle", "--arena=0", "--quality=1", "--autopilot", "--fps"], "observe": ["oba druhy efektů při zásahu", "paměť", "plynulost"]},
+    {"id": "battle_ice", "args": ["--battle", "--arena=1", "--quality=1", "--autopilot", "--fps"], "observe": ["sněžení", "paměť", "plynulost"]},
+    {"id": "transitions", "args": ["--soaktest", "--rounds=20", "--fast=8", "--quality=1"], "observe": ["SOAK objekty a paměť", "návraty do menu", "obraz po opakovaném startu"], "notes": "Zrychlená zkouška životního cyklu; nepoužívat pro srovnání FPS. Paměť GPU má smysl jen s opravdovým vykreslováním."}
+  ],
+  "devices": [
+    {"device": "cloud Linux x86_64", "available_here": true, "gpu_verified": false, "scope": "headless logika; síťová rozhraní omezená"},
+    {"device": "MacBook Air M4", "available_here": false, "browsers": ["Safari", "Chrome", "Firefox"], "scope": "plánovaný fyzický test"},
+    {"device": "Samsung S24 Ultra", "available_here": false, "browsers": ["Chrome", "Samsung Internet"], "scope": "plánovaný fyzický test"},
+    {"device": "Lenovo IdeaTab", "available_here": false, "browsers": ["Chrome"], "scope": "plánovaný fyzický test"},
+    {"device": "iPhone/iPad, Windows, Linux desktop", "available_here": false, "scope": "další cíle; fyzická dostupnost zatím nepotvrzená"}
+  ]
+}

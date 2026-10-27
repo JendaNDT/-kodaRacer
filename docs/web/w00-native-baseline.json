@@ -1,0 +1,733 @@
+{
+  "schema_version": 1,
+  "source_commit": "870ba46e85eb0ae5fad1875bee585dd55752e7e9",
+  "started_at": "2026-10-27T11:15:29.548908+00:00",
+  "godot": "4.7.1.stable.official.a13da4feb",
+  "workflow_sha256": "9b18d99ae773de31bc39bc27b3f90cab6d48855f16097eabaa2e4674897fed5b",
+  "scope": "Existing native headless logic tests; no browser, GPU, audible sound or physical sensors are verified.",
+  "results": [
+    {
+      "index": 1,
+      "name": "Import project",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 10.673,
+      "logs": [
+        "01/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [],
+      "engine_messages": []
+    },
+    {
+      "index": 2,
+      "name": "Test – full race against the AI",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 19.095,
+      "logs": [
+        "02/race-test.log",
+        "02/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "race-test.log",
+          "line": "TEST PASS: results shown"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: results shown"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "race-test.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "name": "Test – championship over all tracks",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 131.963,
+      "logs": [
+        "03/cup-test.log",
+        "03/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "cup-test.log",
+          "line": "TEST PASS: championship finished, 6 races"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: championship finished, 6 races"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "cup-test.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "name": "Test – time trial against the ghost",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 40.029,
+      "logs": [
+        "04/step.log",
+        "04/trial-test.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "step.log",
+          "line": "TEST PASS: time trial with ghost, best 1:44.60"
+        },
+        {
+          "log": "trial-test.log",
+          "line": "TEST PASS: time trial with ghost, best 1:44.60"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "step.log",
+          "line": "ERROR: Parameter \"material\" is null."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "trial-test.log",
+          "line": "ERROR: Parameter \"material\" is null."
+        },
+        {
+          "log": "trial-test.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "name": "Test – shortcuts (worth it only with a turbo or the star, laps counted right)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 149.753,
+      "logs": [
+        "05/cut-test.log",
+        "05/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "cut-test.log",
+          "line": "TEST PASS: shortcuts work on every track"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: shortcuts work on every track"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "cut-test.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "name": "Test – computer drivers on every track (Hard, no item boxes)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 84.146,
+      "logs": [
+        "06/ai-test.log",
+        "06/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "ai-test.log",
+          "line": "TEST PASS: the computer drivers finish on every track without getting stuck, and drift"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: the computer drivers finish on every track without getting stuck, and drift"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "ai-test.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "name": "Test – new items (blue missile, oil, lightning, shield)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 20.532,
+      "logs": [
+        "07/item-test.log",
+        "07/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "item-test.log",
+          "line": "TEST PASS: every item works and gets used"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: every item works and gets used"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "item-test.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "name": "Test – take-offs only from the ramp (turbo and star, all tracks)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 41.249,
+      "logs": [
+        "08/jump-test.log",
+        "08/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "jump-test.log",
+          "line": "TEST PASS: take-offs only from the ramp on all 6 tracks"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: take-offs only from the ramp on all 6 tracks"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "jump-test.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "jump-test.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "name": "Test – take-offs only from the ramp on the mirrored tracks",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 40.438,
+      "logs": [
+        "09/jump-mirror-test.log",
+        "09/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "jump-mirror-test.log",
+          "line": "TEST PASS: take-offs only from the ramp on all 6 tracks"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: take-offs only from the ramp on all 6 tracks"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "jump-mirror-test.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "jump-mirror-test.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "name": "Test – unlocks (made-up cups and time trials, paints, secret driver, mirrored tracks, developer's ghost)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 6.324,
+      "logs": [
+        "10/step.log",
+        "10/unlock-test.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "step.log",
+          "line": "TEST PASS: unlocks work"
+        },
+        {
+          "log": "unlock-test.log",
+          "line": "TEST PASS: unlocks work"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "step.log",
+          "line": "ERROR: Parameter \"material\" is null."
+        },
+        {
+          "log": "unlock-test.log",
+          "line": "ERROR: Parameter \"material\" is null."
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "name": "Test – steering by tilting the phone (made-up sensor readings, levelling at the start)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 7.362,
+      "logs": [
+        "11/step.log",
+        "11/tilt-test.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "step.log",
+          "line": "TEST PASS: tilting steers"
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "TEST PASS: tilting steers"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "step.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "tilt-test.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "name": "Test – vibrations (every event, never more than 10 a second, nothing when off; also for two players)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 40.001,
+      "logs": [
+        "12/haptics-test.log",
+        "12/haptics2-test.log",
+        "12/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "haptics-test.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "haptics2-test.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: every event buzzes, never too often, nothing when off"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "haptics2-test.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "name": "Test – music (both tracks load and loop, menu / race / pause / end)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 2.313,
+      "logs": [
+        "13/music-test.log",
+        "13/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "music-test.log",
+          "line": "TEST PASS: music tracks play where they should"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: music tracks play where they should"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "music-test.log",
+          "line": "WARNING: 10 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "music-test.log",
+          "line": "ERROR: 4 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 10 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 4 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "name": "Test – balloon battle (the rules, then both arenas on every difficulty with only the computer driving)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 68.273,
+      "logs": [
+        "14/battle-test.log",
+        "14/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "battle-test.log",
+          "line": "TEST PASS: battles end with a winner, karts stay in, every hit costs one balloon"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: battles end with a winner, karts stay in, every hit costs one balloon"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "battle-test.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 4 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "name": "Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint",
+      "ok": false,
+      "exit_code": 1,
+      "timeout": false,
+      "seconds": 139.401,
+      "logs": [
+        "15/client.log",
+        "15/host.log",
+        "15/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "client.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.32 p95 1.14 max 8.32 m (3651), correction avg 0.32 p95 1.10 max 9.83 m"
+        },
+        {
+          "log": "client.log",
+          "line": "TEST FAIL: client finished place 6, prediction too far"
+        },
+        {
+          "log": "host.log",
+          "line": "TEST PASS: host results, all players finished"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: host results, all players finished"
+        },
+        {
+          "log": "step.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.32 p95 1.14 max 8.32 m (3651), correction avg 0.32 p95 1.10 max 9.83 m"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST FAIL: client finished place 6, prediction too far"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "host.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "name": "Test – balloon battle over Wi-Fi with 120 ms delay each way (the client sees the host's battle, a third player leaves in the middle)",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 71.818,
+      "logs": [
+        "16/bclient.log",
+        "16/bhost.log",
+        "16/bleaver.log",
+        "16/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "bclient.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.13 p95 0.46 max 1.71 m (971), correction avg 0.15 p95 0.53 max 4.05 m"
+        },
+        {
+          "log": "bclient.log",
+          "line": "BATTLE STATE: karts 5:0:2:out 4:1:5:in 3:0:6:out 2:0:1:out 0:0:2:out 1:0:1:out | pops 5<3 2<0 3<5 5<3 1<3 3<1 1<5 4<0 1<3 0<4 0<4 2<4 0<2 5<3 2<4 4<3 3<4 | winner 4"
+        },
+        {
+          "log": "bclient.log",
+          "line": "TEST PASS: client battle place 6, 0 balloons, popped 1, prediction ok, back in the lobby"
+        },
+        {
+          "log": "bhost.log",
+          "line": "BATTLE STATE: karts 5:0:2:out 4:1:5:in 3:0:6:out 2:0:1:out 0:0:2:out 1:0:1:out | pops 5<3 2<0 3<5 5<3 1<3 3<1 1<5 4<0 1<3 0<4 0<4 2<4 0<2 5<3 2<4 4<3 3<4 | winner 4"
+        },
+        {
+          "log": "bhost.log",
+          "line": "HOST TAKEOVER: Pepa Plyn left at 20.2 s with 2 balloons, then the computer drove 422 m, out at the end: ok"
+        },
+        {
+          "log": "bhost.log",
+          "line": "TEST PASS: host battle over, 17 pops, 5 out, winner Karel Kolo, back to the lobby"
+        },
+        {
+          "log": "bleaver.log",
+          "line": "TEST PASS: left in the middle of the battle"
+        },
+        {
+          "log": "step.log",
+          "line": "BATTLE STATE: karts 5:0:2:out 4:1:5:in 3:0:6:out 2:0:1:out 0:0:2:out 1:0:1:out | pops 5<3 2<0 3<5 5<3 1<3 3<1 1<5 4<0 1<3 0<4 0<4 2<4 0<2 5<3 2<4 4<3 3<4 | winner 4"
+        },
+        {
+          "log": "step.log",
+          "line": "HOST TAKEOVER: Pepa Plyn left at 20.2 s with 2 balloons, then the computer drove 422 m, out at the end: ok"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: host battle over, 17 pops, 5 out, winner Karel Kolo, back to the lobby"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: left in the middle of the battle"
+        },
+        {
+          "log": "step.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.13 p95 0.46 max 1.71 m (971), correction avg 0.15 p95 0.53 max 4.05 m"
+        },
+        {
+          "log": "step.log",
+          "line": "BATTLE STATE: karts 5:0:2:out 4:1:5:in 3:0:6:out 2:0:1:out 0:0:2:out 1:0:1:out | pops 5<3 2<0 3<5 5<3 1<3 3<1 1<5 4<0 1<3 0<4 0<4 2<4 0<2 5<3 2<4 4<3 3<4 | winner 4"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: client battle place 6, 0 balloons, popped 1, prediction ok, back in the lobby"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "bclient.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "bclient.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "bhost.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "bhost.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "name": "Test – finding games on the network",
+      "ok": false,
+      "exit_code": 1,
+      "timeout": false,
+      "seconds": 22.39,
+      "logs": [
+        "17/disc-host.log",
+        "17/disc.log",
+        "17/step.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "disc-host.log",
+          "line": "TEST FAIL: timeout"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "disc-host.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "disc-host.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "disc.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "name": "Test – a different game version is refused",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 17.695,
+      "logs": [
+        "18/step.log",
+        "18/ver-client.log",
+        "18/ver-host.log"
+      ],
+      "script_errors": [],
+      "evidence": [
+        {
+          "log": "step.log",
+          "line": "JOIN FAILED: Hostitel má jinou verzi hry (1.19.1), ty máš 0.0.1. Stáhněte si oba stejnou verzi."
+        },
+        {
+          "log": "step.log",
+          "line": "TEST FAIL: timeout"
+        },
+        {
+          "log": "ver-client.log",
+          "line": "JOIN FAILED: Hostitel má jinou verzi hry (1.19.1), ty máš 0.0.1. Stáhněte si oba stejnou verzi."
+        },
+        {
+          "log": "ver-client.log",
+          "line": "TEST FAIL: timeout"
+        },
+        {
+          "log": "ver-host.log",
+          "line": "TEST FAIL: timeout"
+        }
+      ],
+      "engine_messages": [
+        {
+          "log": "step.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "step.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        },
+        {
+          "log": "ver-client.log",
+          "line": "WARNING: 6 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        },
+        {
+          "log": "ver-client.log",
+          "line": "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+        }
+      ]
+    }
+  ],
+  "completed_at": "2026-10-27T11:30:43.034125+00:00",
+  "all_passed": false
+}

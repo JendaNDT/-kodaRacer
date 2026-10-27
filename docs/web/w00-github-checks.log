@@ -1,0 +1,26 @@
+2026-10-27T11:21:58.8688636Z TEST PASS: results shown
+2026-10-27T11:24:07.2330204Z TEST PASS: championship finished, 6 races
+2026-10-27T11:24:43.3282553Z TEST PASS: time trial with ghost, best 1:41.68
+2026-10-27T11:26:40.1005676Z TEST PASS: shortcuts work on every track
+2026-10-27T11:28:02.1704366Z TEST PASS: the computer drivers finish on every track without getting stuck, and drift
+2026-10-27T11:28:21.5062960Z TEST PASS: every item works and gets used
+2026-10-27T11:28:52.5885167Z TEST PASS: take-offs only from the ramp on all 6 tracks
+2026-10-27T11:29:23.6910278Z TEST PASS: take-offs only from the ramp on all 6 tracks
+2026-10-27T11:29:28.1394302Z TEST PASS: unlocks work
+2026-10-27T11:29:34.9218771Z TEST PASS: tilting steers
+2026-10-27T11:29:55.0174096Z TEST PASS: every event buzzes, never too often, nothing when off
+2026-10-27T11:30:15.0808326Z TEST PASS: every event buzzes, never too often, nothing when off
+2026-10-27T11:30:16.3338872Z TEST PASS: music tracks play where they should
+2026-10-27T11:31:16.3804715Z TEST PASS: battles end with a winner, karts stay in, every hit costs one balloon
+2026-10-27T11:33:25.5061704Z TEST PASS: host results, all players finished
+2026-10-27T11:33:25.5062661Z PREDICTION lag=120 ms: error avg 0.32 p95 0.74 max 1.48 m (3339), correction avg 0.35 p95 0.80 max 8.28 m
+2026-10-27T11:33:25.5066150Z TEST PASS: client finished place 5, prediction ok
+2026-10-27T11:36:45.1469948Z BATTLE STATE: karts 5:1:4:in 3:1:2:in 4:0:1:out 2:1:3:in 0:0:3:out 1:0:1:out | pops 0<3 4<5 0<3 4<2 1<0 3<4 4<4 0<2 5<1 1<0 1<0 5<2 2<5 2<5 3<5 | winner 5
+2026-10-27T11:36:45.1471053Z HOST TAKEOVER: Pepa Plyn left at 20.2 s with 3 balloons, then the computer drove 2320 m: ok
+2026-10-27T11:36:45.1471903Z TEST PASS: host battle over, 15 pops, 3 out, winner Bára Brzda, back to the lobby
+2026-10-27T11:36:45.1473323Z TEST PASS: left in the middle of the battle
+2026-10-27T11:36:45.1474122Z PREDICTION lag=120 ms: error avg 0.11 p95 0.39 max 1.66 m (3650), correction avg 0.14 p95 0.52 max 2.42 m
+2026-10-27T11:36:45.1477423Z BATTLE STATE: karts 5:1:4:in 3:1:2:in 4:0:1:out 2:1:3:in 0:0:3:out 1:0:1:out | pops 0<3 4<5 0<3 4<2 1<0 3<4 4<4 0<2 5<1 1<0 1<0 5<2 2<5 2<5 3<5 | winner 5
+2026-10-27T11:36:45.1478111Z TEST PASS: client battle place 4, 0 balloons, popped 1, prediction ok, back in the lobby
+2026-10-27T11:36:49.8095998Z FOUND HOSTS { "10.1.0.252": { "name": "Hostitel", "count": 1, "racing": false, "version": "1.19.1", "t": 1622 } }
+2026-10-27T11:37:11.3596331Z JOIN FAILED: Hostitel má jinou verzi hry (1.19.1), ty máš 0.0.1. Stáhněte si oba stejnou verzi.

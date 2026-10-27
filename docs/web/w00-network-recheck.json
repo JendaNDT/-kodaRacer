@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source_commit": "870ba46e85eb0ae5fad1875bee585dd55752e7e9",
+  "started_at": "2026-10-27T11:31:09.961534+00:00",
+  "godot": "4.7.1.stable.official.a13da4feb",
+  "workflow_sha256": "17d47818cf7160af3344a291512829e7ab7e7d62b0551dece73d2484cff433e8",
+  "scope": "Existing native headless logic tests; no browser, GPU, audible sound or physical sensors are verified.",
+  "results": [
+    {
+      "index": 1,
+      "name": "Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint",
+      "ok": true,
+      "exit_code": 0,
+      "timeout": false,
+      "seconds": 142.203,
+      "logs": [
+        "01/client.log",
+        "01/host.log",
+        "01/step.log"
+      ],
+      "script_errors": [],
+      "engine_messages": [
+        {
+          "log": "host.log",
+          "line": "WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details)."
+        }
+      ],
+      "evidence": [
+        {
+          "log": "client.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.23 p95 0.62 max 8.40 m (3578), correction avg 0.25 p95 0.67 max 10.47 m"
+        },
+        {
+          "log": "client.log",
+          "line": "TEST PASS: client finished place 5, prediction ok"
+        },
+        {
+          "log": "host.log",
+          "line": "TEST PASS: host results, all players finished"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: host results, all players finished"
+        },
+        {
+          "log": "step.log",
+          "line": "PREDICTION lag=120 ms: error avg 0.23 p95 0.62 max 8.40 m (3578), correction avg 0.25 p95 0.67 max 10.47 m"
+        },
+        {
+          "log": "step.log",
+          "line": "TEST PASS: client finished place 5, prediction ok"
+        }
+      ]
+    }
+  ],
+  "completed_at": "2026-10-27T11:33:32.167861+00:00",
+  "all_passed": true
+}

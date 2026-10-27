@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "checked_date": "2026-10-27",
+  "source": {
+    "repository": "JendaNDT/-kodaRacer",
+    "branch": "main",
+    "commit": "870ba46e85eb0ae5fad1875bee585dd55752e7e9",
+    "version": "1.19.1",
+    "working_branch": "codex/web-version",
+    "open_pull_requests_at_start": 0
+  },
+  "engine": {
+    "version": "4.7.1.stable.official.a13da4feb",
+    "release_url": "https://github.com/godotengine/godot/releases/tag/4.7.1-stable",
+    "download": "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip",
+    "sha256": "c7ff14fd28472c8d4f193043de30278dcf7e5241a1dcf7566b02e27addaa33ba",
+    "sha256_verified": true
+  },
+  "web_templates": {
+    "source": "https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz",
+    "archive_size": 1280486955,
+    "downloaded_bytes": 87865337,
+    "verification": "CRC32 jednotlivých položek a vnitřních ZIP; celkový SHA256 TPZ nebyl při částečném stažení ověřován.",
+    "files": [
+      {
+        "name": "version.txt",
+        "bytes": 13,
+        "sha256": "233b4ce93ffa3c6bc967b45dcfcdf2d29c7d65878d0af6d2fc7c95661d585013",
+        "outer_crc32_verified": true
+      },
+      {
+        "name": "web_debug.zip",
+        "bytes": 10342565,
+        "sha256": "105e3b45b64e149bccfb137a1ebc1dd35019d025b0a5a8b33d1f9f66b0d54b68",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_dlink_debug.zip",
+        "bytes": 12124531,
+        "sha256": "bd3581067e1a0f321a1df1c027a30ea74eaced7305052e3f82e281b2e122fdf4",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.side.wasm",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_dlink_nothreads_debug.zip",
+        "bytes": 12013956,
+        "sha256": "2f3015c397d86c62e9b1fbbbb58bd2d7e443de72dde10388334b72d080239ca2",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.side.wasm",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_dlink_nothreads_release.zip",
+        "bytes": 11548067,
+        "sha256": "553026cc96519da0db3a2dcae493ba9497ca34bbe15e21f0be68713079c81541",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.side.wasm",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_dlink_release.zip",
+        "bytes": 11567332,
+        "sha256": "3d9a4f7963759b31d9bc19fffe0991b7348eeeb970187c9f09bbf1aa843a0c6c",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.side.wasm",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_nothreads_debug.zip",
+        "bytes": 10231638,
+        "sha256": "eb6ca0ca168c405e73b20a4439d6dc048d74ae65eb31cc7675b6bc3cf7ad1815",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_nothreads_release.zip",
+        "bytes": 10246274,
+        "sha256": "b7b7d7da29fc6cc2f4934fdd26cc571a40e7af57f716ea3eb7e18da720dae28a",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      },
+      {
+        "name": "web_release.zip",
+        "bytes": 10289612,
+        "sha256": "fbf25789a657fc484e4ae9befd7bab8e4919d6ab758bef96a9ea05ba82097406",
+        "outer_crc32_verified": true,
+        "contents": [
+          "godot.js",
+          "godot.wasm",
+          "godot.audio.worklet.js",
+          "godot.audio.position.worklet.js",
+          "godot.html",
+          "godot.service.worker.js",
+          "godot.offline.html"
+        ]
+      }
+    ],
+    "release_zip_digest": "sha256:86409db6200b6f8fd3230989c2d2002851f3dd18acf11d7bdbafddf5a0dd0f72",
+    "whole_archive_digest_verified": false
+  },
+  "webrtc_native": {
+    "version": "1.2.2-stable",
+    "release_url": "https://github.com/godotengine/webrtc-native/releases/tag/1.2.2-stable",
+    "download": "https://github.com/godotengine/webrtc-native/releases/download/1.2.2-stable/godot-extension-webrtc_native.zip",
+    "sha256": "98e9446921740d995bd9ca1be48798dc3c2ceed51e044a25ce18b3cff11f56e5",
+    "sha256_verified": true,
+    "declared_minimum_godot": "4.3",
+    "packaged_architectures": {
+      "windows_x86_64": true,
+      "android_arm64": true,
+      "android_arm32": false
+    },
+    "linux_api_probe": "PASS: initialization and two data channel objects in Godot 4.7.1; no data transmission claimed",
+    "local_roundtrip": "BLOCKED: getifaddrs failed, errno=1; no ICE host candidates in restricted environment",
+    "windows_android_runtime_verification": false
+  },
+  "known_baseline": {
+    "github_actions": "https://github.com/JendaNDT/-kodaRacer/actions/runs/37751242918",
+    "conclusion": "success",
+    "new_w00_actions": "https://github.com/JendaNDT/-kodaRacer/actions/runs/40495480190",
+    "new_w00_conclusion": "success",
+    "new_w00_native_steps": 18,
+    "publish_step": "skipped",
+    "public_release_unchanged": true
+  },
+  "web_export_probe": {
+    "scope": "Empty isolated project; this is not an export of Skoda Racer and no browser execution is claimed.",
+    "single_threaded": true,
+    "exit_code": 0,
+    "engine_errors": 0,
+    "wasm_magic_verified": true,
+    "files": [
+      {
+        "name": "index.audio.position.worklet.js",
+        "bytes": 2973,
+        "sha256": "be33985bc7160d6bf9646f259cd86b259cd67b02ccb297ee5c44f8ac84327bc8"
+      },
+      {
+        "name": "index.audio.worklet.js",
+        "bytes": 7298,
+        "sha256": "5b476a9c9ce642c0ee4256436d1bc31d9c38f868aca0f9a8e2a57c18d2dec2a3"
+      },
+      {
+        "name": "index.html",
+        "bytes": 5301,
+        "sha256": "c28eb38b8df6376a126f4cca25a1a2020d379a3a4095cf6ae97002778a4ab99f"
+      },
+      {
+        "name": "index.js",
+        "bytes": 279815,
+        "sha256": "68586d6daafc93c6e697b3fb258976874aa7459b8931165ebb1dc3c9614cc42c"
+      },
+      {
+        "name": "index.pck",
+        "bytes": 1504,
+        "sha256": "b4049f7cee8cd783933a49df84568c0213a4c7ac4500f4e46fc8e6d1f82b062e"
+      },
+      {
+        "name": "index.png",
+        "bytes": 21443,
+        "sha256": "3cb4495c0b98dfbe4b663cbf2b6836473572339beb66d902367893162a70be0e"
+      },
+      {
+        "name": "index.wasm",
+        "bytes": 39513091,
+        "sha256": "35116f68540ac41acf7d71ea457added91b5e960a9cca3e2acc72918eaf01277"
+      }
+    ]
+  }
+}
