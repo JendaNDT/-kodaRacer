@@ -1,0 +1,61 @@
+{
+  "cases": [
+    {
+      "name": "desktop",
+      "passed": true,
+      "scene_frames": 1,
+      "capabilities": [
+        "nezjištěno",
+        "lze připojit",
+        "dostupné",
+        "dostupná"
+      ],
+      "page_errors": [],
+      "logs": [
+        "Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org",
+        "OpenGL API OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium)) - Compatibility - Using Device: WebKit - WebKit WebGL",
+        "Build configuration: Emscripten 4.0.20, single-threaded, no GDExtension support.",
+        "WEB READY: menu and 3D scene, frames=1"
+      ]
+    },
+    {
+      "name": "touch",
+      "passed": true,
+      "scene_frames": 1,
+      "capabilities": [
+        "dostupné",
+        "lze připojit",
+        "dostupné",
+        "dostupná"
+      ],
+      "page_errors": [],
+      "logs": [
+        "Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org",
+        "OpenGL API OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium)) - Compatibility - Using Device: WebKit - WebKit WebGL",
+        "Build configuration: Emscripten 4.0.20, single-threaded, no GDExtension support.",
+        "WEB READY: menu and 3D scene, frames=1"
+      ]
+    },
+    {
+      "name": "no-webgl",
+      "passed": true,
+      "status": "Tento prohlížeč nebo zařízení nepodporuje potřebnou 3D grafiku. Zkus aktuální Chrome, Edge, Firefox nebo Safari."
+    },
+    {
+      "name": "no-wasm",
+      "passed": true,
+      "status": "Tento prohlížeč nepodporuje spuštění hry. Zkus aktuální Chrome, Edge, Firefox nebo Safari."
+    },
+    {
+      "name": "missing-engine",
+      "passed": true,
+      "status": "Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu."
+    },
+    {
+      "name": "missing-pack",
+      "passed": true,
+      "status": "Hru se nepodařilo načíst. Zkontroluj připojení a zkus to znovu."
+    }
+  ],
+  "scope": "Software WebGL on the CI runner; no physical mobile device or performance claim."
+}

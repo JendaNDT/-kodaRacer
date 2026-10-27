@@ -1,0 +1,62 @@
+{
+  "stage": "W01",
+  "godot": "4.7.1.stable.official.a13da4feb",
+  "source_commit": "a1e25eafbe02653d6c6dde63718089771d32eb54",
+  "dirty_tracked_sources": false,
+  "threads": false,
+  "pwa": false,
+  "ghost_files": 18,
+  "limitations": [
+    "Web audio is deferred to W03",
+    "Temporary centre-line AI fallback until W02",
+    "Online disabled until W10–W12",
+    "Browser sensors and haptics deferred to W04"
+  ],
+  "files": [
+    {
+      "name": "index.apple-touch-icon.png",
+      "bytes": 2739,
+      "sha256": "905cb01889bd496374611ed929b50925d83aec18bc6b794c9eb3f949a37be739"
+    },
+    {
+      "name": "index.audio.position.worklet.js",
+      "bytes": 2973,
+      "sha256": "be33985bc7160d6bf9646f259cd86b259cd67b02ccb297ee5c44f8ac84327bc8"
+    },
+    {
+      "name": "index.audio.worklet.js",
+      "bytes": 7298,
+      "sha256": "5b476a9c9ce642c0ee4256436d1bc31d9c38f868aca0f9a8e2a57c18d2dec2a3"
+    },
+    {
+      "name": "index.html",
+      "bytes": 13349,
+      "sha256": "6e8b5e42812550cb11645ba43748d48271af7915e4faa3176bc36f87b62c0212"
+    },
+    {
+      "name": "index.icon.png",
+      "bytes": 8197,
+      "sha256": "5404c97bca95bedd19b144344ec9df6b94277a982edeb9197e2f2743c46ae299"
+    },
+    {
+      "name": "index.js",
+      "bytes": 279815,
+      "sha256": "68586d6daafc93c6e697b3fb258976874aa7459b8931165ebb1dc3c9614cc42c"
+    },
+    {
+      "name": "index.pck",
+      "bytes": 6517464,
+      "sha256": "151045350830407a8458050d404c8f750bd4553d7c91c4a947eda08ef1f31936"
+    },
+    {
+      "name": "index.png",
+      "bytes": 15480,
+      "sha256": "64d4f3fb7a4700df9381791319b484b0e86912af6ddd9e7c64f65a8bd147e0d1"
+    },
+    {
+      "name": "index.wasm",
+      "bytes": 39513091,
+      "sha256": "35116f68540ac41acf7d71ea457added91b5e960a9cca3e2acc72918eaf01277"
+    }
+  ]
+}

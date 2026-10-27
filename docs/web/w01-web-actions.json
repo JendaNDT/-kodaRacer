@@ -1,0 +1,113 @@
+{
+  "run_url": "https://github.com/JendaNDT/-kodaRacer/actions/runs/40504550644",
+  "source_commit": "a1e25eafbe02653d6c6dde63718089771d32eb54",
+  "job_id": 122190401158,
+  "conclusion": "success",
+  "artifact_id": 12734401942,
+  "steps": [
+    {
+      "number": 1,
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:25Z",
+      "completed_at": "2026-10-27T12:32:26Z"
+    },
+    {
+      "number": 2,
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:26Z",
+      "completed_at": "2026-10-27T12:32:27Z"
+    },
+    {
+      "number": 3,
+      "name": "Run actions/setup-python@v5",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:27Z",
+      "completed_at": "2026-10-27T12:32:27Z"
+    },
+    {
+      "number": 4,
+      "name": "Run actions/cache@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:27Z",
+      "completed_at": "2026-10-27T12:32:28Z"
+    },
+    {
+      "number": 5,
+      "name": "Příprava Godotu a webových šablon",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:28Z",
+      "completed_at": "2026-10-27T12:32:30Z"
+    },
+    {
+      "number": 6,
+      "name": "Export a kontrola webového balíku",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:30Z",
+      "completed_at": "2026-10-27T12:32:43Z"
+    },
+    {
+      "number": 7,
+      "name": "Příprava prohlížeče",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:32:43Z",
+      "completed_at": "2026-10-27T12:33:06Z"
+    },
+    {
+      "number": 8,
+      "name": "Spuštění v prohlížeči a chybové stavy",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:06Z",
+      "completed_at": "2026-10-27T12:33:47Z"
+    },
+    {
+      "number": 9,
+      "name": "Run actions/upload-artifact@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:47Z",
+      "completed_at": "2026-10-27T12:33:50Z"
+    },
+    {
+      "number": 16,
+      "name": "Post Run actions/cache@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:50Z",
+      "completed_at": "2026-10-27T12:33:52Z"
+    },
+    {
+      "number": 17,
+      "name": "Post Run actions/setup-python@v5",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:52Z",
+      "completed_at": "2026-10-27T12:33:52Z"
+    },
+    {
+      "number": 18,
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:52Z",
+      "completed_at": "2026-10-27T12:33:52Z"
+    },
+    {
+      "number": 19,
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-10-27T12:33:52Z",
+      "completed_at": "2026-10-27T12:33:52Z"
+    }
+  ]
+}

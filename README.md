@@ -6,7 +6,7 @@
 
 ## Příprava webové verze
 
-Práce probíhá ve větvi `codex/web-version` podle [plánu W00–W14](docs/PLAN_WEB.md). [Záznam W00](docs/WEB_W00.md) obsahuje ověřený výchozí stav, výsledky kontrol a známá omezení. První export samotné hry do prohlížeče je předmětem W01.
+Práce probíhá ve větvi `codex/web-version` podle [plánu W00–W14](docs/PLAN_WEB.md). [W01](docs/WEB_W01.md) přidává první export současné hry: česká spouštěcí stránka už načte menu i 3D scénu v prohlížeči. Jde o technický prototyp; zvuk, plné ovládání, ukládání a online hra pokračují v dalších etapách. Veřejná webová verze zatím není vydaná. [Přehled ověření](docs/WEB_TESTY.md) obsahuje výsledky i zbývající omezení.
 
 ## Stažení hotové hry
 

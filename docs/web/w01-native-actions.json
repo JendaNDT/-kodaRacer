@@ -1,0 +1,205 @@
+{
+  "run_url": "https://github.com/JendaNDT/-kodaRacer/actions/runs/40504550565",
+  "source_commit": "a1e25eafbe02653d6c6dde63718089771d32eb54",
+  "job_id": 122190401532,
+  "conclusion": "success",
+  "control_steps": 18,
+  "passed_control_steps": 18,
+  "steps": [
+    {
+      "number": 1,
+      "name": "Set up job",
+      "conclusion": "success"
+    },
+    {
+      "number": 2,
+      "name": "Run actions/checkout@v4",
+      "conclusion": "success"
+    },
+    {
+      "number": 3,
+      "name": "Run actions/setup-java@v4",
+      "conclusion": "success"
+    },
+    {
+      "number": 4,
+      "name": "Cache Godot and export templates",
+      "conclusion": "success"
+    },
+    {
+      "number": 5,
+      "name": "Download Godot 4.7.1",
+      "conclusion": "success"
+    },
+    {
+      "number": 6,
+      "name": "Import project",
+      "conclusion": "success"
+    },
+    {
+      "number": 7,
+      "name": "Test – full race against the AI",
+      "conclusion": "success"
+    },
+    {
+      "number": 8,
+      "name": "Test – championship over all tracks",
+      "conclusion": "success"
+    },
+    {
+      "number": 9,
+      "name": "Test – time trial against the ghost",
+      "conclusion": "success"
+    },
+    {
+      "number": 10,
+      "name": "Test – shortcuts (worth it only with a turbo or the star, laps counted right)",
+      "conclusion": "success"
+    },
+    {
+      "number": 11,
+      "name": "Test – computer drivers on every track (Hard, no item boxes)",
+      "conclusion": "success"
+    },
+    {
+      "number": 12,
+      "name": "Test – new items (blue missile, oil, lightning, shield)",
+      "conclusion": "success"
+    },
+    {
+      "number": 13,
+      "name": "Test – take-offs only from the ramp (turbo and star, all tracks)",
+      "conclusion": "success"
+    },
+    {
+      "number": 14,
+      "name": "Test – take-offs only from the ramp on the mirrored tracks",
+      "conclusion": "success"
+    },
+    {
+      "number": 15,
+      "name": "Test – unlocks (made-up cups and time trials, paints, secret driver, mirrored tracks, developer's ghost)",
+      "conclusion": "success"
+    },
+    {
+      "number": 16,
+      "name": "Test – steering by tilting the phone (made-up sensor readings, levelling at the start)",
+      "conclusion": "success"
+    },
+    {
+      "number": 17,
+      "name": "Test – vibrations (every event, never more than 10 a second, nothing when off; also for two players)",
+      "conclusion": "success"
+    },
+    {
+      "number": 18,
+      "name": "Test – music (both tracks load and loop, menu / race / pause / end)",
+      "conclusion": "success"
+    },
+    {
+      "number": 19,
+      "name": "Test – balloon battle (the rules, then both arenas on every difficulty with only the computer driving)",
+      "conclusion": "success"
+    },
+    {
+      "number": 20,
+      "name": "Test – Wi-Fi game on a mirrored track with 120 ms delay each way, every item in turn, everybody on the shortcut, gold paint",
+      "conclusion": "success"
+    },
+    {
+      "number": 21,
+      "name": "Test – balloon battle over Wi-Fi with 120 ms delay each way (the client sees the host's battle, a third player leaves in the middle)",
+      "conclusion": "success"
+    },
+    {
+      "number": 22,
+      "name": "Test – finding games on the network",
+      "conclusion": "success"
+    },
+    {
+      "number": 23,
+      "name": "Test – a different game version is refused",
+      "conclusion": "success"
+    },
+    {
+      "number": 24,
+      "name": "Export Windows EXE",
+      "conclusion": "success"
+    },
+    {
+      "number": 25,
+      "name": "Export Android APK",
+      "conclusion": "success"
+    },
+    {
+      "number": 26,
+      "name": "Show results",
+      "conclusion": "success"
+    },
+    {
+      "number": 27,
+      "name": "Run actions/upload-artifact@v4",
+      "conclusion": "success"
+    },
+    {
+      "number": 28,
+      "name": "Publish test build (release \"testovaci-build\")",
+      "conclusion": "skipped"
+    },
+    {
+      "number": 54,
+      "name": "Post Cache Godot and export templates",
+      "conclusion": "success"
+    },
+    {
+      "number": 55,
+      "name": "Post Run actions/setup-java@v4",
+      "conclusion": "success"
+    },
+    {
+      "number": 56,
+      "name": "Post Run actions/checkout@v4",
+      "conclusion": "success"
+    },
+    {
+      "number": 57,
+      "name": "Complete job",
+      "conclusion": "success"
+    }
+  ],
+  "public_release_check": {
+    "id": 406621410,
+    "url": "https://github.com/JendaNDT/-kodaRacer/releases/tag/testovaci-build",
+    "tag": "testovaci-build",
+    "published_at": "2026-10-08T08:53:19Z",
+    "assets": [
+      {
+        "name": "SkodaRacer.apk",
+        "digest": "sha256:d11caa72073f5510679c5087625a470c0698a7079007f436c9b5064c0d57f556",
+        "size": 58733696,
+        "updated_at": "2026-10-08T08:53:18Z"
+      },
+      {
+        "name": "SkodaRacer.exe",
+        "digest": "sha256:3b6463dcd468d54c3df0bd9e915b6ef4114ade1779eea75f5292ac4019f01aac",
+        "size": 115601544,
+        "updated_at": "2026-10-08T08:53:18Z"
+      }
+    ]
+  },
+  "note": "Successful original functional controls and exports. Existing headless engine diagnostics remain recorded in W00; this is not a claim that every engine warning is absent.",
+  "diagnostics": {
+    "script_errors": 0,
+    "engine_errors": [
+      "ERROR: Parameter \"material\" is null.",
+      "ERROR: 2 resources still in use at exit (run with --verbose for details).",
+      "ERROR: 2 resources still in use at exit (run with --verbose for details).",
+      "ERROR: Parameter \"material\" is null.",
+      "ERROR: 2 resources still in use at exit (run with --verbose for details).",
+      "ERROR: 4 resources still in use at exit (run with --verbose for details).",
+      "ERROR: 2 resources still in use at exit (run with --verbose for details)."
+    ],
+    "expected_version_refusal": "JOIN FAILED: Hostitel má jinou verzi hry (1.19.1), ty máš 0.0.1. Stáhněte si oba stejnou verzi.",
+    "version_refusal_client_timeout": "The existing negative-version test permits the client process to finish by timeout and asserts its JOIN FAILED reason; the 18/18 count refers to workflow control steps."
+  }
+}
